@@ -5,11 +5,14 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Events;
+using Ato.Copilot.Core.Data.Context;
 using Ato.Copilot.Core.Extensions;
 using Ato.Copilot.State.Extensions;
 using Ato.Copilot.Agents.Extensions;
 using Ato.Copilot.Mcp.Extensions;
+using Ato.Copilot.Mcp.Middleware;
 using Ato.Copilot.Mcp.Server;
+using Microsoft.EntityFrameworkCore;
 
 // ────────────────────────────────────────────────────────────────
 //  ATO Copilot — Compliance-Only MCP Server
@@ -86,6 +89,10 @@ async Task RunStdioModeAsync(string[] args)
         });
 
     using var host = builder.Build();
+
+    // Auto-migrate database at startup (fail = exit code 1)
+    await MigrateDatabaseAsync(host.Services);
+
     await host.RunAsync();
 }
 
@@ -123,9 +130,18 @@ async Task RunHttpModeAsync(string[] args)
 
     var app = builder.Build();
 
-    // Configure pipeline
+    // Auto-migrate database at startup (fail = exit code 1)
+    await MigrateDatabaseAsync(app.Services);
+
+    // Configure pipeline — middleware ordering per spec:
+    // 1. Request logging (Serilog)
+    // 2. CORS
+    // 3. Authorization (role-based access checks)
+    // 4. Audit logging (captures all requests with user/role/action)
     app.UseSerilogRequestLogging();
     app.UseCors();
+    app.UseMiddleware<ComplianceAuthorizationMiddleware>();
+    app.UseMiddleware<AuditLoggingMiddleware>();
 
     // Map MCP HTTP endpoints
     var httpBridge = app.Services.GetRequiredService<McpHttpBridge>();
@@ -156,6 +172,34 @@ async Task RunHttpModeAsync(string[] args)
 }
 
 // ────────────────────────────────────────────────────────────────
+//  Database Migration
+// ────────────────────────────────────────────────────────────────
+/// <summary>
+/// Applies pending EF Core migrations at startup. Fails fast (exit code 1)
+/// if migration cannot complete within 30 seconds.
+/// </summary>
+async Task MigrateDatabaseAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<AtoCopilotContext>>();
+
+    try
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        logger.LogInformation("Applying database migrations...");
+        await db.Database.MigrateAsync(cts.Token);
+        logger.LogInformation("Database migrations applied successfully");
+    }
+    catch (Exception ex)
+    {
+        logger.LogCritical(ex, "Database migration failed — shutting down");
+        Environment.ExitCode = 1;
+        throw;
+    }
+}
+
+// ────────────────────────────────────────────────────────────────
 //  Service Registration (shared between modes)
 // ────────────────────────────────────────────────────────────────
 void RegisterCoreServices(IServiceCollection services, IConfiguration configuration)
@@ -168,6 +212,9 @@ void RegisterCoreServices(IServiceCollection services, IConfiguration configurat
 
     // Compliance agent + tools
     services.AddComplianceAgent(configuration);
+
+    // Configuration agent + tools
+    services.AddConfigurationAgent();
 
     // MCP server
     services.AddMcpServer(configuration);

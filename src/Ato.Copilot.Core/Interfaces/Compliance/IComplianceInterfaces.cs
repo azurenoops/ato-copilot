@@ -55,6 +55,7 @@ public interface IRemediationEngine
     Task<string> BatchRemediateAsync(
         string? subscriptionId = null,
         string? severity = null,
+        string? family = null,
         bool dryRun = true,
         CancellationToken cancellationToken = default);
 }

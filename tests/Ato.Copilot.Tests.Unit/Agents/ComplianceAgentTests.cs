@@ -1,10 +1,12 @@
 using Xunit;
 using FluentAssertions;
 using Moq;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Ato.Copilot.Agents.Compliance.Agents;
 using Ato.Copilot.Agents.Compliance.Tools;
 using Ato.Copilot.Agents.Common;
+using Ato.Copilot.Core.Data.Context;
 using Ato.Copilot.Core.Interfaces.Compliance;
 
 namespace Ato.Copilot.Tests.Unit.Agents;
@@ -53,6 +55,10 @@ public class ComplianceAgentTests
             historyTool,
             statusTool,
             monitoringTool,
+            new InMemoryDbContextFactory(
+                new DbContextOptionsBuilder<AtoCopilotContext>()
+                    .UseInMemoryDatabase($"AgentTests_{Guid.NewGuid()}")
+                    .Options),
             logger);
     }
 
@@ -105,5 +111,20 @@ public class ComplianceAgentTests
 
         result.Should().NotBeNull();
         result.AgentName.Should().Be("Compliance Agent");
+    }
+
+    private class InMemoryDbContextFactory : IDbContextFactory<AtoCopilotContext>
+    {
+        private readonly DbContextOptions<AtoCopilotContext> _options;
+
+        public InMemoryDbContextFactory(DbContextOptions<AtoCopilotContext> options)
+        {
+            _options = options;
+        }
+
+        public AtoCopilotContext CreateDbContext() => new(_options);
+
+        public Task<AtoCopilotContext> CreateDbContextAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(CreateDbContext());
     }
 }

@@ -2,17 +2,20 @@
 
 Compliance-only MCP agent server for NIST 800-53 / FedRAMP authorization support on Azure Government.
 
-Built from the [Platform Engineering Copilot](https://github.com/your-org/platform-engineering-copilot) architecture using the BaseAgent/BaseTool pattern.
+Built from the [Platform Engineering Copilot](https://github.com/azurenoops/platform-engineering-copilot) architecture using the BaseAgent/BaseTool pattern.
 
 ## Features
 
 - **NIST 800-53 Compliance Assessment** — Run quick, policy, or full scans against Azure subscriptions
-- **Control Family Browser** — Get detailed info on AC, AU, IA, CM, SC, and all 18 control families
+- **Control Family Browser** — Get detailed info on AC, AU, IA, CM, SC, and all 20 control families
 - **Document Generation** — Generate SSP, POA&M, SAR, and assessment reports
 - **Evidence Collection** — Collect and store compliance evidence for audit
 - **Automated Remediation** — Guided or automated fixes with dry-run support
 - **Continuous Monitoring** — Real-time compliance posture tracking and alerting
 - **Audit Trail** — Full history of compliance assessments and remediations
+- **Configuration Agent** — Manage Azure subscription, framework, and scan settings via natural language
+- **Agent Handoff** — Automatic intent-based routing between Configuration and Compliance agents
+- **RBAC Enforcement** — Role-based access control (Viewer, Operator, Administrator, Auditor)
 - **Dual-Mode MCP** — Stdio (GitHub Copilot, Claude Desktop) + HTTP REST API
 
 ## Quick Start
@@ -23,10 +26,11 @@ Built from the [Platform Engineering Copilot](https://github.com/your-org/platfo
 - Azure subscription (Azure Government preferred)
 - Azure CLI (`az login`)
 
-### Build
+### Build & Test
 
 ```bash
 dotnet build Ato.Copilot.sln
+dotnet test Ato.Copilot.sln
 ```
 
 ### Run (HTTP mode)
@@ -37,9 +41,10 @@ dotnet run -- --http
 ```
 
 Server starts at `http://localhost:3001`. Try:
-- `GET /health` — Health check
-- `GET /mcp/tools` — List available tools
-- `POST /mcp/chat` — Send a compliance question
+- `GET /health` — Health check with capabilities
+- `GET /mcp/tools` — List available compliance tools
+- `POST /mcp/chat` — Send a compliance or configuration question
+- `POST /mcp` — MCP JSON-RPC endpoint (tools/list, tools/call)
 
 ### Run (stdio mode)
 
@@ -58,6 +63,8 @@ docker compose -f docker-compose.mcp.yml up --build
 
 ## MCP Tools
 
+### Compliance Tools
+
 | Tool | Description |
 |------|-------------|
 | `compliance_assess` | Run NIST 800-53 compliance assessment |
@@ -73,51 +80,74 @@ docker compose -f docker-compose.mcp.yml up --build
 | `compliance_monitoring` | Continuous compliance monitoring |
 | `compliance_chat` | Natural language compliance interaction |
 
+### Configuration Tools
+
+| Tool | Description |
+|------|-------------|
+| `configuration_manage` | Manage Azure subscription, framework, and scan settings |
+| `configuration_chat` | Natural language configuration interaction |
+
 ## Project Structure
 
 ```
 ato-copilot/
 ├── Ato.Copilot.sln
 ├── src/
-│   ├── Ato.Copilot.Core/          # Models, interfaces, configuration
+│   ├── Ato.Copilot.Core/          # Models, interfaces, configuration, EF Core
 │   ├── Ato.Copilot.State/         # In-memory state management
-│   ├── Ato.Copilot.Agents/        # BaseAgent/BaseTool + ComplianceAgent
+│   ├── Ato.Copilot.Agents/        # BaseAgent/BaseTool + agents & services
+│   │   ├── Common/                # BaseAgent, BaseTool
+│   │   └── Compliance/            # ComplianceAgent, ConfigurationAgent
+│   │       ├── Agents/            # Agent implementations
+│   │       ├── Tools/             # 14 tool implementations
+│   │       └── Configuration/     # Agent options
 │   └── Ato.Copilot.Mcp/           # MCP server (stdio + HTTP)
+│       ├── Server/                # McpServer, McpHttpBridge, McpStdioService
+│       ├── Middleware/            # Auth, audit logging
+│       └── Tools/                 # ComplianceMcpTools (MCP tool definitions)
 ├── tests/
-│   └── Ato.Copilot.Tests.Unit/    # xUnit + FluentAssertions + Moq
-├── .specify/                       # Specify toolkit (constitution, templates, scripts)
+│   ├── Ato.Copilot.Tests.Unit/        # 170 unit tests (xUnit + FluentAssertions + Moq)
+│   └── Ato.Copilot.Tests.Integration/ # 20 integration tests (TestServer)
+├── specs/                          # Specify toolkit specs
 ├── Dockerfile
-├── docker-compose.mcp.yml
-└── docs/
+└── docker-compose.mcp.yml
 ```
 
 ## Architecture
 
 ```
-MCP Client (GitHub Copilot / Claude / HTTP)
+MCP Client (GitHub Copilot / Claude Desktop / HTTP REST)
     │
     ▼
-┌─────────────────────────────────┐
-│  Ato.Copilot.Mcp                │
-│  ├── McpServer (stdio JSON-RPC) │
-│  ├── McpHttpBridge (REST API)   │
-│  └── ComplianceMcpTools         │
-└─────────┬───────────────────────┘
-          │
-          ▼
-┌─────────────────────────────────┐
-│  Ato.Copilot.Agents             │
-│  ├── BaseAgent / BaseTool       │
-│  └── ComplianceAgent (11 tools) │
-└─────────┬───────────────────────┘
-          │
-          ▼
-┌─────────────────────────────────┐
-│  Ato.Copilot.Core               │
-│  ├── Models & Interfaces        │
-│  ├── Configuration              │
-│  └── EF Core DbContext          │
-└─────────────────────────────────┘
+┌────────────────────────────────────────┐
+│  Ato.Copilot.Mcp                       │
+│  ├── McpServer (stdio JSON-RPC)        │
+│  │   └── Agent Handoff (intent routing)│
+│  ├── McpHttpBridge (REST API)          │
+│  ├── ComplianceMcpTools (tool defs)    │
+│  └── Middleware (Auth + Audit)         │
+└────────────┬───────────────────────────┘
+             │
+     ┌───────┴───────┐
+     ▼               ▼
+┌────────────┐  ┌──────────────────┐
+│ Config     │  │ Compliance Agent │
+│ Agent      │  │ (12 tools)       │
+│ (2 tools)  │  │  ├── Assessment  │
+└────────────┘  │  ├── Remediation │
+                │  ├── Evidence    │
+                │  ├── Documents   │
+                │  └── Monitoring  │
+                └──────┬───────────┘
+                       │
+             ┌─────────┼──────────┐
+             ▼         ▼          ▼
+┌──────────────┐ ┌──────────┐ ┌────────────┐
+│ Core Services│ │ State    │ │ Azure SDKs │
+│ ├── Models   │ │ ├── Agent│ │ ├── ARG    │
+│ ├── DbContext│ │ ├── Conv │ │ ├── Policy │
+│ └── Config   │ │ └── RBAC │ │ └── MDfC   │
+└──────────────┘ └──────────┘ └────────────┘
 ```
 
 ## Configuration
@@ -128,10 +158,23 @@ Copy `.env.example` to `.env` and configure:
 ATO_RUN_MODE=http                               # stdio | http
 ATO_AZURE_AD__TENANT_ID=your-tenant-id
 ATO_AZURE_AD__CLIENT_ID=your-client-id
-ATO_GATEWAY__DEFAULT_SUBSCRIPTION_ID=your-sub-id
+ATO_GATEWAY__AZURE__SUBSCRIPTION_ID=your-sub-id
+ATO_GATEWAY__AZURE__CLOUD_ENVIRONMENT=AzureGovernment
 ```
 
-See [appsettings.json](src/Ato.Copilot.Mcp/appsettings.json) for all options.
+Key configuration sections in [appsettings.json](src/Ato.Copilot.Mcp/appsettings.json):
+
+| Section | Description |
+|---------|-------------|
+| `AzureAd` | Azure AD / Entra ID authentication settings |
+| `Gateway` | Azure connection settings (tenant, subscription, managed identity) |
+| `Database` | SQLite (dev) / SQL Server (prod) provider and timeouts |
+| `NistCatalog` | NIST SP 800-53 catalog source (online/offline, cache) |
+| `Agents:Compliance` | Default framework, impact level, supported frameworks |
+| `RateLimits` | Per-service rate limits (Resource Graph, Policy, Defender) |
+| `FeatureFlags` | Enable/disable scans, evidence, documents, remediation |
+| `Performance` | Concurrency, timeouts, memory budget, page sizes |
+| `Serilog` | Structured logging (console + rolling file) |
 
 ## Compliance Frameworks
 
@@ -143,6 +186,22 @@ See [appsettings.json](src/Ato.Copilot.Mcp/appsettings.json) for all options.
 | DoD IL2 | Supported |
 | DoD IL4 | Supported |
 | DoD IL5 | Supported |
+
+## Testing
+
+```bash
+# Run all tests
+dotnet test Ato.Copilot.sln
+
+# Run unit tests only
+dotnet test tests/Ato.Copilot.Tests.Unit/
+
+# Run integration tests only
+dotnet test tests/Ato.Copilot.Tests.Integration/
+```
+
+- **170 unit tests** — Services, agents, tools, middleware, state management
+- **20 integration tests** — End-to-end HTTP endpoint testing with TestServer
 
 ## Specify Toolkit
 

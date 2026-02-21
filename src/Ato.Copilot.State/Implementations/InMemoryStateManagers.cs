@@ -10,6 +10,7 @@ public class InMemoryAgentStateManager : IAgentStateManager
 {
     private readonly ConcurrentDictionary<string, object> _state = new();
 
+    /// <inheritdoc />
     public Task<T?> GetStateAsync<T>(string agentId, string key, CancellationToken cancellationToken = default)
     {
         var compositeKey = $"{agentId}:{key}";
@@ -20,6 +21,7 @@ public class InMemoryAgentStateManager : IAgentStateManager
         return Task.FromResult<T?>(default);
     }
 
+    /// <inheritdoc />
     public Task SetStateAsync<T>(string agentId, string key, T value, CancellationToken cancellationToken = default)
     {
         var compositeKey = $"{agentId}:{key}";
@@ -27,6 +29,7 @@ public class InMemoryAgentStateManager : IAgentStateManager
         return Task.CompletedTask;
     }
 
+    /// <inheritdoc />
     public Task ClearStateAsync(string agentId, CancellationToken cancellationToken = default)
     {
         var prefix = $"{agentId}:";
@@ -46,12 +49,14 @@ public class InMemoryConversationStateManager : IConversationStateManager
 {
     private readonly ConcurrentDictionary<string, ConversationState> _conversations = new();
 
+    /// <inheritdoc />
     public Task<ConversationState?> GetConversationAsync(string conversationId, CancellationToken cancellationToken = default)
     {
         _conversations.TryGetValue(conversationId, out var state);
         return Task.FromResult(state);
     }
 
+    /// <inheritdoc />
     public Task SaveConversationAsync(ConversationState state, CancellationToken cancellationToken = default)
     {
         state.LastActivityAt = DateTime.UtcNow;
@@ -59,6 +64,7 @@ public class InMemoryConversationStateManager : IConversationStateManager
         return Task.CompletedTask;
     }
 
+    /// <inheritdoc />
     public Task<string> CreateConversationAsync(CancellationToken cancellationToken = default)
     {
         var state = new ConversationState();

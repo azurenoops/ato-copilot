@@ -1,8 +1,11 @@
 using System.Diagnostics;
 using System.Reflection;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Ato.Copilot.Agents.Common;
 using Ato.Copilot.Agents.Compliance.Tools;
+using Ato.Copilot.Core.Data.Context;
+using Ato.Copilot.Core.Models.Compliance;
 
 namespace Ato.Copilot.Agents.Compliance.Agents;
 
@@ -23,7 +26,11 @@ public class ComplianceAgent : BaseAgent
     private readonly ComplianceHistoryTool _historyTool;
     private readonly ComplianceStatusTool _statusTool;
     private readonly ComplianceMonitoringTool _monitoringTool;
+    private readonly IDbContextFactory<AtoCopilotContext> _dbFactory;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ComplianceAgent"/> class.
+    /// </summary>
     public ComplianceAgent(
         ComplianceAssessmentTool assessmentTool,
         ControlFamilyTool controlFamilyTool,
@@ -36,6 +43,7 @@ public class ComplianceAgent : BaseAgent
         ComplianceHistoryTool historyTool,
         ComplianceStatusTool statusTool,
         ComplianceMonitoringTool monitoringTool,
+        IDbContextFactory<AtoCopilotContext> dbFactory,
         ILogger<ComplianceAgent> logger)
         : base(logger)
     {
@@ -50,6 +58,7 @@ public class ComplianceAgent : BaseAgent
         _historyTool = historyTool;
         _statusTool = statusTool;
         _monitoringTool = monitoringTool;
+        _dbFactory = dbFactory;
 
         // Register all tools per Constitution Principle II
         RegisterTool(_assessmentTool);
@@ -65,10 +74,14 @@ public class ComplianceAgent : BaseAgent
         RegisterTool(_monitoringTool);
     }
 
+    /// <inheritdoc />
     public override string AgentId => "compliance-agent";
+    /// <inheritdoc />
     public override string AgentName => "Compliance Agent";
+    /// <inheritdoc />
     public override string Description => "Handles NIST 800-53, FedRAMP, and ATO compliance assessments, remediation, and documentation";
 
+    /// <inheritdoc />
     public override string GetSystemPrompt()
     {
         var assembly = Assembly.GetExecutingAssembly();
@@ -85,6 +98,9 @@ public class ComplianceAgent : BaseAgent
         return reader.ReadToEnd();
     }
 
+    /// <summary>
+    /// Processes a compliance request, routing to the appropriate tool and logging the action.
+    /// </summary>
     public override async Task<AgentResponse> ProcessAsync(
         string message,
         AgentConversationContext context,
@@ -92,6 +108,7 @@ public class ComplianceAgent : BaseAgent
     {
         var stopwatch = Stopwatch.StartNew();
         Logger.LogInformation("ComplianceAgent processing: {Message}", message[..Math.Min(100, message.Length)]);
+        var actionType = ClassifyIntent(message);
 
         try
         {
@@ -99,6 +116,12 @@ public class ComplianceAgent : BaseAgent
             var toolResult = await RouteToToolAsync(message, context, cancellationToken);
 
             stopwatch.Stop();
+
+            // Log successful action to audit trail
+            await LogAuditEntryAsync(actionType, GetContextValue(context, "subscription_id"),
+                AuditOutcome.Success, $"Processed: {message[..Math.Min(200, message.Length)]}",
+                stopwatch.Elapsed, cancellationToken);
+
             return new AgentResponse
             {
                 Success = true,
@@ -111,6 +134,11 @@ public class ComplianceAgent : BaseAgent
         {
             stopwatch.Stop();
             Logger.LogError(ex, "Error in ComplianceAgent processing");
+
+            // Log failed action to audit trail
+            await LogAuditEntryAsync(actionType, GetContextValue(context, "subscription_id"),
+                AuditOutcome.Failure, $"Error: {ex.Message}", stopwatch.Elapsed, cancellationToken);
+
             return new AgentResponse
             {
                 Success = false,
@@ -121,6 +149,7 @@ public class ComplianceAgent : BaseAgent
         }
     }
 
+    /// <summary>Routes a user message to the appropriate compliance tool based on intent analysis.</summary>
     private async Task<string> RouteToToolAsync(
         string message,
         AgentConversationContext context,
@@ -221,12 +250,15 @@ public class ComplianceAgent : BaseAgent
         }, cancellationToken);
     }
 
+    /// <summary>Returns true if the text contains any of the specified keywords (case-insensitive).</summary>
     private static bool ContainsAny(string text, params string[] keywords) =>
         keywords.Any(k => text.Contains(k, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>Retrieves a context value from the agent conversation workflow state.</summary>
     private static string? GetContextValue(AgentConversationContext context, string key) =>
         context.WorkflowState.TryGetValue(key, out var value) ? value?.ToString() : null;
 
+    /// <summary>Extracts the NIST control family abbreviation from the user message.</summary>
     private static string ExtractControlFamily(string message)
     {
         var families = new[] { "AC", "AU", "AT", "CM", "CP", "IA", "IR", "MA", "MP", "PE", "PL", "PM", "PS", "RA", "SA", "SC", "SI", "SR" };
@@ -238,11 +270,63 @@ public class ComplianceAgent : BaseAgent
         return "AC";
     }
 
+    /// <summary>Extracts the document type (ssp, poam, sar) from the user message.</summary>
     private static string ExtractDocumentType(string message)
     {
         if (message.Contains("ssp", StringComparison.OrdinalIgnoreCase)) return "ssp";
         if (message.Contains("poam", StringComparison.OrdinalIgnoreCase) || message.Contains("poa&m", StringComparison.OrdinalIgnoreCase)) return "poam";
         if (message.Contains("sar", StringComparison.OrdinalIgnoreCase)) return "sar";
         return "ssp";
+    }
+
+    /// <summary>
+    /// Classifies the user message intent for audit logging.
+    /// </summary>
+    private static string ClassifyIntent(string message)
+    {
+        var lower = message.ToLowerInvariant();
+        if (ContainsAny(lower, "assess", "scan")) return "Assessment";
+        if (ContainsAny(lower, "remediat", "fix")) return "Remediation";
+        if (ContainsAny(lower, "evidence", "collect")) return "EvidenceCollection";
+        if (ContainsAny(lower, "document", "ssp", "sar", "poam")) return "DocumentGeneration";
+        if (ContainsAny(lower, "monitor", "alert")) return "Monitoring";
+        if (ContainsAny(lower, "audit", "log")) return "AuditQuery";
+        if (ContainsAny(lower, "history", "trend")) return "HistoryQuery";
+        if (ContainsAny(lower, "status", "posture")) return "StatusQuery";
+        if (ContainsAny(lower, "control", "nist")) return "ControlQuery";
+        return "GeneralQuery";
+    }
+
+    /// <summary>
+    /// Persists an audit log entry to the database.
+    /// </summary>
+    private async Task LogAuditEntryAsync(
+        string action,
+        string? subscriptionId,
+        AuditOutcome outcome,
+        string details,
+        TimeSpan duration,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+            db.AuditLogs.Add(new AuditLogEntry
+            {
+                UserId = "system",
+                UserRole = "Agent",
+                Action = action,
+                SubscriptionId = subscriptionId,
+                Outcome = outcome,
+                Details = details,
+                Duration = duration
+            });
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // Audit logging should never fail the main operation
+            Logger.LogWarning(ex, "Failed to persist audit log entry for action {Action}", action);
+        }
     }
 }

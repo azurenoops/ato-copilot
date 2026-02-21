@@ -13,12 +13,17 @@ public class AuditLoggingMiddleware
     private readonly RequestDelegate _next;
     private readonly ILogger<AuditLoggingMiddleware> _logger;
 
+    /// <summary>Initializes a new instance of the <see cref="AuditLoggingMiddleware"/> class.</summary>
+    /// <param name="next">The next middleware in the pipeline.</param>
+    /// <param name="logger">Logger instance.</param>
     public AuditLoggingMiddleware(RequestDelegate next, ILogger<AuditLoggingMiddleware> logger)
     {
         _next = next;
         _logger = logger;
     }
 
+    /// <summary>Invokes the middleware, logging request and response details for audit.</summary>
+    /// <param name="context">The HTTP context.</param>
     public async Task InvokeAsync(HttpContext context)
     {
         var stopwatch = Stopwatch.StartNew();

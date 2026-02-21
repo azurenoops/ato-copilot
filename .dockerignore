@@ -1,0 +1,55 @@
+# Build artifacts
+bin/
+obj/
+publish/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Logs
+logs/
+*.log
+
+# Environment & Secrets
+.env
+.env.*
+*.local
+appsettings.*.local.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tests & Coverage
+tests/
+coverage/
+TestResults/
+
+# Specs & Documentation
+specs/
+.specify/
+.github/
+README.md
+docs/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Temporary
+*.tmp
+*.swp

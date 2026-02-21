@@ -15,6 +15,9 @@ public class McpHttpBridge
     private readonly ILogger<McpHttpBridge> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
 
+    /// <summary>Initializes a new instance of the <see cref="McpHttpBridge"/> class.</summary>
+    /// <param name="mcpServer">The MCP server to delegate requests to.</param>
+    /// <param name="logger">Logger instance.</param>
     public McpHttpBridge(McpServer mcpServer, ILogger<McpHttpBridge> logger)
     {
         _mcpServer = mcpServer;
@@ -31,26 +34,29 @@ public class McpHttpBridge
     /// </summary>
     public void MapEndpoints(WebApplication app)
     {
+        // Cast to Delegate so minimal API correctly handles Task<IResult> return
+        // Without the cast, the framework treats these as RequestDelegate and discards the IResult (ASP0016)
+
         // MCP JSON-RPC endpoint
-        app.MapPost("/mcp", HandleMcpRequestAsync)
+        app.MapPost("/mcp", (Delegate)HandleMcpRequestAsync)
             .WithName("McpJsonRpc")
             .WithTags("MCP")
             .WithDescription("MCP JSON-RPC endpoint for tool invocations");
 
         // Compliance chat endpoint
-        app.MapPost("/mcp/chat", HandleChatRequestAsync)
+        app.MapPost("/mcp/chat", (Delegate)HandleChatRequestAsync)
             .WithName("McpChat")
             .WithTags("MCP")
             .WithDescription("Process compliance requests via AI agent");
 
         // Health endpoint
-        app.MapGet("/health", HandleHealthAsync)
+        app.MapGet("/health", (Delegate)HandleHealthAsync)
             .WithName("Health")
             .WithTags("Health")
             .WithDescription("Health check");
 
         // Tools listing endpoint
-        app.MapGet("/mcp/tools", HandleToolsListAsync)
+        app.MapGet("/mcp/tools", (Delegate)HandleToolsListAsync)
             .WithName("McpToolsList")
             .WithTags("MCP")
             .WithDescription("List available compliance tools");
@@ -58,6 +64,7 @@ public class McpHttpBridge
         _logger.LogInformation("MCP HTTP endpoints mapped");
     }
 
+    /// <summary>Handles MCP JSON-RPC requests (tools/list, tools/call).</summary>
     private async Task<IResult> HandleMcpRequestAsync(HttpContext context)
     {
         try
@@ -98,6 +105,7 @@ public class McpHttpBridge
         }
     }
 
+    /// <summary>Handles natural language chat requests routed to the appropriate agent.</summary>
     private async Task<IResult> HandleChatRequestAsync(HttpContext context)
     {
         try
@@ -125,6 +133,7 @@ public class McpHttpBridge
         }
     }
 
+    /// <summary>Returns server health status and capabilities.</summary>
     private Task<IResult> HandleHealthAsync(HttpContext context)
     {
         var health = new
@@ -139,6 +148,7 @@ public class McpHttpBridge
         return Task.FromResult(Results.Json(health, _jsonOptions));
     }
 
+    /// <summary>Returns the list of available compliance tools.</summary>
     private Task<IResult> HandleToolsListAsync(HttpContext context)
     {
         var tools = new[]
@@ -172,8 +182,13 @@ public class ChatRequest
     public List<ChatMessage>? ConversationHistory { get; set; }
 }
 
+/// <summary>
+/// Chat message model for conversation history.
+/// </summary>
 public class ChatMessage
 {
+    /// <summary>The role of the message sender (user or assistant).</summary>
     public string Role { get; set; } = "user";
+    /// <summary>The message content text.</summary>
     public string Content { get; set; } = string.Empty;
 }

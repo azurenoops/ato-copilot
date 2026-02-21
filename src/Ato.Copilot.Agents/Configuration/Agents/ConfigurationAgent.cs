@@ -1,0 +1,244 @@
+using System.Diagnostics;
+using System.Reflection;
+using Microsoft.Extensions.Logging;
+using Ato.Copilot.Agents.Common;
+using Ato.Copilot.Agents.Configuration.Tools;
+
+namespace Ato.Copilot.Agents.Configuration.Agents;
+
+/// <summary>
+/// Configuration Agent — manages ATO Copilot settings including subscription,
+/// framework, baseline, and environment preferences.
+/// Routes configuration intents to the ConfigurationTool.
+/// Extends BaseAgent per Constitution Principle II.
+/// </summary>
+public class ConfigurationAgent : BaseAgent
+{
+    /// <summary>The single configuration tool managed by this agent.</summary>
+    private readonly ConfigurationTool _configurationTool;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ConfigurationAgent"/> class.
+    /// </summary>
+    /// <param name="configurationTool">Configuration management tool.</param>
+    /// <param name="logger">Logger instance.</param>
+    public ConfigurationAgent(
+        ConfigurationTool configurationTool,
+        ILogger<ConfigurationAgent> logger)
+        : base(logger)
+    {
+        _configurationTool = configurationTool;
+        RegisterTool(_configurationTool);
+    }
+
+    /// <inheritdoc />
+    public override string AgentId => "configuration-agent";
+
+    /// <inheritdoc />
+    public override string AgentName => "Configuration Agent";
+
+    /// <inheritdoc />
+    public override string Description =>
+        "Manages ATO Copilot settings: subscription, framework, baseline, environment, and preferences";
+
+    /// <inheritdoc />
+    public override string GetSystemPrompt()
+    {
+        try
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            var resourceName = "Ato.Copilot.Agents.Configuration.Prompts.ConfigurationAgent.prompt.txt";
+            using var stream = assembly.GetManifestResourceStream(resourceName);
+
+            if (stream == null)
+            {
+                Logger.LogWarning("Configuration agent prompt resource not found: {Resource}", resourceName);
+                return GetFallbackPrompt();
+            }
+
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load configuration agent system prompt");
+            return GetFallbackPrompt();
+        }
+    }
+
+    /// <inheritdoc />
+    public override async Task<AgentResponse> ProcessAsync(
+        string message,
+        AgentConversationContext context,
+        CancellationToken cancellationToken = default)
+    {
+        var sw = Stopwatch.StartNew();
+
+        Logger.LogInformation("Configuration agent processing: {Message}", message);
+
+        // Route the message to the appropriate configuration action
+        var action = ClassifyIntent(message);
+        var arguments = ExtractArguments(message, action);
+
+        var result = await _configurationTool.ExecuteAsync(arguments, cancellationToken);
+
+        sw.Stop();
+
+        return new AgentResponse
+        {
+            Success = true,
+            Response = result,
+            AgentName = AgentName,
+            ProcessingTimeMs = sw.Elapsed.TotalMilliseconds,
+            ToolsExecuted = new List<ToolExecutionResult>
+            {
+                new()
+                {
+                    ToolName = _configurationTool.Name,
+                    Success = true,
+                    Result = result,
+                    ExecutionTimeMs = sw.Elapsed.TotalMilliseconds
+                }
+            }
+        };
+    }
+
+    /// <summary>
+    /// Classifies user intent into a configuration action.
+    /// </summary>
+    /// <param name="message">User message to classify.</param>
+    /// <returns>Configuration action string.</returns>
+    private static string ClassifyIntent(string message)
+    {
+        var lower = message.ToLowerInvariant();
+
+        if (ContainsAny(lower, "show settings", "what's configured", "get configuration",
+            "show configuration", "current settings", "my settings", "display settings"))
+            return "get_configuration";
+
+        if (ContainsAny(lower, "set subscription", "configure subscription", "use subscription",
+            "switch subscription", "change subscription"))
+            return "set_subscription";
+
+        if (ContainsAny(lower, "set framework", "use framework", "switch framework",
+            "change framework", "use fedramp", "use nist", "use dod"))
+            return "set_framework";
+
+        if (ContainsAny(lower, "set baseline", "change baseline", "use baseline"))
+            return "set_baseline";
+
+        if (ContainsAny(lower, "set preference", "set dry", "enable dry", "disable dry",
+            "switch to government", "switch to commercial", "set scan type",
+            "set cloud", "set region", "change region"))
+            return "set_preference";
+
+        // Default to showing current configuration
+        return "get_configuration";
+    }
+
+    /// <summary>
+    /// Extracts tool arguments from the user message based on the classified action.
+    /// </summary>
+    /// <param name="message">Original user message.</param>
+    /// <param name="action">Classified action.</param>
+    /// <returns>Arguments dictionary for the tool.</returns>
+    private static Dictionary<string, object?> ExtractArguments(string message, string action)
+    {
+        var args = new Dictionary<string, object?> { ["action"] = action };
+        var lower = message.ToLowerInvariant();
+
+        switch (action)
+        {
+            case "set_subscription":
+                // Try to extract GUID from message
+                var words = message.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var word in words)
+                {
+                    if (Guid.TryParse(word.Trim('\'', '"'), out _))
+                    {
+                        args["subscriptionId"] = word.Trim('\'', '"');
+                        break;
+                    }
+                }
+                break;
+
+            case "set_framework":
+                if (ContainsAny(lower, "fedramp high", "fedramp-high", "fedramphigh"))
+                    args["framework"] = "FedRAMPHigh";
+                else if (ContainsAny(lower, "fedramp moderate", "fedramp-moderate", "fedrampmoderate"))
+                    args["framework"] = "FedRAMPModerate";
+                else if (ContainsAny(lower, "dod", "il5", "dodil5"))
+                    args["framework"] = "DoDIL5";
+                else if (ContainsAny(lower, "nist", "800-53", "80053"))
+                    args["framework"] = "NIST80053";
+                else
+                {
+                    // Try last word as framework
+                    var parts = message.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length > 0)
+                        args["framework"] = parts[^1];
+                }
+                break;
+
+            case "set_baseline":
+                if (lower.Contains("high"))
+                    args["baseline"] = "High";
+                else if (lower.Contains("moderate"))
+                    args["baseline"] = "Moderate";
+                else if (lower.Contains("low"))
+                    args["baseline"] = "Low";
+                break;
+
+            case "set_preference":
+                if (ContainsAny(lower, "dry run", "dryrun", "dry-run"))
+                {
+                    args["preferenceName"] = "dryRunDefault";
+                    args["preferenceValue"] = lower.Contains("disable") || lower.Contains("off") ? "false" : "true";
+                }
+                else if (ContainsAny(lower, "government", "gov"))
+                {
+                    args["preferenceName"] = "cloudEnvironment";
+                    args["preferenceValue"] = "AzureGovernment";
+                }
+                else if (ContainsAny(lower, "commercial", "public"))
+                {
+                    args["preferenceName"] = "cloudEnvironment";
+                    args["preferenceValue"] = "AzureCloud";
+                }
+                else if (ContainsAny(lower, "scan type"))
+                {
+                    args["preferenceName"] = "defaultScanType";
+                    if (lower.Contains("resource")) args["preferenceValue"] = "resource";
+                    else if (lower.Contains("policy")) args["preferenceValue"] = "policy";
+                    else args["preferenceValue"] = "combined";
+                }
+                else if (ContainsAny(lower, "region"))
+                {
+                    args["preferenceName"] = "region";
+                    var regionWords = message.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (regionWords.Length > 0)
+                        args["preferenceValue"] = regionWords[^1];
+                }
+                break;
+        }
+
+        return args;
+    }
+
+    /// <summary>
+    /// Returns true if the text contains any of the specified phrases.
+    /// </summary>
+    /// <param name="text">Text to search.</param>
+    /// <param name="phrases">Phrases to look for.</param>
+    /// <returns>True if any phrase is found.</returns>
+    private static bool ContainsAny(string text, params string[] phrases) =>
+        phrases.Any(p => text.Contains(p, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Returns a fallback system prompt when the embedded resource cannot be loaded.
+    /// </summary>
+    /// <returns>Fallback prompt string.</returns>
+    private static string GetFallbackPrompt() =>
+        "You are the ATO Copilot Configuration Agent. You help users configure their " +
+        "Azure compliance settings including subscription, framework, baseline, and environment.";
+}

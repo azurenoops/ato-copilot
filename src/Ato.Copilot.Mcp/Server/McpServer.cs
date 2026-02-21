@@ -3,6 +3,8 @@ using Ato.Copilot.Mcp.Tools;
 using Ato.Copilot.Mcp.Models;
 using Ato.Copilot.Mcp.Prompts;
 using Ato.Copilot.Agents.Compliance.Agents;
+using Ato.Copilot.Agents.Configuration.Agents;
+using Ato.Copilot.Agents.Configuration.Tools;
 using Ato.Copilot.Agents.Common;
 using System.Diagnostics;
 using System.Text.Json;
@@ -17,16 +19,22 @@ public class McpServer
 {
     private readonly ComplianceMcpTools _complianceTools;
     private readonly ComplianceAgent _complianceAgent;
+    private readonly ConfigurationAgent _configurationAgent;
+    private readonly ConfigurationTool _configurationTool;
     private readonly ILogger<McpServer> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
 
     public McpServer(
         ComplianceMcpTools complianceTools,
         ComplianceAgent complianceAgent,
+        ConfigurationAgent configurationAgent,
+        ConfigurationTool configurationTool,
         ILogger<McpServer> logger)
     {
         _complianceTools = complianceTools;
         _complianceAgent = complianceAgent;
+        _configurationAgent = configurationAgent;
+        _configurationTool = configurationTool;
         _logger = logger;
         _jsonOptions = new JsonSerializerOptions
         {
@@ -70,8 +78,13 @@ public class McpServer
                     agentContext.WorkflowState[kvp.Key] = kvp.Value;
             }
 
-            var response = await _complianceAgent.ProcessAsync(message, agentContext, cancellationToken);
+            // Route to appropriate agent based on intent classification
+            var targetAgent = ClassifyAndRouteAgent(message);
+            var response = await targetAgent.ProcessAsync(message, agentContext, cancellationToken);
             stopwatch.Stop();
+
+            _logger.LogInformation("Routed to {Agent} | ConvId: {ConvId}",
+                targetAgent.AgentName, conversationId);
 
             return new McpChatResponse
             {
@@ -332,6 +345,34 @@ public class McpServer
             required = new[] { "message" }
         }));
 
+        // Configuration Management Tool
+        tools.Add(CreateTool("configuration_manage", "Manage ATO Copilot settings: subscription, framework, baseline, and preferences", new
+        {
+            type = "object",
+            properties = new
+            {
+                action = new { type = "string", description = "Action: get_configuration, set_subscription, set_framework, set_baseline, set_preference" },
+                subscriptionId = new { type = "string", description = "Azure subscription GUID (for set_subscription)" },
+                framework = new { type = "string", description = "Compliance framework: NIST80053, FedRAMPHigh, FedRAMPModerate, DoDIL5 (for set_framework)" },
+                baseline = new { type = "string", description = "Security baseline: Low, Moderate, High (for set_baseline)" },
+                preferenceName = new { type = "string", description = "Preference name (for set_preference)" },
+                preferenceValue = new { type = "string", description = "Preference value (for set_preference)" }
+            },
+            required = new[] { "action" }
+        }));
+
+        // Configuration Chat Tool
+        tools.Add(CreateTool("configuration_chat", "Process configuration requests through the AI configuration agent for natural language interaction", new
+        {
+            type = "object",
+            properties = new
+            {
+                message = new { type = "string", description = "The configuration question or request" },
+                conversation_id = new { type = "string", description = "Optional conversation ID for context" }
+            },
+            required = new[] { "message" }
+        }));
+
         return new McpResponse { Id = request.Id, Result = new { tools } };
     }
 
@@ -422,6 +463,12 @@ public class McpServer
                     GetArg<string>(args, "message") ?? "",
                     GetArg<string>(args, "conversation_id")),
 
+                "configuration_manage" => await ExecuteConfigurationToolAsync(args),
+
+                "configuration_chat" => await ExecuteConfigurationChatAsync(
+                    GetArg<string>(args, "message") ?? "",
+                    GetArg<string>(args, "conversation_id")),
+
                 _ => $"Unknown tool: {toolName}"
             };
 
@@ -438,6 +485,30 @@ public class McpServer
     {
         var result = await ProcessChatRequestAsync(message, conversationId);
         return result.Response;
+    }
+
+    private async Task<string> ExecuteConfigurationToolAsync(Dictionary<string, object> args)
+    {
+        // Convert to nullable dictionary expected by BaseTool
+        var toolArgs = args.ToDictionary(
+            kvp => kvp.Key,
+            kvp => (object?)kvp.Value);
+
+        return await _configurationTool.ExecuteAsync(toolArgs);
+    }
+
+    private async Task<string> ExecuteConfigurationChatAsync(string message, string? conversationId)
+    {
+        conversationId ??= Guid.NewGuid().ToString();
+
+        var agentContext = new AgentConversationContext
+        {
+            ConversationId = conversationId,
+            UserId = "mcp-user"
+        };
+
+        var response = await _configurationAgent.ProcessAsync(message, agentContext);
+        return response.Response;
     }
 
     private McpResponse HandlePromptsList(McpRequest request)
@@ -497,4 +568,28 @@ public class McpServer
         try { return (T)Convert.ChangeType(value, typeof(T)); }
         catch { return default; }
     }
+
+    /// <summary>
+    /// Classifies the user message and routes to the appropriate agent.
+    /// Configuration intents go to ConfigurationAgent; everything else goes to ComplianceAgent.
+    /// </summary>
+    private BaseAgent ClassifyAndRouteAgent(string message)
+    {
+        var lower = message.ToLowerInvariant();
+
+        // Configuration-related intents → ConfigurationAgent
+        if (ContainsAny(lower,
+            "configure", "subscription", "set framework", "set baseline",
+            "set cloud", "get config", "show config", "configuration",
+            "settings", "setup", "set dry", "set scan"))
+        {
+            return _configurationAgent;
+        }
+
+        // Everything else → ComplianceAgent (assessment, remediation, evidence, documents, monitoring, etc.)
+        return _complianceAgent;
+    }
+
+    private static bool ContainsAny(string text, params string[] keywords) =>
+        keywords.Any(k => text.Contains(k, StringComparison.OrdinalIgnoreCase));
 }

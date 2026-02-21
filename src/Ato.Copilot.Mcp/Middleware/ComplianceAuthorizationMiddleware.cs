@@ -6,19 +6,41 @@ namespace Ato.Copilot.Mcp.Middleware;
 
 /// <summary>
 /// Middleware for compliance-level authorization checks.
-/// When enabled, validates user claims against required compliance roles.
+/// Validates user claims against required compliance roles and enforces
+/// tool-level RBAC: Auditor is read-only, Analyst cannot approve, Administrator has full access.
 /// </summary>
 public class ComplianceAuthorizationMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<ComplianceAuthorizationMiddleware> _logger;
 
+    /// <summary>Tools that modify compliance state (write operations).</summary>
+    private static readonly HashSet<string> WriteTools = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "compliance_remediate",
+        "compliance_validate_remediation",
+        "compliance_remediation_plan",
+        "compliance_collect_evidence"
+    };
+
+    /// <summary>Tools that require administrator/officer approval authority.</summary>
+    private static readonly HashSet<string> ApprovalTools = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "compliance_validate_remediation"
+    };
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ComplianceAuthorizationMiddleware"/> class.
+    /// </summary>
     public ComplianceAuthorizationMiddleware(RequestDelegate next, ILogger<ComplianceAuthorizationMiddleware> logger)
     {
         _next = next;
         _logger = logger;
     }
 
+    /// <summary>
+    /// Processes the HTTP request, enforcing authentication and role-based tool access.
+    /// </summary>
     public async Task InvokeAsync(HttpContext context)
     {
         // Skip auth for health checks
@@ -48,6 +70,7 @@ public class ComplianceAuthorizationMiddleware
         // Verify compliance reader role minimum
         var hasRole = context.User.IsInRole(ComplianceRoles.Viewer) ||
                       context.User.IsInRole(ComplianceRoles.Analyst) ||
+                      context.User.IsInRole(ComplianceRoles.Auditor) ||
                       context.User.IsInRole(ComplianceRoles.Administrator);
 
         if (!hasRole)
@@ -59,6 +82,54 @@ public class ComplianceAuthorizationMiddleware
             return;
         }
 
+        // Tool-level RBAC enforcement
+        var toolName = context.Items["ToolName"] as string;
+        if (!string.IsNullOrEmpty(toolName))
+        {
+            // Auditor: read-only — deny write tools
+            if (context.User.IsInRole(ComplianceRoles.Auditor) && !context.User.IsInRole(ComplianceRoles.Administrator))
+            {
+                if (WriteTools.Contains(toolName))
+                {
+                    _logger.LogWarning("Auditor {User} denied access to write tool {Tool}",
+                        context.User.Identity?.Name, toolName);
+                    context.Response.StatusCode = 403;
+                    await context.Response.WriteAsJsonAsync(new
+                    {
+                        error = "Auditors have read-only access. Write operations require Analyst or Administrator role."
+                    });
+                    return;
+                }
+            }
+
+            // Analyst/Viewer: deny approval tools
+            if ((context.User.IsInRole(ComplianceRoles.Analyst) || context.User.IsInRole(ComplianceRoles.Viewer))
+                && !context.User.IsInRole(ComplianceRoles.Administrator))
+            {
+                if (ApprovalTools.Contains(toolName))
+                {
+                    _logger.LogWarning("User {User} denied access to approval tool {Tool}",
+                        context.User.Identity?.Name, toolName);
+                    context.Response.StatusCode = 403;
+                    await context.Response.WriteAsJsonAsync(new
+                    {
+                        error = "Approval operations require Administrator role."
+                    });
+                    return;
+                }
+            }
+        }
+
         await _next(context);
     }
+
+    /// <summary>
+    /// Checks whether a given tool name requires write access.
+    /// </summary>
+    public static bool IsWriteTool(string toolName) => WriteTools.Contains(toolName);
+
+    /// <summary>
+    /// Checks whether a given tool name requires approval authority.
+    /// </summary>
+    public static bool IsApprovalTool(string toolName) => ApprovalTools.Contains(toolName);
 }

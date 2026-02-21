@@ -11,14 +11,20 @@ public class ComplianceAssessmentTool : BaseTool
 {
     private readonly IAtoComplianceEngine _complianceEngine;
 
+    /// <summary>Initializes a new instance of the <see cref="ComplianceAssessmentTool"/> class.</summary>
+    /// <param name="complianceEngine">The compliance engine for running assessments.</param>
+    /// <param name="logger">Logger instance.</param>
     public ComplianceAssessmentTool(IAtoComplianceEngine complianceEngine, ILogger<ComplianceAssessmentTool> logger) : base(logger)
     {
         _complianceEngine = complianceEngine;
     }
 
+    /// <inheritdoc />
     public override string Name => "compliance_assess";
+    /// <inheritdoc />
     public override string Description => "Run a NIST 800-53 compliance assessment against Azure resources. Supports scan types: quick, policy, full.";
 
+    /// <inheritdoc />
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
         ["subscription_id"] = new() { Name = "subscription_id", Description = "Azure subscription ID", Type = "string", Required = true },
@@ -29,6 +35,7 @@ public class ComplianceAssessmentTool : BaseTool
         ["include_passed"] = new() { Name = "include_passed", Description = "Include passed controls", Type = "boolean" }
     };
 
+    /// <inheritdoc />
     public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var subscriptionId = GetArg<string>(arguments, "subscription_id");
@@ -38,12 +45,18 @@ public class ComplianceAssessmentTool : BaseTool
         var scanType = GetArg<string>(arguments, "scan_type") ?? "quick";
         var includePassed = GetArg<bool?>(arguments, "include_passed") ?? false;
 
+        if (string.IsNullOrWhiteSpace(subscriptionId))
+        {
+            return "⚠️ No subscription configured. Use 'set my subscription to <id>' first.\n" +
+                   "Error: SUBSCRIPTION_NOT_CONFIGURED";
+        }
+
         Logger.LogInformation("Running compliance assessment | Sub: {Sub} | Type: {Type}", subscriptionId, scanType);
 
         var result = await _complianceEngine.RunAssessmentAsync(
-            subscriptionId ?? "", framework, controlFamilies, resourceTypes, scanType, includePassed, cancellationToken);
+            subscriptionId, framework, controlFamilies, resourceTypes, scanType, includePassed, cancellationToken);
 
-        return $"## Compliance Assessment Results\n\n" +
+        var output = $"## Compliance Assessment Results\n\n" +
                $"**Subscription**: {result.SubscriptionId}\n" +
                $"**Framework**: {result.Framework}\n" +
                $"**Scan Type**: {result.ScanType}\n" +
@@ -53,10 +66,64 @@ public class ComplianceAssessmentTool : BaseTool
                $"| Total Controls | {result.TotalControls} |\n" +
                $"| ✅ Passed | {result.PassedControls} |\n" +
                $"| ❌ Failed | {result.FailedControls} |\n" +
-               $"| ⚪ Not Assessed | {result.NotAssessedControls} |\n\n" +
-               $"### Findings ({result.Findings.Count})\n\n" +
-               string.Join("\n", result.Findings.Take(10).Select(f =>
-                   $"- **{f.Severity}** [{f.ControlId}] {f.Title}"));
+               $"| ⚪ Not Assessed | {result.NotAssessedControls} |\n\n";
+
+        // Group findings by resource type for resource scans, or by policy for policy scans
+        if (result.Findings.Count > 0)
+        {
+            if (string.Equals(scanType, "resource", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(scanType, "quick", StringComparison.OrdinalIgnoreCase))
+            {
+                var grouped = result.Findings
+                    .GroupBy(f => f.ResourceType ?? "Unknown")
+                    .OrderByDescending(g => g.Count());
+                output += $"### Findings by Resource Type ({result.Findings.Count})\n\n";
+                foreach (var group in grouped)
+                {
+                    output += $"#### {group.Key} ({group.Count()})\n";
+                    foreach (var f in group.Take(5))
+                        output += $"- **{f.Severity}** [{f.ControlId}] {f.Title}\n";
+                    if (group.Count() > 5)
+                        output += $"- ... and {group.Count() - 5} more\n";
+                    output += "\n";
+                }
+            }
+            else if (string.Equals(scanType, "policy", StringComparison.OrdinalIgnoreCase))
+            {
+                var grouped = result.Findings
+                    .GroupBy(f => f.PolicyDefinitionId ?? f.ControlId ?? "Unknown")
+                    .OrderByDescending(g => g.Count());
+                output += $"### Findings by Policy ({result.Findings.Count})\n\n";
+                foreach (var group in grouped)
+                {
+                    output += $"#### {group.Key} ({group.Count()})\n";
+                    foreach (var f in group.Take(5))
+                        output += $"- **{f.Severity}** [{f.ControlId}] {f.Title}\n";
+                    if (group.Count() > 5)
+                        output += $"- ... and {group.Count() - 5} more\n";
+                    output += "\n";
+                }
+            }
+            else
+            {
+                // Combined or other: show by control family
+                var grouped = result.Findings
+                    .GroupBy(f => f.ControlId?.Split('-').FirstOrDefault() ?? "Unknown")
+                    .OrderByDescending(g => g.Count());
+                output += $"### Findings by Control Family ({result.Findings.Count})\n\n";
+                foreach (var group in grouped)
+                {
+                    output += $"#### {group.Key} ({group.Count()})\n";
+                    foreach (var f in group.Take(5))
+                        output += $"- **{f.Severity}** [{f.ControlId}] {f.Title}\n";
+                    if (group.Count() > 5)
+                        output += $"- ... and {group.Count() - 5} more\n";
+                    output += "\n";
+                }
+            }
+        }
+
+        return output;
     }
 }
 
@@ -67,20 +134,27 @@ public class ControlFamilyTool : BaseTool
 {
     private readonly INistControlsService _nistService;
 
+    /// <summary>Initializes a new instance of the <see cref="ControlFamilyTool"/> class.</summary>
+    /// <param name="nistService">NIST controls catalog service.</param>
+    /// <param name="logger">Logger instance.</param>
     public ControlFamilyTool(INistControlsService nistService, ILogger<ControlFamilyTool> logger) : base(logger)
     {
         _nistService = nistService;
     }
 
+    /// <inheritdoc />
     public override string Name => "compliance_get_control_family";
+    /// <inheritdoc />
     public override string Description => "Get detailed information about a NIST 800-53 control family.";
 
+    /// <inheritdoc />
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
         ["family_id"] = new() { Name = "family_id", Description = "Control family (e.g., AC, AU, IA)", Type = "string", Required = true },
         ["include_controls"] = new() { Name = "include_controls", Description = "Include individual controls", Type = "boolean" }
     };
 
+    /// <inheritdoc />
     public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var familyId = GetArg<string>(arguments, "family_id") ?? "AC";
@@ -101,14 +175,20 @@ public class DocumentGenerationTool : BaseTool
 {
     private readonly IDocumentGenerationService _documentService;
 
+    /// <summary>Initializes a new instance of the <see cref="DocumentGenerationTool"/> class.</summary>
+    /// <param name="documentService">Document generation service.</param>
+    /// <param name="logger">Logger instance.</param>
     public DocumentGenerationTool(IDocumentGenerationService documentService, ILogger<DocumentGenerationTool> logger) : base(logger)
     {
         _documentService = documentService;
     }
 
+    /// <inheritdoc />
     public override string Name => "compliance_generate_document";
+    /// <inheritdoc />
     public override string Description => "Generate compliance documentation (SSP, POA&M, SAR).";
 
+    /// <inheritdoc />
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
         ["document_type"] = new() { Name = "document_type", Description = "Document type: ssp, poam, sar", Type = "string", Required = true },
@@ -117,6 +197,7 @@ public class DocumentGenerationTool : BaseTool
         ["system_name"] = new() { Name = "system_name", Description = "System name for document", Type = "string" }
     };
 
+    /// <inheritdoc />
     public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var documentType = GetArg<string>(arguments, "document_type") ?? "ssp";
@@ -136,14 +217,20 @@ public class EvidenceCollectionTool : BaseTool
 {
     private readonly IEvidenceStorageService _evidenceService;
 
+    /// <summary>Initializes a new instance of the <see cref="EvidenceCollectionTool"/> class.</summary>
+    /// <param name="evidenceService">Evidence storage service.</param>
+    /// <param name="logger">Logger instance.</param>
     public EvidenceCollectionTool(IEvidenceStorageService evidenceService, ILogger<EvidenceCollectionTool> logger) : base(logger)
     {
         _evidenceService = evidenceService;
     }
 
+    /// <inheritdoc />
     public override string Name => "compliance_collect_evidence";
+    /// <inheritdoc />
     public override string Description => "Collect compliance evidence from Azure resources for audit documentation.";
 
+    /// <inheritdoc />
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
         ["control_id"] = new() { Name = "control_id", Description = "NIST control ID", Type = "string", Required = true },
@@ -151,6 +238,7 @@ public class EvidenceCollectionTool : BaseTool
         ["resource_group"] = new() { Name = "resource_group", Description = "Resource group filter", Type = "string" }
     };
 
+    /// <inheritdoc />
     public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var controlId = GetArg<string>(arguments, "control_id") ?? "";
@@ -169,28 +257,53 @@ public class RemediationExecuteTool : BaseTool
 {
     private readonly IRemediationEngine _remediationEngine;
 
+    /// <summary>Initializes a new instance of the <see cref="RemediationExecuteTool"/> class.</summary>
+    /// <param name="remediationEngine">Remediation engine service.</param>
+    /// <param name="logger">Logger instance.</param>
     public RemediationExecuteTool(IRemediationEngine remediationEngine, ILogger<RemediationExecuteTool> logger) : base(logger)
     {
         _remediationEngine = remediationEngine;
     }
 
+    /// <inheritdoc />
     public override string Name => "compliance_remediate";
-    public override string Description => "Remediate a compliance finding with guided or automated fixes.";
+    /// <inheritdoc />
+    public override string Description => "Remediate a compliance finding with guided or automated fixes. Supports single finding or batch remediation by severity/family.";
 
+    /// <inheritdoc />
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["finding_id"] = new() { Name = "finding_id", Description = "Finding ID to remediate", Type = "string", Required = true },
+        ["finding_id"] = new() { Name = "finding_id", Description = "Finding ID to remediate (for single remediation)", Type = "string" },
         ["apply_remediation"] = new() { Name = "apply_remediation", Description = "Apply fix automatically", Type = "boolean" },
-        ["dry_run"] = new() { Name = "dry_run", Description = "Preview without applying", Type = "boolean" }
+        ["dry_run"] = new() { Name = "dry_run", Description = "Preview without applying", Type = "boolean" },
+        ["batch"] = new() { Name = "batch", Description = "Set to true for batch remediation by severity or family", Type = "boolean" },
+        ["severity"] = new() { Name = "severity", Description = "Severity filter for batch remediation (Critical, High, Medium, Low)", Type = "string" },
+        ["family"] = new() { Name = "family", Description = "Control family filter for batch remediation (e.g., AC, IA, SC)", Type = "string" },
+        ["subscription_id"] = new() { Name = "subscription_id", Description = "Subscription ID for batch remediation", Type = "string" }
     };
 
+    /// <inheritdoc />
     public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
-        var findingId = GetArg<string>(arguments, "finding_id") ?? "";
-        var applyRemediation = GetArg<bool?>(arguments, "apply_remediation") ?? false;
-        var dryRun = GetArg<bool?>(arguments, "dry_run") ?? true;
+        var batch = GetArg<bool?>(arguments, "batch") ?? false;
 
-        return await _remediationEngine.ExecuteRemediationAsync(findingId, applyRemediation, dryRun, cancellationToken);
+        if (batch)
+        {
+            var severity = GetArg<string>(arguments, "severity");
+            var family = GetArg<string>(arguments, "family");
+            var subscriptionId = GetArg<string>(arguments, "subscription_id") ?? "";
+            var dryRun = GetArg<bool?>(arguments, "dry_run") ?? true;
+
+            return await _remediationEngine.BatchRemediateAsync(subscriptionId, severity, family, dryRun, cancellationToken);
+        }
+        else
+        {
+            var findingId = GetArg<string>(arguments, "finding_id") ?? "";
+            var applyRemediation = GetArg<bool?>(arguments, "apply_remediation") ?? false;
+            var dryRun = GetArg<bool?>(arguments, "dry_run") ?? true;
+
+            return await _remediationEngine.ExecuteRemediationAsync(findingId, applyRemediation, dryRun, cancellationToken);
+        }
     }
 }
 
@@ -201,14 +314,20 @@ public class ValidateRemediationTool : BaseTool
 {
     private readonly IRemediationEngine _remediationEngine;
 
+    /// <summary>Initializes a new instance of the <see cref="ValidateRemediationTool"/> class.</summary>
+    /// <param name="remediationEngine">Remediation engine service.</param>
+    /// <param name="logger">Logger instance.</param>
     public ValidateRemediationTool(IRemediationEngine remediationEngine, ILogger<ValidateRemediationTool> logger) : base(logger)
     {
         _remediationEngine = remediationEngine;
     }
 
+    /// <inheritdoc />
     public override string Name => "compliance_validate_remediation";
+    /// <inheritdoc />
     public override string Description => "Validate that a remediation was successfully applied.";
 
+    /// <inheritdoc />
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
         ["finding_id"] = new() { Name = "finding_id", Description = "Finding ID to validate", Type = "string", Required = true },
@@ -216,6 +335,7 @@ public class ValidateRemediationTool : BaseTool
         ["subscription_id"] = new() { Name = "subscription_id", Description = "Azure subscription", Type = "string" }
     };
 
+    /// <inheritdoc />
     public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var findingId = GetArg<string>(arguments, "finding_id") ?? "";
@@ -233,20 +353,27 @@ public class RemediationPlanTool : BaseTool
 {
     private readonly IRemediationEngine _remediationEngine;
 
+    /// <summary>Initializes a new instance of the <see cref="RemediationPlanTool"/> class.</summary>
+    /// <param name="remediationEngine">Remediation engine service.</param>
+    /// <param name="logger">Logger instance.</param>
     public RemediationPlanTool(IRemediationEngine remediationEngine, ILogger<RemediationPlanTool> logger) : base(logger)
     {
         _remediationEngine = remediationEngine;
     }
 
+    /// <inheritdoc />
     public override string Name => "compliance_generate_plan";
+    /// <inheritdoc />
     public override string Description => "Generate a prioritized remediation plan for compliance findings.";
 
+    /// <inheritdoc />
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
         ["subscription_id"] = new() { Name = "subscription_id", Description = "Azure subscription", Type = "string" },
         ["resource_group_name"] = new() { Name = "resource_group_name", Description = "Resource group filter", Type = "string" }
     };
 
+    /// <inheritdoc />
     public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var subscriptionId = GetArg<string>(arguments, "subscription_id");
@@ -270,20 +397,27 @@ public class AssessmentAuditLogTool : BaseTool
 {
     private readonly IAssessmentAuditService _auditService;
 
+    /// <summary>Initializes a new instance of the <see cref="AssessmentAuditLogTool"/> class.</summary>
+    /// <param name="auditService">Assessment audit service.</param>
+    /// <param name="logger">Logger instance.</param>
     public AssessmentAuditLogTool(IAssessmentAuditService auditService, ILogger<AssessmentAuditLogTool> logger) : base(logger)
     {
         _auditService = auditService;
     }
 
+    /// <inheritdoc />
     public override string Name => "compliance_audit_log";
+    /// <inheritdoc />
     public override string Description => "Get the audit trail of compliance assessments.";
 
+    /// <inheritdoc />
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
         ["subscription_id"] = new() { Name = "subscription_id", Description = "Azure subscription", Type = "string" },
         ["days"] = new() { Name = "days", Description = "Number of days to look back", Type = "integer" }
     };
 
+    /// <inheritdoc />
     public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var subscriptionId = GetArg<string>(arguments, "subscription_id");
@@ -300,20 +434,27 @@ public class ComplianceHistoryTool : BaseTool
 {
     private readonly IComplianceHistoryService _historyService;
 
+    /// <summary>Initializes a new instance of the <see cref="ComplianceHistoryTool"/> class.</summary>
+    /// <param name="historyService">Compliance history service.</param>
+    /// <param name="logger">Logger instance.</param>
     public ComplianceHistoryTool(IComplianceHistoryService historyService, ILogger<ComplianceHistoryTool> logger) : base(logger)
     {
         _historyService = historyService;
     }
 
+    /// <inheritdoc />
     public override string Name => "compliance_history";
+    /// <inheritdoc />
     public override string Description => "Get compliance history and trends over time.";
 
+    /// <inheritdoc />
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
         ["subscription_id"] = new() { Name = "subscription_id", Description = "Azure subscription", Type = "string" },
         ["days"] = new() { Name = "days", Description = "Number of days to look back", Type = "integer" }
     };
 
+    /// <inheritdoc />
     public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var subscriptionId = GetArg<string>(arguments, "subscription_id");
@@ -330,20 +471,27 @@ public class ComplianceStatusTool : BaseTool
 {
     private readonly IComplianceStatusService _statusService;
 
+    /// <summary>Initializes a new instance of the <see cref="ComplianceStatusTool"/> class.</summary>
+    /// <param name="statusService">Compliance status service.</param>
+    /// <param name="logger">Logger instance.</param>
     public ComplianceStatusTool(IComplianceStatusService statusService, ILogger<ComplianceStatusTool> logger) : base(logger)
     {
         _statusService = statusService;
     }
 
+    /// <inheritdoc />
     public override string Name => "compliance_status";
+    /// <inheritdoc />
     public override string Description => "Get current compliance status and posture summary.";
 
+    /// <inheritdoc />
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
         ["subscription_id"] = new() { Name = "subscription_id", Description = "Azure subscription", Type = "string" },
         ["framework"] = new() { Name = "framework", Description = "Compliance framework", Type = "string" }
     };
 
+    /// <inheritdoc />
     public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var subscriptionId = GetArg<string>(arguments, "subscription_id");
@@ -360,14 +508,20 @@ public class ComplianceMonitoringTool : BaseTool
 {
     private readonly IComplianceMonitoringService _monitoringService;
 
+    /// <summary>Initializes a new instance of the <see cref="ComplianceMonitoringTool"/> class.</summary>
+    /// <param name="monitoringService">Compliance monitoring service.</param>
+    /// <param name="logger">Logger instance.</param>
     public ComplianceMonitoringTool(IComplianceMonitoringService monitoringService, ILogger<ComplianceMonitoringTool> logger) : base(logger)
     {
         _monitoringService = monitoringService;
     }
 
+    /// <inheritdoc />
     public override string Name => "compliance_monitoring";
+    /// <inheritdoc />
     public override string Description => "Query continuous compliance monitoring status, alerts, and trends.";
 
+    /// <inheritdoc />
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
         ["action"] = new() { Name = "action", Description = "Action: status, scan, alerts, acknowledge, trend, history", Type = "string", Required = true },
@@ -375,6 +529,7 @@ public class ComplianceMonitoringTool : BaseTool
         ["days"] = new() { Name = "days", Description = "Days to look back", Type = "integer" }
     };
 
+    /// <inheritdoc />
     public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var action = GetArg<string>(arguments, "action") ?? "status";
