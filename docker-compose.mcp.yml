@@ -1,0 +1,45 @@
+# ──────────────────────────────────────────────────────────────
+#  ATO Copilot — Docker Compose (MCP Server)
+# ──────────────────────────────────────────────────────────────
+version: '3.8'
+
+services:
+  ato-copilot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ato-copilot-mcp
+    restart: unless-stopped
+    ports:
+      - "${ATO_SERVER_PORT:-3001}:3001"
+    environment:
+      - ATO_RUN_MODE=http
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
+      - ATO_AZURE_AD__TENANT_ID=${ATO_AZURE_AD__TENANT_ID}
+      - ATO_AZURE_AD__CLIENT_ID=${ATO_AZURE_AD__CLIENT_ID}
+      - ATO_AZURE_AD__CLIENT_SECRET=${ATO_AZURE_AD__CLIENT_SECRET}
+      - ATO_AZURE_AD__CLOUD_ENVIRONMENT=${ATO_AZURE_AD__CLOUD_ENVIRONMENT:-AzureUSGovernment}
+      - ATO_GATEWAY__AZURE_ENVIRONMENT=${ATO_GATEWAY__AZURE_ENVIRONMENT:-AzureUSGovernment}
+      - ATO_GATEWAY__DEFAULT_SUBSCRIPTION_ID=${ATO_GATEWAY__DEFAULT_SUBSCRIPTION_ID}
+      - ATO_CONNECTION_STRINGS__DEFAULT_CONNECTION=${ATO_CONNECTION_STRINGS__DEFAULT_CONNECTION:-Data Source=/data/ato-copilot.db}
+    volumes:
+      - ato-data:/data
+      - ato-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - ato-network
+
+volumes:
+  ato-data:
+    driver: local
+  ato-logs:
+    driver: local
+
+networks:
+  ato-network:
+    driver: bridge

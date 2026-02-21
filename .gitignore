@@ -1,0 +1,43 @@
+# Build artifacts
+bin/
+obj/
+publish/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Environment
+.env
+*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Secrets
+appsettings.*.local.json
+*.pfx
+*.pem
+
+# Docker
+docker-compose.override.yml
+
+# NuGet
+*.nupkg
+nuget.config
+
+# Test results
+TestResults/
+coverage/
