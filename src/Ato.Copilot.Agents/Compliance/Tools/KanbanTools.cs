@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Ato.Copilot.Agents.Common;
+using Ato.Copilot.Core.Interfaces.Auth;
 using Ato.Copilot.Core.Interfaces.Kanban;
 using Ato.Copilot.Core.Models.Compliance;
 using Ato.Copilot.Core.Models.Kanban;
@@ -85,6 +86,30 @@ public abstract class KanbanToolBase : BaseTool
 
         return new List<string>();
     }
+
+    /// <summary>
+    /// Resolves <see cref="IUserContext"/> from a scoped <see cref="IServiceProvider"/>.
+    /// Falls back to a default anonymous context if the service is not registered.
+    /// </summary>
+    /// <param name="serviceProvider">The scoped service provider.</param>
+    /// <returns>The resolved <see cref="IUserContext"/> instance.</returns>
+    protected static IUserContext ResolveUserContext(IServiceProvider serviceProvider)
+    {
+        return serviceProvider.GetService<IUserContext>() ?? AnonymousUserContext.Instance;
+    }
+}
+
+/// <summary>
+/// Fallback <see cref="IUserContext"/> for unauthenticated or test scenarios
+/// where no <c>IUserContext</c> is registered in DI.
+/// </summary>
+internal sealed class AnonymousUserContext : IUserContext
+{
+    public static readonly AnonymousUserContext Instance = new();
+    public string UserId => "anonymous";
+    public string DisplayName => "anonymous";
+    public string Role => "Compliance.Viewer";
+    public bool IsAuthenticated => false;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -115,7 +140,6 @@ public class KanbanCreateBoardTool : KanbanToolBase
         var name = GetArg<string>(arguments, "name");
         var subscriptionId = GetArg<string>(arguments, "subscription_id") ?? "";
         var assessmentId = GetArg<string>(arguments, "assessment_id");
-        var owner = GetArg<string>(arguments, "owner") ?? "system";
 
         if (string.IsNullOrWhiteSpace(name))
             return Error("Board name is required.", "COMMENT_REQUIRES_TEXT", "Provide a name for the board.");
@@ -124,6 +148,8 @@ public class KanbanCreateBoardTool : KanbanToolBase
         {
             using var scope = ScopeFactory.CreateScope();
             var svc = scope.ServiceProvider.GetRequiredService<IKanbanService>();
+            var userContext = ResolveUserContext(scope.ServiceProvider);
+            var owner = GetArg<string>(arguments, "owner") ?? userContext.UserId;
 
             RemediationBoard board;
             if (!string.IsNullOrWhiteSpace(assessmentId))
@@ -179,6 +205,7 @@ public class KanbanBoardShowTool : KanbanToolBase
 
         using var scope = ScopeFactory.CreateScope();
         var svc = scope.ServiceProvider.GetRequiredService<IKanbanService>();
+        var userContext = ResolveUserContext(scope.ServiceProvider);
 
         var board = await svc.GetBoardAsync(boardId, cancellationToken);
         if (board == null)
@@ -200,7 +227,8 @@ public class KanbanBoardShowTool : KanbanToolBase
                         taskId = t.Id, taskNumber = t.TaskNumber, title = t.Title,
                         severity = t.Severity.ToString(), assigneeName = t.AssigneeName,
                         dueDate = t.DueDate,
-                        isOverdue = t.DueDate < DateTime.UtcNow && t.Status != TaskStatus.Done && t.Status != TaskStatus.Blocked
+                        isOverdue = t.DueDate < DateTime.UtcNow && t.Status != TaskStatus.Done && t.Status != TaskStatus.Blocked,
+                        isAssignedToCurrentUser = userContext.IsAuthenticated && string.Equals(t.AssigneeId, userContext.UserId, StringComparison.OrdinalIgnoreCase)
                     }).ToArray()
                     : Array.Empty<object>()
             };
@@ -251,6 +279,7 @@ public class KanbanGetTaskTool : KanbanToolBase
 
         using var scope = ScopeFactory.CreateScope();
         var svc = scope.ServiceProvider.GetRequiredService<IKanbanService>();
+        var userContext = ResolveUserContext(scope.ServiceProvider);
 
         var task = await svc.GetTaskAsync(taskId, cancellationToken);
         if (task == null)
@@ -263,6 +292,7 @@ public class KanbanGetTaskTool : KanbanToolBase
             controlId = task.ControlId, controlFamily = task.ControlFamily,
             severity = task.Severity.ToString(), status = task.Status.ToString(),
             assigneeId = task.AssigneeId, assigneeName = task.AssigneeName,
+            isAssignedToCurrentUser = userContext.IsAuthenticated && string.Equals(task.AssigneeId, userContext.UserId, StringComparison.OrdinalIgnoreCase),
             dueDate = task.DueDate,
             isOverdue = task.DueDate < DateTime.UtcNow && task.Status != TaskStatus.Done && task.Status != TaskStatus.Blocked,
             createdAt = task.CreatedAt, updatedAt = task.UpdatedAt, createdBy = task.CreatedBy,
@@ -330,9 +360,10 @@ public class KanbanCreateTaskTool : KanbanToolBase
         {
             using var scope = ScopeFactory.CreateScope();
             var svc = scope.ServiceProvider.GetRequiredService<IKanbanService>();
+            var userContext = ResolveUserContext(scope.ServiceProvider);
 
             var task = await svc.CreateTaskAsync(
-                boardId, title, controlId, "system", description, severity, assigneeId, dueDate,
+                boardId, title, controlId, userContext.UserId, description, severity, assigneeId, dueDate,
                 affectedResources.Count > 0 ? affectedResources : null,
                 remediationScript, validationCriteria, cancellationToken);
 
@@ -384,16 +415,17 @@ public class KanbanAssignTaskTool : KanbanToolBase
         {
             using var scope = ScopeFactory.CreateScope();
             var svc = scope.ServiceProvider.GetRequiredService<IKanbanService>();
+            var userContext = ResolveUserContext(scope.ServiceProvider);
 
             var task = await svc.AssignTaskAsync(
-                taskId, "system", "System", "Compliance.Officer", assigneeId, assigneeName, cancellationToken);
+                taskId, userContext.UserId, userContext.DisplayName, userContext.Role, assigneeId, assigneeName, cancellationToken);
 
             return Success(new
             {
                 taskId = task.Id, taskNumber = task.TaskNumber,
                 previousAssignee = (string?)null,
                 newAssignee = new { assigneeId = task.AssigneeId, assigneeName = task.AssigneeName },
-                assignedAt = DateTime.UtcNow, assignedBy = "system"
+                assignedAt = DateTime.UtcNow, assignedBy = userContext.UserId
             });
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("not found"))
@@ -443,15 +475,16 @@ public class KanbanMoveTaskTool : KanbanToolBase
         {
             using var scope = ScopeFactory.CreateScope();
             var svc = scope.ServiceProvider.GetRequiredService<IKanbanService>();
+            var userContext = ResolveUserContext(scope.ServiceProvider);
 
             var task = await svc.MoveTaskAsync(
-                taskId, targetStatus, "system", "System", "Compliance.Officer", comment, skipValidation, cancellationToken);
+                taskId, targetStatus, userContext.UserId, userContext.DisplayName, userContext.Role, comment, skipValidation, cancellationToken);
 
             return Success(new
             {
                 taskId = task.Id, taskNumber = task.TaskNumber,
                 previousStatus = (string?)null, newStatus = task.Status.ToString(),
-                transitionedAt = DateTime.UtcNow, transitionedBy = "system"
+                transitionedAt = DateTime.UtcNow, transitionedBy = userContext.UserId
             });
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("not found"))
@@ -524,6 +557,7 @@ public class KanbanTaskListTool : KanbanToolBase
         {
             using var scope = ScopeFactory.CreateScope();
             var svc = scope.ServiceProvider.GetRequiredService<IKanbanService>();
+            var userContext = ResolveUserContext(scope.ServiceProvider);
 
             var result = await svc.ListTasksAsync(
                 boardId, status, severity, assigneeId, controlFamily, isOverdue,
@@ -540,6 +574,7 @@ public class KanbanTaskListTool : KanbanToolBase
                     severity = t.Severity.ToString(), status = t.Status.ToString(),
                     assigneeName = t.AssigneeName, dueDate = t.DueDate,
                     isOverdue = t.DueDate < DateTime.UtcNow && t.Status != TaskStatus.Done && t.Status != TaskStatus.Blocked,
+                    isAssignedToCurrentUser = userContext.IsAuthenticated && string.Equals(t.AssigneeId, userContext.UserId, StringComparison.OrdinalIgnoreCase),
                     commentCount = t.Comments?.Count ?? 0, createdAt = t.CreatedAt
                 }),
                 appliedFilters = new { status = statusStr, severity = severityStr, assigneeId, controlFamily, isOverdue }
@@ -694,9 +729,10 @@ public class KanbanAddCommentTool : KanbanToolBase
         {
             using var scope = ScopeFactory.CreateScope();
             var svc = scope.ServiceProvider.GetRequiredService<IKanbanService>();
+            var userContext = ResolveUserContext(scope.ServiceProvider);
 
             var comment = await svc.AddCommentAsync(
-                taskId, "system", "System", content, "Compliance.Officer", parentCommentId, cancellationToken);
+                taskId, userContext.UserId, userContext.DisplayName, content, userContext.Role, parentCommentId, cancellationToken);
             var task = await svc.GetTaskAsync(taskId, cancellationToken);
 
             return Success(new
@@ -797,8 +833,9 @@ public class KanbanEditCommentTool : KanbanToolBase
         {
             using var scope = ScopeFactory.CreateScope();
             var svc = scope.ServiceProvider.GetRequiredService<IKanbanService>();
+            var userContext = ResolveUserContext(scope.ServiceProvider);
 
-            var comment = await svc.EditCommentAsync(commentId, "system", content, cancellationToken);
+            var comment = await svc.EditCommentAsync(commentId, userContext.UserId, content, cancellationToken);
             var task = await svc.GetTaskAsync(comment.TaskId, cancellationToken);
 
             return Success(new
@@ -846,14 +883,15 @@ public class KanbanDeleteCommentTool : KanbanToolBase
         {
             using var scope = ScopeFactory.CreateScope();
             var svc = scope.ServiceProvider.GetRequiredService<IKanbanService>();
+            var userContext = ResolveUserContext(scope.ServiceProvider);
 
-            var comment = await svc.DeleteCommentAsync(commentId, "system", "Compliance.Officer", cancellationToken);
+            var comment = await svc.DeleteCommentAsync(commentId, userContext.UserId, userContext.Role, cancellationToken);
             var task = await svc.GetTaskAsync(comment.TaskId, cancellationToken);
 
             return Success(new
             {
                 commentId = comment.Id, taskId = comment.TaskId, taskNumber = task?.TaskNumber,
-                deletedAt = DateTime.UtcNow, deletedBy = "system"
+                deletedAt = DateTime.UtcNow, deletedBy = userContext.UserId
             });
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("not found"))
@@ -897,8 +935,9 @@ public class KanbanRemediateTaskTool : KanbanToolBase
         {
             using var scope = ScopeFactory.CreateScope();
             var svc = scope.ServiceProvider.GetRequiredService<IKanbanService>();
+            var userContext = ResolveUserContext(scope.ServiceProvider);
 
-            var result = await svc.ExecuteTaskRemediationAsync(taskId, "system", "System", cancellationToken);
+            var result = await svc.ExecuteTaskRemediationAsync(taskId, userContext.UserId, userContext.DisplayName, cancellationToken);
 
             return Success(new
             {
@@ -943,9 +982,10 @@ public class KanbanCollectEvidenceTool : KanbanToolBase
         {
             using var scope = ScopeFactory.CreateScope();
             var svc = scope.ServiceProvider.GetRequiredService<IKanbanService>();
+            var userContext = ResolveUserContext(scope.ServiceProvider);
 
             var result = await svc.CollectTaskEvidenceAsync(
-                taskId, "system", "System", subscriptionId, cancellationToken);
+                taskId, userContext.UserId, userContext.DisplayName, subscriptionId, cancellationToken);
 
             return Success(new
             {
@@ -1009,6 +1049,7 @@ public class KanbanBulkUpdateTool : KanbanToolBase
         {
             using var scope = ScopeFactory.CreateScope();
             var svc = scope.ServiceProvider.GetRequiredService<IKanbanService>();
+            var userContext = ResolveUserContext(scope.ServiceProvider);
 
             BulkOperationResult result;
             switch (operation.ToLowerInvariant())
@@ -1016,18 +1057,18 @@ public class KanbanBulkUpdateTool : KanbanToolBase
                 case "assign":
                     result = await svc.BulkAssignAsync(
                         boardId, taskIds, assigneeId ?? "", assigneeName ?? "",
-                        "system", "System", "Compliance.Officer", cancellationToken);
+                        userContext.UserId, userContext.DisplayName, userContext.Role, cancellationToken);
                     break;
                 case "move":
                     if (string.IsNullOrWhiteSpace(targetStatusStr) || !Enum.TryParse<TaskStatus>(targetStatusStr, true, out var ts))
                         return Error("Valid target status is required for 'move' operation.", "INVALID_TRANSITION");
                     result = await svc.BulkMoveAsync(
-                        boardId, taskIds, ts, "system", "System", "Compliance.Officer", comment, cancellationToken);
+                        boardId, taskIds, ts, userContext.UserId, userContext.DisplayName, userContext.Role, comment, cancellationToken);
                     break;
                 case "setduedate":
                     if (string.IsNullOrWhiteSpace(dueDateStr) || !DateTime.TryParse(dueDateStr, out var dd))
                         return Error("Valid due date is required for 'setDueDate' operation.", "COMMENT_REQUIRES_TEXT");
-                    result = await svc.BulkSetDueDateAsync(boardId, taskIds, dd, "system", "System", cancellationToken);
+                    result = await svc.BulkSetDueDateAsync(boardId, taskIds, dd, userContext.UserId, userContext.DisplayName, cancellationToken);
                     break;
                 default:
                     return Error($"Unknown operation '{operation}'. Use 'assign', 'move', or 'setDueDate'.", "COMMENT_REQUIRES_TEXT");
@@ -1087,10 +1128,11 @@ public class KanbanExportTool : KanbanToolBase
         {
             using var scope = ScopeFactory.CreateScope();
             var svc = scope.ServiceProvider.GetRequiredService<IKanbanService>();
+            var userContext = ResolveUserContext(scope.ServiceProvider);
 
             string csvContent = includeHistory
-                ? await svc.ExportBoardHistoryAsync(boardId, "system", "Compliance.Officer", cancellationToken)
-                : await svc.ExportBoardCsvAsync(boardId, "system", "Compliance.Officer", cancellationToken);
+                ? await svc.ExportBoardHistoryAsync(boardId, userContext.UserId, userContext.Role, cancellationToken)
+                : await svc.ExportBoardCsvAsync(boardId, userContext.UserId, userContext.Role, cancellationToken);
 
             var board = await svc.GetBoardAsync(boardId, cancellationToken);
 
@@ -1139,14 +1181,15 @@ public class KanbanArchiveBoardTool : KanbanToolBase
         {
             using var scope = ScopeFactory.CreateScope();
             var svc = scope.ServiceProvider.GetRequiredService<IKanbanService>();
+            var userContext = ResolveUserContext(scope.ServiceProvider);
 
-            var board = await svc.ArchiveBoardAsync(boardId, "system", "System", cancellationToken);
+            var board = await svc.ArchiveBoardAsync(boardId, userContext.UserId, userContext.DisplayName, cancellationToken);
             var tasksByStatus = board.Tasks.GroupBy(t => t.Status).ToDictionary(g => g.Key.ToString(), g => g.Count());
 
             return Success(new
             {
                 boardId = board.Id, name = board.Name,
-                archivedAt = DateTime.UtcNow, archivedBy = "system",
+                archivedAt = DateTime.UtcNow, archivedBy = userContext.UserId,
                 taskCount = board.Tasks.Count, tasksByStatus
             });
         }

@@ -35,6 +35,7 @@ public static class KanbanPermissionsHelper
             KanbanPermissions.CanMoveOwn,
             KanbanPermissions.CanMoveAny,
             KanbanPermissions.CanComment,
+            KanbanPermissions.CanDeleteAnyComment,
             KanbanPermissions.CanExport,
         },
         [ComplianceRoles.Analyst] = new HashSet<string>

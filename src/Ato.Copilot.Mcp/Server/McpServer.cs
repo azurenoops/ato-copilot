@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Http;
 using Ato.Copilot.Mcp.Tools;
 using Ato.Copilot.Mcp.Models;
 using Ato.Copilot.Mcp.Prompts;
@@ -21,6 +22,7 @@ public class McpServer
     private readonly ComplianceAgent _complianceAgent;
     private readonly ConfigurationAgent _configurationAgent;
     private readonly ConfigurationTool _configurationTool;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<McpServer> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
 
@@ -29,18 +31,38 @@ public class McpServer
         ComplianceAgent complianceAgent,
         ConfigurationAgent configurationAgent,
         ConfigurationTool configurationTool,
+        IHttpContextAccessor httpContextAccessor,
         ILogger<McpServer> logger)
     {
         _complianceTools = complianceTools;
         _complianceAgent = complianceAgent;
         _configurationAgent = configurationAgent;
         _configurationTool = configurationTool;
+        _httpContextAccessor = httpContextAccessor;
         _logger = logger;
         _jsonOptions = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             WriteIndented = false
         };
+    }
+
+    /// <summary>
+    /// Resolves the current user ID from the ambient HTTP context.
+    /// Falls back to "mcp-user" when no authenticated user is present.
+    /// </summary>
+    private string ResolveCurrentUserId()
+    {
+        var user = _httpContextAccessor.HttpContext?.User;
+        if (user?.Identity?.IsAuthenticated != true)
+            return "mcp-user";
+
+        var oid = user.FindFirst("oid")?.Value;
+        if (!string.IsNullOrEmpty(oid))
+            return oid;
+
+        var sub = user.FindFirst("sub")?.Value;
+        return !string.IsNullOrEmpty(sub) ? sub : "mcp-user";
     }
 
     /// <summary>
@@ -63,7 +85,7 @@ public class McpServer
             var agentContext = new AgentConversationContext
             {
                 ConversationId = conversationId,
-                UserId = "mcp-user"
+                UserId = ResolveCurrentUserId()
             };
 
             if (conversationHistory != null)
@@ -504,7 +526,7 @@ public class McpServer
         var agentContext = new AgentConversationContext
         {
             ConversationId = conversationId,
-            UserId = "mcp-user"
+            UserId = ResolveCurrentUserId()
         };
 
         var response = await _configurationAgent.ProcessAsync(message, agentContext);

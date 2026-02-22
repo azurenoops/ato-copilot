@@ -6,7 +6,9 @@ using Moq;
 using Xunit;
 using FluentAssertions;
 using Ato.Copilot.Agents.Compliance.Tools;
+using Ato.Copilot.Core.Constants;
 using Ato.Copilot.Core.Data.Context;
+using Ato.Copilot.Core.Interfaces.Auth;
 using Ato.Copilot.Core.Interfaces.Compliance;
 using Ato.Copilot.Core.Interfaces.Kanban;
 using Ato.Copilot.Core.Models.Compliance;
@@ -44,6 +46,29 @@ public class KanbanToolTests : IDisposable
         services.AddSingleton(Mock.Of<IRemediationEngine>());
         services.AddLogging();
         _serviceProvider = services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// Creates a ServiceProvider with IUserContext registered for a specific user.
+    /// </summary>
+    private ServiceProvider BuildServiceProviderWithUser(string userId, string displayName, string role)
+    {
+        var userContext = new Mock<IUserContext>();
+        userContext.Setup(u => u.UserId).Returns(userId);
+        userContext.Setup(u => u.DisplayName).Returns(displayName);
+        userContext.Setup(u => u.Role).Returns(role);
+        userContext.Setup(u => u.IsAuthenticated).Returns(true);
+
+        var services = new ServiceCollection();
+        services.AddDbContext<AtoCopilotContext>(opt => opt.UseInMemoryDatabase(_dbName));
+        services.AddScoped<IKanbanService, KanbanService>();
+        services.AddSingleton(_notificationMock.Object);
+        services.AddSingleton(Mock.Of<IAgentStateManager>());
+        services.AddSingleton(Mock.Of<IAtoComplianceEngine>());
+        services.AddSingleton(Mock.Of<IRemediationEngine>());
+        services.AddScoped<IUserContext>(_ => userContext.Object);
+        services.AddLogging();
+        return services.BuildServiceProvider();
     }
 
     public void Dispose()
@@ -189,9 +214,9 @@ public class KanbanToolTests : IDisposable
 
         var tool = new KanbanMoveTaskTool(ScopeFactory, Mock.Of<ILogger<KanbanMoveTaskTool>>());
 
-        // Note: KanbanMoveTaskTool hard-codes "Compliance.Officer" role which isn't in
-        // ComplianceRoles (no CanMoveAny/CanMoveOwn). The tool doesn't catch 
-        // UnauthorizedAccessException so it propagates. This validates that behavior.
+        // Note: Without IUserContext registered, AnonymousUserContext returns
+        // "Compliance.Viewer" role which has no CanMoveAny/CanMoveOwn permissions.
+        // KanbanService throws UnauthorizedAccessException for unauthorized moves.
         var act = () => tool.ExecuteAsync(new Dictionary<string, object?>
         {
             ["task_id"] = taskId,
@@ -306,5 +331,271 @@ public class KanbanToolTests : IDisposable
         root.GetProperty("error").GetProperty("message").GetString().Should().NotBeNullOrEmpty();
         root.GetProperty("error").GetProperty("errorCode").GetString().Should().NotBeNullOrEmpty();
         root.GetProperty("metadata").GetProperty("toolName").GetString().Should().Be("kanban_board_show");
+    }
+
+    // ── Identity propagation (T018) ───────────────────────────────────────
+
+    [Fact]
+    public async Task CreateBoardTool_PropagatesUserContextOwner()
+    {
+        using var sp = BuildServiceProviderWithUser("user-abc", "Alice", ComplianceRoles.Administrator);
+        var factory = sp.GetRequiredService<IServiceScopeFactory>();
+        var tool = new KanbanCreateBoardTool(factory, Mock.Of<ILogger<KanbanCreateBoardTool>>());
+
+        var result = await tool.ExecuteAsync(new Dictionary<string, object?>
+        {
+            ["name"] = "Identity Board",
+            ["subscription_id"] = "sub-id",
+        });
+
+        using var doc = JsonDocument.Parse(result);
+        doc.RootElement.GetProperty("status").GetString().Should().Be("success");
+        doc.RootElement.GetProperty("data").GetProperty("owner").GetString().Should().Be("user-abc");
+    }
+
+    [Fact]
+    public async Task CreateTaskTool_PropagatesUserContextCreatedBy()
+    {
+        using var sp = BuildServiceProviderWithUser("user-xyz", "Bob", ComplianceRoles.Administrator);
+        var factory = sp.GetRequiredService<IServiceScopeFactory>();
+
+        // Seed board
+        using (var scope = factory.CreateScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+            ctx.RemediationBoards.Add(new RemediationBoard { Id = "board-id-ct", Name = "B", SubscriptionId = "sub", Owner = "o" });
+            await ctx.SaveChangesAsync();
+        }
+
+        var tool = new KanbanCreateTaskTool(factory, Mock.Of<ILogger<KanbanCreateTaskTool>>());
+
+        var result = await tool.ExecuteAsync(new Dictionary<string, object?>
+        {
+            ["board_id"] = "board-id-ct",
+            ["title"] = "Task by Bob",
+            ["control_id"] = "AC-1",
+        });
+
+        using var doc = JsonDocument.Parse(result);
+        doc.RootElement.GetProperty("status").GetString().Should().Be("success");
+        doc.RootElement.GetProperty("data").GetProperty("createdBy").GetString().Should().Be("user-xyz");
+    }
+
+    [Fact]
+    public async Task CreateBoardTool_WithoutUserContext_UsesAnonymousFallback()
+    {
+        // Default _serviceProvider has no IUserContext registered
+        var tool = new KanbanCreateBoardTool(ScopeFactory, Mock.Of<ILogger<KanbanCreateBoardTool>>());
+
+        var result = await tool.ExecuteAsync(new Dictionary<string, object?>
+        {
+            ["name"] = "Anonymous Board",
+            ["subscription_id"] = "sub-anon",
+        });
+
+        using var doc = JsonDocument.Parse(result);
+        doc.RootElement.GetProperty("status").GetString().Should().Be("success");
+        doc.RootElement.GetProperty("data").GetProperty("owner").GetString().Should().Be("anonymous");
+    }
+
+    [Fact]
+    public async Task AssignTaskTool_PropagatesUserContextRole()
+    {
+        using var sp = BuildServiceProviderWithUser("admin-001", "Admin", ComplianceRoles.Administrator);
+        var factory = sp.GetRequiredService<IServiceScopeFactory>();
+
+        // Seed board with task
+        string taskId;
+        using (var scope = factory.CreateScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+            var board = new RemediationBoard { Id = "board-assign", Name = "B", SubscriptionId = "sub", Owner = "o" };
+            var task = new RemediationTask
+            {
+                BoardId = "board-assign", TaskNumber = "REM-001", Title = "T",
+                ControlId = "AC-1", ControlFamily = "AC",
+                Severity = FindingSeverity.High, CreatedBy = "owner",
+            };
+            taskId = task.Id;
+            board.Tasks.Add(task);
+            ctx.RemediationBoards.Add(board);
+            await ctx.SaveChangesAsync();
+        }
+
+        var tool = new KanbanAssignTaskTool(factory, Mock.Of<ILogger<KanbanAssignTaskTool>>());
+
+        var result = await tool.ExecuteAsync(new Dictionary<string, object?>
+        {
+            ["task_id"] = taskId,
+            ["assignee_id"] = "dev-001",
+            ["assignee_name"] = "Dev User",
+        });
+
+        using var doc = JsonDocument.Parse(result);
+        doc.RootElement.GetProperty("status").GetString().Should().Be("success");
+        doc.RootElement.GetProperty("data").GetProperty("assignedBy").GetString().Should().Be("admin-001");
+    }
+
+    // ── isAssignedToCurrentUser (T023) ────────────────────────────────────
+
+    [Fact]
+    public async Task BoardShowTool_FlagsTaskAssignedToCurrentUser()
+    {
+        using var sp = BuildServiceProviderWithUser("user-me", "Me", ComplianceRoles.Analyst);
+        var factory = sp.GetRequiredService<IServiceScopeFactory>();
+
+        // Seed board with tasks — one assigned to "user-me", one to someone else
+        using (var scope = factory.CreateScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+            var board = new RemediationBoard { Id = "board-cu", Name = "B", SubscriptionId = "sub", Owner = "o" };
+            board.Tasks.Add(new RemediationTask
+            {
+                BoardId = "board-cu", TaskNumber = "REM-001", Title = "My Task",
+                ControlId = "AC-1", ControlFamily = "AC",
+                Severity = FindingSeverity.High, CreatedBy = "owner",
+                AssigneeId = "user-me", AssigneeName = "Me",
+            });
+            board.Tasks.Add(new RemediationTask
+            {
+                BoardId = "board-cu", TaskNumber = "REM-002", Title = "Other Task",
+                ControlId = "AC-2", ControlFamily = "AC",
+                Severity = FindingSeverity.Medium, CreatedBy = "owner",
+                AssigneeId = "user-other", AssigneeName = "Other",
+            });
+            ctx.RemediationBoards.Add(board);
+            await ctx.SaveChangesAsync();
+        }
+
+        var tool = new KanbanBoardShowTool(factory, Mock.Of<ILogger<KanbanBoardShowTool>>());
+        var result = await tool.ExecuteAsync(new Dictionary<string, object?> { ["board_id"] = "board-cu" });
+
+        using var doc = JsonDocument.Parse(result);
+        doc.RootElement.GetProperty("status").GetString().Should().Be("success");
+
+        var columns = doc.RootElement.GetProperty("data").GetProperty("columns");
+        // columns is an object keyed by status — iterate its properties
+        var allTasks = new List<JsonElement>();
+        foreach (var col in columns.EnumerateObject())
+            foreach (var t in col.Value.GetProperty("tasks").EnumerateArray())
+                allTasks.Add(t);
+
+        allTasks.Should().HaveCount(2);
+
+        var myTask = allTasks.First(t => t.GetProperty("taskNumber").GetString() == "REM-001");
+        myTask.GetProperty("isAssignedToCurrentUser").GetBoolean().Should().BeTrue();
+
+        var otherTask = allTasks.First(t => t.GetProperty("taskNumber").GetString() == "REM-002");
+        otherTask.GetProperty("isAssignedToCurrentUser").GetBoolean().Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task BoardShowTool_WithoutUserContext_FlagIsFalse()
+    {
+        // No IUserContext registered — AnonymousUserContext (IsAuthenticated=false)
+        using (var scope = ScopeFactory.CreateScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+            var board = new RemediationBoard { Id = "board-anon", Name = "B", SubscriptionId = "sub", Owner = "o" };
+            board.Tasks.Add(new RemediationTask
+            {
+                BoardId = "board-anon", TaskNumber = "REM-001", Title = "T",
+                ControlId = "AC-1", ControlFamily = "AC",
+                Severity = FindingSeverity.High, CreatedBy = "owner",
+                AssigneeId = "anonymous", AssigneeName = "Anon",
+            });
+            ctx.RemediationBoards.Add(board);
+            await ctx.SaveChangesAsync();
+        }
+
+        var tool = new KanbanBoardShowTool(ScopeFactory, Mock.Of<ILogger<KanbanBoardShowTool>>());
+        var result = await tool.ExecuteAsync(new Dictionary<string, object?> { ["board_id"] = "board-anon" });
+
+        using var doc = JsonDocument.Parse(result);
+        var columns = doc.RootElement.GetProperty("data").GetProperty("columns");
+        var tasks = new List<JsonElement>();
+        foreach (var col in columns.EnumerateObject())
+            foreach (var t in col.Value.GetProperty("tasks").EnumerateArray())
+                tasks.Add(t);
+
+        tasks.Should().HaveCount(1);
+        tasks[0].GetProperty("isAssignedToCurrentUser").GetBoolean().Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetTaskTool_FlagsTaskAssignedToCurrentUser()
+    {
+        using var sp = BuildServiceProviderWithUser("user-me", "Me", ComplianceRoles.Analyst);
+        var factory = sp.GetRequiredService<IServiceScopeFactory>();
+
+        string taskId;
+        using (var scope = factory.CreateScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+            var board = new RemediationBoard { Id = "board-gt", Name = "B", SubscriptionId = "sub", Owner = "o" };
+            var task = new RemediationTask
+            {
+                BoardId = "board-gt", TaskNumber = "REM-001", Title = "My Task",
+                ControlId = "AC-1", ControlFamily = "AC",
+                Severity = FindingSeverity.High, CreatedBy = "owner",
+                AssigneeId = "user-me", AssigneeName = "Me",
+            };
+            taskId = task.Id;
+            board.Tasks.Add(task);
+            ctx.RemediationBoards.Add(board);
+            await ctx.SaveChangesAsync();
+        }
+
+        var tool = new KanbanGetTaskTool(factory, Mock.Of<ILogger<KanbanGetTaskTool>>());
+        var result = await tool.ExecuteAsync(new Dictionary<string, object?> { ["task_id"] = taskId });
+
+        using var doc = JsonDocument.Parse(result);
+        doc.RootElement.GetProperty("status").GetString().Should().Be("success");
+        doc.RootElement.GetProperty("data").GetProperty("isAssignedToCurrentUser").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task TaskListTool_FlagsTaskAssignedToCurrentUser()
+    {
+        using var sp = BuildServiceProviderWithUser("user-me", "Me", ComplianceRoles.Analyst);
+        var factory = sp.GetRequiredService<IServiceScopeFactory>();
+
+        using (var scope = factory.CreateScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+            var board = new RemediationBoard { Id = "board-tl", Name = "B", SubscriptionId = "sub", Owner = "o" };
+            board.Tasks.Add(new RemediationTask
+            {
+                BoardId = "board-tl", TaskNumber = "REM-001", Title = "My Task",
+                ControlId = "AC-1", ControlFamily = "AC",
+                Severity = FindingSeverity.High, CreatedBy = "owner",
+                AssigneeId = "user-me", AssigneeName = "Me",
+            });
+            board.Tasks.Add(new RemediationTask
+            {
+                BoardId = "board-tl", TaskNumber = "REM-002", Title = "Other",
+                ControlId = "AC-2", ControlFamily = "AC",
+                Severity = FindingSeverity.Low, CreatedBy = "owner",
+                AssigneeId = "user-other", AssigneeName = "Other",
+            });
+            ctx.RemediationBoards.Add(board);
+            await ctx.SaveChangesAsync();
+        }
+
+        var tool = new KanbanTaskListTool(factory, Mock.Of<ILogger<KanbanTaskListTool>>());
+        var result = await tool.ExecuteAsync(new Dictionary<string, object?> { ["board_id"] = "board-tl" });
+
+        using var doc = JsonDocument.Parse(result);
+        doc.RootElement.GetProperty("status").GetString().Should().Be("success");
+        var tasks = doc.RootElement.GetProperty("data").GetProperty("tasks");
+
+        var taskList = tasks.EnumerateArray().ToList();
+        taskList.Should().HaveCount(2);
+
+        var myTask = taskList.First(t => t.GetProperty("taskNumber").GetString() == "REM-001");
+        myTask.GetProperty("isAssignedToCurrentUser").GetBoolean().Should().BeTrue();
+
+        var otherTask = taskList.First(t => t.GetProperty("taskNumber").GetString() == "REM-002");
+        otherTask.GetProperty("isAssignedToCurrentUser").GetBoolean().Should().BeFalse();
     }
 }
