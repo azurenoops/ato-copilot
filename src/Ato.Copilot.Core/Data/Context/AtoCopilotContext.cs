@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Ato.Copilot.Core.Models.Compliance;
+using Ato.Copilot.Core.Models.Kanban;
 
 namespace Ato.Copilot.Core.Data.Context;
 
@@ -37,6 +38,18 @@ public class AtoCopilotContext : DbContext
 
     /// <summary>Remediation plans with ordered steps.</summary>
     public DbSet<RemediationPlan> RemediationPlans => Set<RemediationPlan>();
+
+    /// <summary>Kanban remediation boards grouping tasks by subscription.</summary>
+    public DbSet<RemediationBoard> RemediationBoards => Set<RemediationBoard>();
+
+    /// <summary>Individual remediation tasks (Kanban cards).</summary>
+    public DbSet<RemediationTask> RemediationTasks => Set<RemediationTask>();
+
+    /// <summary>Threaded comments on remediation tasks.</summary>
+    public DbSet<TaskComment> TaskComments => Set<TaskComment>();
+
+    /// <summary>Immutable history entries for remediation task changes.</summary>
+    public DbSet<TaskHistoryEntry> TaskHistoryEntries => Set<TaskHistoryEntry>();
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -212,5 +225,128 @@ public class AtoCopilotContext : DbContext
             entity.HasIndex(e => e.SubscriptionId);
             entity.HasIndex(e => new { e.UserId, e.Timestamp });
         });
+
+        // ─── RemediationBoard ────────────────────────────────────────────────────
+        modelBuilder.Entity<RemediationBoard>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.SubscriptionId).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.AssessmentId).HasMaxLength(100);
+            entity.Property(e => e.Owner).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.RowVersion).IsConcurrencyToken();
+
+            // Relationship: Board → Assessment (optional, restrict delete)
+            entity.HasOne<ComplianceAssessment>()
+                .WithMany()
+                .HasForeignKey(e => e.AssessmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .IsRequired(false);
+
+            // Relationship: Board 1:N Tasks (cascade delete)
+            entity.HasMany(e => e.Tasks)
+                .WithOne(t => t.Board)
+                .HasForeignKey(t => t.BoardId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Indexes
+            entity.HasIndex(e => e.SubscriptionId);
+            entity.HasIndex(e => new { e.SubscriptionId, e.IsArchived });
+        });
+
+        // ─── RemediationTask ─────────────────────────────────────────────────────
+        modelBuilder.Entity<RemediationTask>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TaskNumber).HasMaxLength(10).IsRequired();
+            entity.Property(e => e.BoardId).IsRequired();
+            entity.Property(e => e.Title).HasMaxLength(500).IsRequired();
+            entity.Property(e => e.Description).HasMaxLength(4000);
+            entity.Property(e => e.ControlId).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.ControlFamily).HasMaxLength(5);
+            entity.Property(e => e.AssigneeId).HasMaxLength(200);
+            entity.Property(e => e.AssigneeName).HasMaxLength(200);
+            entity.Property(e => e.RemediationScript).HasMaxLength(8000);
+            entity.Property(e => e.ValidationCriteria).HasMaxLength(2000);
+            entity.Property(e => e.FindingId).HasMaxLength(100);
+            entity.Property(e => e.CreatedBy).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.RowVersion).IsConcurrencyToken();
+
+            // Value conversion for List<string> AffectedResources
+            entity.Property(e => e.AffectedResources).HasConversion(stringListConverter);
+
+            // Relationship: Task 1:N Comments (cascade delete)
+            entity.HasMany(e => e.Comments)
+                .WithOne(c => c.Task)
+                .HasForeignKey(c => c.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Relationship: Task 1:N History (cascade delete)
+            entity.HasMany(e => e.History)
+                .WithOne(h => h.Task)
+                .HasForeignKey(h => h.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Indexes
+            entity.HasIndex(e => e.BoardId);
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.AssigneeId);
+            entity.HasIndex(e => e.ControlId);
+            entity.HasIndex(e => e.DueDate);
+            entity.HasIndex(e => new { e.BoardId, e.Status });
+            entity.HasIndex(e => new { e.BoardId, e.ControlFamily });
+        });
+
+        // ─── TaskComment ─────────────────────────────────────────────────────────
+        modelBuilder.Entity<TaskComment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TaskId).IsRequired();
+            entity.Property(e => e.AuthorId).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.AuthorName).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Content).HasMaxLength(4000).IsRequired();
+            entity.Property(e => e.ParentCommentId).HasMaxLength(100);
+
+            // Value conversion for List<string> Mentions
+            entity.Property(e => e.Mentions).HasConversion(stringListConverter);
+
+            // Indexes
+            entity.HasIndex(e => e.TaskId);
+            entity.HasIndex(e => new { e.TaskId, e.CreatedAt });
+        });
+
+        // ─── TaskHistoryEntry ────────────────────────────────────────────────────
+        modelBuilder.Entity<TaskHistoryEntry>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TaskId).IsRequired();
+            entity.Property(e => e.OldValue).HasMaxLength(500);
+            entity.Property(e => e.NewValue).HasMaxLength(500);
+            entity.Property(e => e.ActingUserId).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.ActingUserName).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Details).HasMaxLength(4000);
+
+            // Indexes
+            entity.HasIndex(e => e.TaskId);
+            entity.HasIndex(e => new { e.TaskId, e.Timestamp });
+        });
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Auto-regenerates RowVersion for all modified ConcurrentEntity entries
+    /// to support optimistic concurrency with Guid-based tokens (per research R-001).
+    /// </remarks>
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        foreach (var entry in ChangeTracker.Entries<ConcurrentEntity>())
+        {
+            if (entry.State == EntityState.Modified || entry.State == EntityState.Added)
+            {
+                entry.Entity.RowVersion = Guid.NewGuid();
+            }
+        }
+
+        return await base.SaveChangesAsync(cancellationToken);
     }
 }
