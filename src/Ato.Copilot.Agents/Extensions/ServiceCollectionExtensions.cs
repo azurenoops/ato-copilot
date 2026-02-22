@@ -8,6 +8,7 @@ using Ato.Copilot.Agents.Compliance.Tools;
 using Ato.Copilot.Agents.Configuration.Agents;
 using Ato.Copilot.Agents.Configuration.Tools;
 using Ato.Copilot.Core.Interfaces.Compliance;
+using Ato.Copilot.Core.Interfaces.Kanban;
 
 namespace Ato.Copilot.Agents.Extensions;
 
@@ -68,6 +69,51 @@ public static class ServiceCollectionExtensions
         // Register the agent
         services.AddSingleton<ComplianceAgent>();
         services.AddSingleton<BaseAgent>(sp => sp.GetRequiredService<ComplianceAgent>());
+
+        // ─── Kanban Services ─────────────────────────────────────────────────
+        services.AddScoped<IKanbanService, KanbanService>();
+        services.AddSingleton<INotificationService, NotificationService>();
+        services.AddHostedService<OverdueScanHostedService>();
+
+        // ─── Kanban Tools (Singleton — uses IServiceScopeFactory for scoped IKanbanService)
+        services.AddSingleton<KanbanCreateBoardTool>();
+        services.AddSingleton<KanbanBoardShowTool>();
+        services.AddSingleton<KanbanGetTaskTool>();
+        services.AddSingleton<KanbanCreateTaskTool>();
+        services.AddSingleton<KanbanAssignTaskTool>();
+        services.AddSingleton<KanbanMoveTaskTool>();
+        services.AddSingleton<KanbanTaskListTool>();
+        services.AddSingleton<KanbanTaskHistoryTool>();
+        services.AddSingleton<KanbanValidateTaskTool>();
+        services.AddSingleton<KanbanAddCommentTool>();
+        services.AddSingleton<KanbanTaskCommentsTool>();
+        services.AddSingleton<KanbanEditCommentTool>();
+        services.AddSingleton<KanbanDeleteCommentTool>();
+        services.AddSingleton<KanbanRemediateTaskTool>();
+        services.AddSingleton<KanbanCollectEvidenceTool>();
+        services.AddSingleton<KanbanBulkUpdateTool>();
+        services.AddSingleton<KanbanExportTool>();
+        services.AddSingleton<KanbanArchiveBoardTool>();
+
+        // Register Kanban tools as BaseTool collection
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanCreateBoardTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanBoardShowTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanGetTaskTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanCreateTaskTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanAssignTaskTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanMoveTaskTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanTaskListTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanTaskHistoryTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanValidateTaskTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanAddCommentTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanTaskCommentsTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanEditCommentTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanDeleteCommentTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanRemediateTaskTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanCollectEvidenceTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanBulkUpdateTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanExportTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanArchiveBoardTool>());
 
         return services;
     }

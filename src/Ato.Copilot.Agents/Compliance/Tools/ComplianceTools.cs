@@ -1,22 +1,34 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Ato.Copilot.Agents.Common;
+using Ato.Copilot.Core.Data.Context;
 using Ato.Copilot.Core.Interfaces.Compliance;
+using Ato.Copilot.Core.Interfaces.Kanban;
+using Ato.Copilot.Core.Models.Compliance;
 
 namespace Ato.Copilot.Agents.Compliance.Tools;
 
 /// <summary>
-/// Tool for running NIST 800-53 compliance assessments
+/// Tool for running NIST 800-53 compliance assessments.
+/// Post-assessment: detects findings and offers Kanban board creation/update.
 /// </summary>
 public class ComplianceAssessmentTool : BaseTool
 {
     private readonly IAtoComplianceEngine _complianceEngine;
+    private readonly IServiceScopeFactory _scopeFactory;
 
     /// <summary>Initializes a new instance of the <see cref="ComplianceAssessmentTool"/> class.</summary>
     /// <param name="complianceEngine">The compliance engine for running assessments.</param>
+    /// <param name="scopeFactory">Service scope factory for resolving scoped services.</param>
     /// <param name="logger">Logger instance.</param>
-    public ComplianceAssessmentTool(IAtoComplianceEngine complianceEngine, ILogger<ComplianceAssessmentTool> logger) : base(logger)
+    public ComplianceAssessmentTool(
+        IAtoComplianceEngine complianceEngine,
+        IServiceScopeFactory scopeFactory,
+        ILogger<ComplianceAssessmentTool> logger) : base(logger)
     {
         _complianceEngine = complianceEngine;
+        _scopeFactory = scopeFactory;
     }
 
     /// <inheritdoc />
@@ -123,7 +135,70 @@ public class ComplianceAssessmentTool : BaseTool
             }
         }
 
+        // ── Post-assessment flow: suggest Kanban board creation / update ──
+        if (result.Findings.Count > 0 && !string.IsNullOrWhiteSpace(subscriptionId))
+        {
+            output += await AppendKanbanSuggestionAsync(subscriptionId, result, cancellationToken);
+        }
+
         return output;
+    }
+
+    /// <summary>
+    /// Checks for existing remediation boards on the subscription and appends
+    /// a suggestion to create or update a Kanban board if findings exist.
+    /// </summary>
+    private async Task<string> AppendKanbanSuggestionAsync(
+        string subscriptionId,
+        ComplianceAssessment assessment,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+
+            // Check for existing active boards on this subscription
+            var existingBoard = await context.RemediationBoards
+                .Where(b => b.SubscriptionId == subscriptionId && !b.IsArchived)
+                .OrderByDescending(b => b.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            var openFindingsCount = assessment.Findings
+                .Count(f => f.Status == FindingStatus.Open || f.Status == FindingStatus.InProgress);
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("---");
+            sb.AppendLine($"### 📋 Remediation Tracking ({openFindingsCount} open findings)");
+            sb.AppendLine();
+
+            if (existingBoard != null)
+            {
+                sb.AppendLine($"An active remediation board already exists for this subscription:");
+                sb.AppendLine($"- **Board**: {existingBoard.Name} (ID: `{existingBoard.Id}`)");
+                sb.AppendLine($"- **Created**: {existingBoard.CreatedAt:yyyy-MM-dd}");
+                sb.AppendLine();
+                sb.AppendLine("You can:");
+                sb.AppendLine($"1. **Update existing board** — \"Update board {existingBoard.Id} with this assessment\" to sync new/resolved findings");
+                sb.AppendLine($"2. **Create new board** — \"Create a new remediation board from this assessment\" for a fresh board");
+            }
+            else
+            {
+                sb.AppendLine("No active remediation board found for this subscription.");
+                sb.AppendLine();
+                sb.AppendLine("💡 **Create a remediation board** to track fixes as Kanban tasks:");
+                sb.AppendLine("- Say: \"Create a remediation board from this assessment\"");
+                sb.AppendLine($"- Each of the {openFindingsCount} findings will become a trackable task with SLA-based due dates");
+            }
+
+            sb.AppendLine();
+            return sb.ToString();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to check for existing Kanban boards post-assessment");
+            return string.Empty;
+        }
     }
 }
 
@@ -169,24 +244,31 @@ public class ControlFamilyTool : BaseTool
 }
 
 /// <summary>
-/// Tool for generating compliance documents (SSP, POA&M, SAR)
+/// Tool for generating compliance documents (SSP, POA&M, SAR).
+/// When boardId is provided for POA&M, merges open Kanban tasks into the document.
 /// </summary>
 public class DocumentGenerationTool : BaseTool
 {
     private readonly IDocumentGenerationService _documentService;
+    private readonly IServiceScopeFactory _scopeFactory;
 
     /// <summary>Initializes a new instance of the <see cref="DocumentGenerationTool"/> class.</summary>
     /// <param name="documentService">Document generation service.</param>
+    /// <param name="scopeFactory">Service scope factory for resolving scoped services.</param>
     /// <param name="logger">Logger instance.</param>
-    public DocumentGenerationTool(IDocumentGenerationService documentService, ILogger<DocumentGenerationTool> logger) : base(logger)
+    public DocumentGenerationTool(
+        IDocumentGenerationService documentService,
+        IServiceScopeFactory scopeFactory,
+        ILogger<DocumentGenerationTool> logger) : base(logger)
     {
         _documentService = documentService;
+        _scopeFactory = scopeFactory;
     }
 
     /// <inheritdoc />
     public override string Name => "compliance_generate_document";
     /// <inheritdoc />
-    public override string Description => "Generate compliance documentation (SSP, POA&M, SAR).";
+    public override string Description => "Generate compliance documentation (SSP, POA&M, SAR). For POA&M, optionally provide a boardId to include open remediation tasks.";
 
     /// <inheritdoc />
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
@@ -194,7 +276,8 @@ public class DocumentGenerationTool : BaseTool
         ["document_type"] = new() { Name = "document_type", Description = "Document type: ssp, poam, sar", Type = "string", Required = true },
         ["subscription_id"] = new() { Name = "subscription_id", Description = "Azure subscription for evidence", Type = "string" },
         ["framework"] = new() { Name = "framework", Description = "Compliance framework", Type = "string" },
-        ["system_name"] = new() { Name = "system_name", Description = "System name for document", Type = "string" }
+        ["system_name"] = new() { Name = "system_name", Description = "System name for document", Type = "string" },
+        ["board_id"] = new() { Name = "board_id", Description = "Optional Kanban board ID — when provided for POA&M, includes open remediation tasks from the board", Type = "string" }
     };
 
     /// <inheritdoc />
@@ -204,9 +287,62 @@ public class DocumentGenerationTool : BaseTool
         var subscriptionId = GetArg<string>(arguments, "subscription_id");
         var framework = GetArg<string>(arguments, "framework");
         var systemName = GetArg<string>(arguments, "system_name");
+        var boardId = GetArg<string>(arguments, "board_id");
 
         var doc = await _documentService.GenerateDocumentAsync(documentType, subscriptionId, framework, systemName, cancellationToken);
-        return doc.Content;
+        var content = doc.Content;
+
+        // For POA&M documents with a boardId, merge open Kanban tasks
+        if (string.Equals(documentType, "poam", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(boardId))
+        {
+            content += await AppendBoardTasksToPoamAsync(boardId, cancellationToken);
+        }
+
+        return content;
+    }
+
+    /// <summary>
+    /// Fetches open tasks from a Kanban board and formats them as POA&M line items.
+    /// </summary>
+    private async Task<string> AppendBoardTasksToPoamAsync(string boardId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var kanbanService = scope.ServiceProvider.GetRequiredService<IKanbanService>();
+
+            var poamItems = await kanbanService.GetOpenTasksForPoamAsync(boardId, cancellationToken);
+
+            if (poamItems.Count == 0)
+                return "\n\n_No open remediation tasks on the specified board._\n";
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine();
+            sb.AppendLine();
+            sb.AppendLine("## POA&M Items from Remediation Board");
+            sb.AppendLine();
+            sb.AppendLine("| # | Control ID | Weakness | Status | Severity | Assignee | Due Date | Overdue |");
+            sb.AppendLine("|---|-----------|----------|--------|----------|----------|----------|---------|");
+
+            for (var i = 0; i < poamItems.Count; i++)
+            {
+                var item = poamItems[i];
+                var isOverdue = item.DueDate < DateTime.UtcNow;
+                var overdue = isOverdue ? "⚠️ Yes" : "No";
+                sb.AppendLine($"| {i + 1} | {item.ControlId} | {item.Title} | {item.Status} | {item.Severity} | {item.AssigneeName ?? "Unassigned"} | {item.DueDate:yyyy-MM-dd} | {overdue} |");
+            }
+
+            sb.AppendLine();
+            sb.AppendLine($"_Total open items: {poamItems.Count}_");
+            sb.AppendLine();
+
+            return sb.ToString();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to fetch Kanban board tasks for POA&M generation");
+            return "\n\n_⚠️ Could not load remediation board tasks. Board may not exist._\n";
+        }
     }
 }
 

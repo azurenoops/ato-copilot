@@ -2,6 +2,7 @@ using Xunit;
 using FluentAssertions;
 using Moq;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Ato.Copilot.Agents.Compliance.Agents;
 using Ato.Copilot.Agents.Compliance.Tools;
@@ -30,10 +31,13 @@ public class ComplianceAgentTests
         var history = Mock.Of<IComplianceHistoryService>();
         var status = Mock.Of<IComplianceStatusService>();
 
+        // Create mock IServiceScopeFactory for tools that need it
+        var scopeFactory = Mock.Of<IServiceScopeFactory>();
+
         // Create tool instances with mocked services
-        var assessmentTool = new ComplianceAssessmentTool(complianceEngine, Mock.Of<ILogger<ComplianceAssessmentTool>>());
+        var assessmentTool = new ComplianceAssessmentTool(complianceEngine, scopeFactory, Mock.Of<ILogger<ComplianceAssessmentTool>>());
         var controlFamilyTool = new ControlFamilyTool(nistControls, Mock.Of<ILogger<ControlFamilyTool>>());
-        var documentGenerationTool = new DocumentGenerationTool(docGen, Mock.Of<ILogger<DocumentGenerationTool>>());
+        var documentGenerationTool = new DocumentGenerationTool(docGen, scopeFactory, Mock.Of<ILogger<DocumentGenerationTool>>());
         var evidenceCollectionTool = new EvidenceCollectionTool(evidence, Mock.Of<ILogger<EvidenceCollectionTool>>());
         var remediationExecuteTool = new RemediationExecuteTool(remediationEngine, Mock.Of<ILogger<RemediationExecuteTool>>());
         var validateRemediationTool = new ValidateRemediationTool(remediationEngine, Mock.Of<ILogger<ValidateRemediationTool>>());
@@ -42,6 +46,26 @@ public class ComplianceAgentTests
         var historyTool = new ComplianceHistoryTool(history, Mock.Of<ILogger<ComplianceHistoryTool>>());
         var statusTool = new ComplianceStatusTool(status, Mock.Of<ILogger<ComplianceStatusTool>>());
         var monitoringTool = new ComplianceMonitoringTool(monitoring, Mock.Of<ILogger<ComplianceMonitoringTool>>());
+
+        // Create Kanban tool instances
+        var kanbanCreateBoard = new KanbanCreateBoardTool(scopeFactory, Mock.Of<ILogger<KanbanCreateBoardTool>>());
+        var kanbanBoardShow = new KanbanBoardShowTool(scopeFactory, Mock.Of<ILogger<KanbanBoardShowTool>>());
+        var kanbanGetTask = new KanbanGetTaskTool(scopeFactory, Mock.Of<ILogger<KanbanGetTaskTool>>());
+        var kanbanCreateTask = new KanbanCreateTaskTool(scopeFactory, Mock.Of<ILogger<KanbanCreateTaskTool>>());
+        var kanbanAssignTask = new KanbanAssignTaskTool(scopeFactory, Mock.Of<ILogger<KanbanAssignTaskTool>>());
+        var kanbanMoveTask = new KanbanMoveTaskTool(scopeFactory, Mock.Of<ILogger<KanbanMoveTaskTool>>());
+        var kanbanTaskList = new KanbanTaskListTool(scopeFactory, Mock.Of<ILogger<KanbanTaskListTool>>());
+        var kanbanTaskHistory = new KanbanTaskHistoryTool(scopeFactory, Mock.Of<ILogger<KanbanTaskHistoryTool>>());
+        var kanbanValidateTask = new KanbanValidateTaskTool(scopeFactory, Mock.Of<ILogger<KanbanValidateTaskTool>>());
+        var kanbanAddComment = new KanbanAddCommentTool(scopeFactory, Mock.Of<ILogger<KanbanAddCommentTool>>());
+        var kanbanTaskComments = new KanbanTaskCommentsTool(scopeFactory, Mock.Of<ILogger<KanbanTaskCommentsTool>>());
+        var kanbanEditComment = new KanbanEditCommentTool(scopeFactory, Mock.Of<ILogger<KanbanEditCommentTool>>());
+        var kanbanDeleteComment = new KanbanDeleteCommentTool(scopeFactory, Mock.Of<ILogger<KanbanDeleteCommentTool>>());
+        var kanbanRemediateTask = new KanbanRemediateTaskTool(scopeFactory, Mock.Of<ILogger<KanbanRemediateTaskTool>>());
+        var kanbanCollectEvidence = new KanbanCollectEvidenceTool(scopeFactory, Mock.Of<ILogger<KanbanCollectEvidenceTool>>());
+        var kanbanBulkUpdate = new KanbanBulkUpdateTool(scopeFactory, Mock.Of<ILogger<KanbanBulkUpdateTool>>());
+        var kanbanExport = new KanbanExportTool(scopeFactory, Mock.Of<ILogger<KanbanExportTool>>());
+        var kanbanArchiveBoard = new KanbanArchiveBoardTool(scopeFactory, Mock.Of<ILogger<KanbanArchiveBoardTool>>());
 
         _agent = new ComplianceAgent(
             assessmentTool,
@@ -55,6 +79,24 @@ public class ComplianceAgentTests
             historyTool,
             statusTool,
             monitoringTool,
+            kanbanCreateBoard,
+            kanbanBoardShow,
+            kanbanGetTask,
+            kanbanCreateTask,
+            kanbanAssignTask,
+            kanbanMoveTask,
+            kanbanTaskList,
+            kanbanTaskHistory,
+            kanbanValidateTask,
+            kanbanAddComment,
+            kanbanTaskComments,
+            kanbanEditComment,
+            kanbanDeleteComment,
+            kanbanRemediateTask,
+            kanbanCollectEvidence,
+            kanbanBulkUpdate,
+            kanbanExport,
+            kanbanArchiveBoard,
             new InMemoryDbContextFactory(
                 new DbContextOptionsBuilder<AtoCopilotContext>()
                     .UseInMemoryDatabase($"AgentTests_{Guid.NewGuid()}")

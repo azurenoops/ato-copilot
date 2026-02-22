@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Ato.Copilot.Agents.Common;
@@ -28,6 +30,26 @@ public class ComplianceAgent : BaseAgent
     private readonly ComplianceMonitoringTool _monitoringTool;
     private readonly IDbContextFactory<AtoCopilotContext> _dbFactory;
 
+    // Kanban tools (Phase 3–6)
+    private readonly KanbanCreateBoardTool _kanbanCreateBoard;
+    private readonly KanbanBoardShowTool _kanbanBoardShow;
+    private readonly KanbanGetTaskTool _kanbanGetTask;
+    private readonly KanbanCreateTaskTool _kanbanCreateTask;
+    private readonly KanbanAssignTaskTool _kanbanAssignTask;
+    private readonly KanbanMoveTaskTool _kanbanMoveTask;
+    private readonly KanbanTaskListTool _kanbanTaskList;
+    private readonly KanbanTaskHistoryTool _kanbanTaskHistory;
+    private readonly KanbanValidateTaskTool _kanbanValidateTask;
+    private readonly KanbanAddCommentTool _kanbanAddComment;
+    private readonly KanbanTaskCommentsTool _kanbanTaskComments;
+    private readonly KanbanEditCommentTool _kanbanEditComment;
+    private readonly KanbanDeleteCommentTool _kanbanDeleteComment;
+    private readonly KanbanRemediateTaskTool _kanbanRemediateTask;
+    private readonly KanbanCollectEvidenceTool _kanbanCollectEvidence;
+    private readonly KanbanBulkUpdateTool _kanbanBulkUpdate;
+    private readonly KanbanExportTool _kanbanExport;
+    private readonly KanbanArchiveBoardTool _kanbanArchiveBoard;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="ComplianceAgent"/> class.
     /// </summary>
@@ -43,6 +65,24 @@ public class ComplianceAgent : BaseAgent
         ComplianceHistoryTool historyTool,
         ComplianceStatusTool statusTool,
         ComplianceMonitoringTool monitoringTool,
+        KanbanCreateBoardTool kanbanCreateBoard,
+        KanbanBoardShowTool kanbanBoardShow,
+        KanbanGetTaskTool kanbanGetTask,
+        KanbanCreateTaskTool kanbanCreateTask,
+        KanbanAssignTaskTool kanbanAssignTask,
+        KanbanMoveTaskTool kanbanMoveTask,
+        KanbanTaskListTool kanbanTaskList,
+        KanbanTaskHistoryTool kanbanTaskHistory,
+        KanbanValidateTaskTool kanbanValidateTask,
+        KanbanAddCommentTool kanbanAddComment,
+        KanbanTaskCommentsTool kanbanTaskComments,
+        KanbanEditCommentTool kanbanEditComment,
+        KanbanDeleteCommentTool kanbanDeleteComment,
+        KanbanRemediateTaskTool kanbanRemediateTask,
+        KanbanCollectEvidenceTool kanbanCollectEvidence,
+        KanbanBulkUpdateTool kanbanBulkUpdate,
+        KanbanExportTool kanbanExport,
+        KanbanArchiveBoardTool kanbanArchiveBoard,
         IDbContextFactory<AtoCopilotContext> dbFactory,
         ILogger<ComplianceAgent> logger)
         : base(logger)
@@ -58,6 +98,24 @@ public class ComplianceAgent : BaseAgent
         _historyTool = historyTool;
         _statusTool = statusTool;
         _monitoringTool = monitoringTool;
+        _kanbanCreateBoard = kanbanCreateBoard;
+        _kanbanBoardShow = kanbanBoardShow;
+        _kanbanGetTask = kanbanGetTask;
+        _kanbanCreateTask = kanbanCreateTask;
+        _kanbanAssignTask = kanbanAssignTask;
+        _kanbanMoveTask = kanbanMoveTask;
+        _kanbanTaskList = kanbanTaskList;
+        _kanbanTaskHistory = kanbanTaskHistory;
+        _kanbanValidateTask = kanbanValidateTask;
+        _kanbanAddComment = kanbanAddComment;
+        _kanbanTaskComments = kanbanTaskComments;
+        _kanbanEditComment = kanbanEditComment;
+        _kanbanDeleteComment = kanbanDeleteComment;
+        _kanbanRemediateTask = kanbanRemediateTask;
+        _kanbanCollectEvidence = kanbanCollectEvidence;
+        _kanbanBulkUpdate = kanbanBulkUpdate;
+        _kanbanExport = kanbanExport;
+        _kanbanArchiveBoard = kanbanArchiveBoard;
         _dbFactory = dbFactory;
 
         // Register all tools per Constitution Principle II
@@ -72,6 +130,26 @@ public class ComplianceAgent : BaseAgent
         RegisterTool(_historyTool);
         RegisterTool(_statusTool);
         RegisterTool(_monitoringTool);
+
+        // Register Kanban tools
+        RegisterTool(_kanbanCreateBoard);
+        RegisterTool(_kanbanBoardShow);
+        RegisterTool(_kanbanGetTask);
+        RegisterTool(_kanbanCreateTask);
+        RegisterTool(_kanbanAssignTask);
+        RegisterTool(_kanbanMoveTask);
+        RegisterTool(_kanbanTaskList);
+        RegisterTool(_kanbanTaskHistory);
+        RegisterTool(_kanbanValidateTask);
+        RegisterTool(_kanbanAddComment);
+        RegisterTool(_kanbanTaskComments);
+        RegisterTool(_kanbanEditComment);
+        RegisterTool(_kanbanDeleteComment);
+        RegisterTool(_kanbanRemediateTask);
+        RegisterTool(_kanbanCollectEvidence);
+        RegisterTool(_kanbanBulkUpdate);
+        RegisterTool(_kanbanExport);
+        RegisterTool(_kanbanArchiveBoard);
     }
 
     /// <inheritdoc />
@@ -156,6 +234,15 @@ public class ComplianceAgent : BaseAgent
         CancellationToken cancellationToken)
     {
         var lowerMessage = message.ToLowerInvariant();
+
+        // ── Context-aware task resolution ────────────────────────────────────
+        // Resolve ordinal references ("the first one", "the second task", etc.)
+        // from previously stored task list context.
+        var resolvedTaskId = ResolveTaskFromContext(lowerMessage, context);
+        if (resolvedTaskId != null)
+        {
+            context.WorkflowState["task_id"] = resolvedTaskId;
+        }
 
         // Route based on intent keywords
         if (ContainsAny(lowerMessage, "assess", "scan", "audit", "check compliance", "run assessment"))
@@ -243,6 +330,149 @@ public class ComplianceAgent : BaseAgent
             }, cancellationToken);
         }
 
+        // ─── Kanban routing ──────────────────────────────────────────────────
+        if (ContainsAny(lowerMessage, "create board", "new board", "kanban board create"))
+        {
+            return await _kanbanCreateBoard.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["name"] = "New Remediation Board",
+                ["subscription_id"] = GetContextValue(context, "subscription_id")
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "show board", "board overview", "board status", "kanban board"))
+        {
+            return await _kanbanBoardShow.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["board_id"] = GetContextValue(context, "board_id"),
+                ["include_task_summaries"] = true
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "get task", "task detail", "rem-", "task info"))
+        {
+            return await _kanbanGetTask.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["task_id"] = GetContextValue(context, "task_id")
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "create task", "new task", "add task"))
+        {
+            return await _kanbanCreateTask.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["board_id"] = GetContextValue(context, "board_id"),
+                ["title"] = "New Remediation Task", ["control_id"] = "AC-1"
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "assign task", "reassign", "unassign"))
+        {
+            return await _kanbanAssignTask.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["task_id"] = GetContextValue(context, "task_id")
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "move task", "transition", "change status"))
+        {
+            return await _kanbanMoveTask.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["task_id"] = GetContextValue(context, "task_id"),
+                ["target_status"] = "InProgress"
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "list task", "task list", "tasks on board", "show tasks"))
+        {
+            var result = await _kanbanTaskList.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["board_id"] = GetContextValue(context, "board_id")
+            }, cancellationToken);
+
+            // Store task IDs in context for ordinal resolution
+            StoreTaskListResults(result, context);
+            return result;
+        }
+
+        if (ContainsAny(lowerMessage, "task history", "history of task", "audit task"))
+        {
+            return await _kanbanTaskHistory.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["task_id"] = GetContextValue(context, "task_id")
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "validate task", "verify task", "check task fix"))
+        {
+            return await _kanbanValidateTask.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["task_id"] = GetContextValue(context, "task_id"),
+                ["subscription_id"] = GetContextValue(context, "subscription_id")
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "add comment", "comment on task"))
+        {
+            return await _kanbanAddComment.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["task_id"] = GetContextValue(context, "task_id"),
+                ["content"] = "Comment added via agent"
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "task comments", "list comments", "show comments"))
+        {
+            return await _kanbanTaskComments.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["task_id"] = GetContextValue(context, "task_id")
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "remediate task", "run remediation", "execute fix", "apply remediation"))
+        {
+            return await _kanbanRemediateTask.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["task_id"] = GetContextValue(context, "task_id")
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "collect evidence", "task evidence", "gather evidence"))
+        {
+            return await _kanbanCollectEvidence.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["task_id"] = GetContextValue(context, "task_id"),
+                ["subscription_id"] = GetContextValue(context, "subscription_id")
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "bulk update", "bulk assign", "bulk move"))
+        {
+            return await _kanbanBulkUpdate.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["board_id"] = GetContextValue(context, "board_id"),
+                ["operation"] = "assign", ["task_ids"] = new string[0]
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "export board", "export csv", "export poam", "kanban export"))
+        {
+            return await _kanbanExport.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["board_id"] = GetContextValue(context, "board_id"),
+                ["format"] = "csv"
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "archive board", "close board"))
+        {
+            return await _kanbanArchiveBoard.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["board_id"] = GetContextValue(context, "board_id"),
+                ["confirm"] = false
+            }, cancellationToken);
+        }
+
         // Default: return compliance status
         return await _statusTool.ExecuteAsync(new Dictionary<string, object?>
         {
@@ -294,6 +524,11 @@ public class ComplianceAgent : BaseAgent
         if (ContainsAny(lower, "history", "trend")) return "HistoryQuery";
         if (ContainsAny(lower, "status", "posture")) return "StatusQuery";
         if (ContainsAny(lower, "control", "nist")) return "ControlQuery";
+        if (ContainsAny(lower, "board", "kanban")) return "KanbanQuery";
+        if (ContainsAny(lower, "task", "rem-", "assign", "move task")) return "KanbanTask";
+        if (ContainsAny(lower, "comment")) return "KanbanComment";
+        if (ContainsAny(lower, "bulk")) return "KanbanBulk";
+        if (ContainsAny(lower, "export", "csv", "poam export")) return "KanbanExport";
         return "GeneralQuery";
     }
 
@@ -327,6 +562,101 @@ public class ComplianceAgent : BaseAgent
         {
             // Audit logging should never fail the main operation
             Logger.LogWarning(ex, "Failed to persist audit log entry for action {Action}", action);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Context-aware task resolution (US14)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// <summary>Key used to store the last displayed task ID list in workflow state.</summary>
+    public const string LastResultsKey = "kanban:lastResults";
+
+    /// <summary>
+    /// Ordinal patterns mapped to zero-based index.
+    /// Keys are regex patterns, values are the resolved index.
+    /// </summary>
+    private static readonly (Regex Pattern, int Index)[] OrdinalPatterns =
+    [
+        (new Regex(@"\b(the\s+)?first(\s+one|\s+task)?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), 0),
+        (new Regex(@"\b(the\s+)?second(\s+one|\s+task)?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), 1),
+        (new Regex(@"\b(the\s+)?third(\s+one|\s+task)?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), 2),
+        (new Regex(@"\b(the\s+)?fourth(\s+one|\s+task)?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), 3),
+        (new Regex(@"\b(the\s+)?fifth(\s+one|\s+task)?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), 4),
+        (new Regex(@"\b(the\s+)?last(\s+one|\s+task)?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), -1),
+    ];
+
+    /// <summary>
+    /// Resolves an ordinal reference ("first", "second", "last") to a task ID
+    /// from the previously stored task list. Returns null if no match or no context.
+    /// </summary>
+    public static string? ResolveTaskFromContext(string lowerMessage, AgentConversationContext context)
+    {
+        // Only attempt resolution if context has stored results
+        if (!context.WorkflowState.TryGetValue(LastResultsKey, out var stored) || stored is not List<string> taskIds || taskIds.Count == 0)
+            return null;
+
+        foreach (var (pattern, index) in OrdinalPatterns)
+        {
+            if (!pattern.IsMatch(lowerMessage)) continue;
+
+            var resolvedIndex = index == -1 ? taskIds.Count - 1 : index;
+            if (resolvedIndex >= 0 && resolvedIndex < taskIds.Count)
+            {
+                return taskIds[resolvedIndex];
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Extracts task IDs from a JSON tool result (standard envelope format)
+    /// and stores them in the conversation context for ordinal resolution.
+    /// </summary>
+    public static void StoreTaskListResults(string toolResult, AgentConversationContext context)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(toolResult);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("data", out var data))
+            {
+                var taskIds = new List<string>();
+
+                // Handle array of tasks in data
+                if (data.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in data.EnumerateArray())
+                    {
+                        if (item.TryGetProperty("id", out var id))
+                            taskIds.Add(id.GetString() ?? "");
+                        else if (item.TryGetProperty("taskId", out var taskId))
+                            taskIds.Add(taskId.GetString() ?? "");
+                    }
+                }
+                // Handle object with tasks array inside
+                else if (data.ValueKind == JsonValueKind.Object && data.TryGetProperty("tasks", out var tasks) && tasks.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in tasks.EnumerateArray())
+                    {
+                        if (item.TryGetProperty("id", out var id))
+                            taskIds.Add(id.GetString() ?? "");
+                        else if (item.TryGetProperty("taskId", out var taskId))
+                            taskIds.Add(taskId.GetString() ?? "");
+                    }
+                }
+
+                if (taskIds.Count > 0)
+                {
+                    context.WorkflowState[LastResultsKey] = taskIds;
+                }
+            }
+        }
+        catch
+        {
+            // Non-JSON results or parse errors — silently skip context storage
         }
     }
 }
