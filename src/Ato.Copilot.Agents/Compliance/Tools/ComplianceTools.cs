@@ -48,7 +48,7 @@ public class ComplianceAssessmentTool : BaseTool
     };
 
     /// <inheritdoc />
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var subscriptionId = GetArg<string>(arguments, "subscription_id");
         var framework = GetArg<string>(arguments, "framework");
@@ -230,7 +230,7 @@ public class ControlFamilyTool : BaseTool
     };
 
     /// <inheritdoc />
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var familyId = GetArg<string>(arguments, "family_id") ?? "AC";
         var includeControls = GetArg<bool?>(arguments, "include_controls") ?? true;
@@ -281,7 +281,7 @@ public class DocumentGenerationTool : BaseTool
     };
 
     /// <inheritdoc />
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var documentType = GetArg<string>(arguments, "document_type") ?? "ssp";
         var subscriptionId = GetArg<string>(arguments, "subscription_id");
@@ -375,7 +375,7 @@ public class EvidenceCollectionTool : BaseTool
     };
 
     /// <inheritdoc />
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var controlId = GetArg<string>(arguments, "control_id") ?? "";
         var subscriptionId = GetArg<string>(arguments, "subscription_id") ?? "";
@@ -419,7 +419,7 @@ public class RemediationExecuteTool : BaseTool
     };
 
     /// <inheritdoc />
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var batch = GetArg<bool?>(arguments, "batch") ?? false;
 
@@ -472,7 +472,7 @@ public class ValidateRemediationTool : BaseTool
     };
 
     /// <inheritdoc />
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var findingId = GetArg<string>(arguments, "finding_id") ?? "";
         var executionId = GetArg<string>(arguments, "execution_id");
@@ -510,7 +510,7 @@ public class RemediationPlanTool : BaseTool
     };
 
     /// <inheritdoc />
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var subscriptionId = GetArg<string>(arguments, "subscription_id");
         var resourceGroupName = GetArg<string>(arguments, "resource_group_name");
@@ -554,7 +554,7 @@ public class AssessmentAuditLogTool : BaseTool
     };
 
     /// <inheritdoc />
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var subscriptionId = GetArg<string>(arguments, "subscription_id");
         var days = GetArg<int?>(arguments, "days") ?? 7;
@@ -591,7 +591,7 @@ public class ComplianceHistoryTool : BaseTool
     };
 
     /// <inheritdoc />
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var subscriptionId = GetArg<string>(arguments, "subscription_id");
         var days = GetArg<int?>(arguments, "days") ?? 30;
@@ -628,7 +628,7 @@ public class ComplianceStatusTool : BaseTool
     };
 
     /// <inheritdoc />
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var subscriptionId = GetArg<string>(arguments, "subscription_id");
         var framework = GetArg<string>(arguments, "framework");
@@ -666,7 +666,7 @@ public class ComplianceMonitoringTool : BaseTool
     };
 
     /// <inheritdoc />
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var action = GetArg<string>(arguments, "action") ?? "status";
         var subscriptionId = GetArg<string>(arguments, "subscription_id");

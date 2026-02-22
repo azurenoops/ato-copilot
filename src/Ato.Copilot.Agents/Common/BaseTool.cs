@@ -1,4 +1,7 @@
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
+using Ato.Copilot.Core.Models.Auth;
+using Ato.Copilot.Core.Observability;
 
 namespace Ato.Copilot.Agents.Common;
 
@@ -31,11 +34,54 @@ public abstract class BaseTool
     public abstract IReadOnlyDictionary<string, ToolParameter> Parameters { get; }
 
     /// <summary>
-    /// Execute the tool with the given arguments
+    /// The PIM tier required to execute this tool (per R-010).
+    /// Tier 1 (None): No PIM elevation required — local/cached operations.
+    /// Tier 2a (Read): Reader-level PIM role required — read-only Azure operations.
+    /// Tier 2b (Write): Contributor-level (or higher) PIM role required — write operations.
+    /// Override in derived classes to declare the tool's required PIM tier.
     /// </summary>
-    public abstract Task<string> ExecuteAsync(
+    public virtual PimTier RequiredPimTier => PimTier.None;
+
+    /// <summary>
+    /// The name of the agent that owns this tool. Override in derived classes.
+    /// Used for metrics tagging (per FR-046).
+    /// </summary>
+    public virtual string AgentName => "compliance";
+
+    /// <summary>
+    /// Implement tool logic in derived classes. Called by <see cref="ExecuteAsync"/>.
+    /// </summary>
+    public abstract Task<string> ExecuteCoreAsync(
         Dictionary<string, object?> arguments,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Instrumented entry point that wraps <see cref="ExecuteCoreAsync"/> with
+    /// Stopwatch timing and metrics recording (latency, errors, throughput) per FR-046.
+    /// All callers (ComplianceAgent, ComplianceMcpTools, McpServer) invoke this method.
+    /// </summary>
+    public async Task<string> ExecuteAsync(
+        Dictionary<string, object?> arguments,
+        CancellationToken cancellationToken = default)
+    {
+        ToolMetrics.RecordStart(Name, AgentName);
+        var sw = Stopwatch.StartNew();
+
+        try
+        {
+            var result = await ExecuteCoreAsync(arguments, cancellationToken);
+            sw.Stop();
+            ToolMetrics.RecordSuccess(sw.Elapsed.TotalMilliseconds, Name, AgentName);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            var errorCode = ex is OperationCanceledException ? "cancelled" : "unhandled";
+            ToolMetrics.RecordError(Name, AgentName, errorCode);
+            throw;
+        }
+    }
 
     /// <summary>
     /// Get a typed argument value from the arguments dictionary

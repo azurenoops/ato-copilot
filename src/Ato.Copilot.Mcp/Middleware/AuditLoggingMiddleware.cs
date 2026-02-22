@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Serilog.Context;
 using System.Diagnostics;
 using System.Text.Json;
 
@@ -29,37 +30,58 @@ public class AuditLoggingMiddleware
         var stopwatch = Stopwatch.StartNew();
         var requestId = Guid.NewGuid().ToString("N")[..12];
 
-        // Log request
-        _logger.LogInformation(
-            "ATO Audit | ReqId: {RequestId} | Method: {Method} | Path: {Path} | IP: {IP} | User: {User}",
-            requestId,
-            context.Request.Method,
-            context.Request.Path,
-            context.Connection.RemoteIpAddress,
-            context.User?.Identity?.Name ?? "anonymous");
+        // Extract correlation ID set by CorrelationIdMiddleware (per FR-048)
+        var correlationId = context.Items.TryGetValue("CorrelationId", out var cid)
+            ? cid?.ToString() ?? requestId
+            : requestId;
 
-        try
+        // Extract tool name from MCP request path/method
+        var toolName = context.Request.Path.Value?.Split('/').LastOrDefault() ?? "unknown";
+
+        // Extract user ID — redacted: first 8 chars + "***" (per FR-048)
+        var rawUserId = context.User?.Identity?.Name ?? "anonymous";
+        var redactedUserId = rawUserId.Length > 8
+            ? rawUserId[..8] + "***"
+            : rawUserId;
+
+        // Push structured properties to Serilog LogContext (per FR-048)
+        using (LogContext.PushProperty("CorrelationId", correlationId))
+        using (LogContext.PushProperty("AgentName", "compliance"))
+        using (LogContext.PushProperty("ToolName", toolName))
+        using (LogContext.PushProperty("UserId", redactedUserId))
         {
-            await _next(context);
-            stopwatch.Stop();
-
+            // Log request
             _logger.LogInformation(
-                "ATO Audit | ReqId: {RequestId} | Status: {Status} | Duration: {Duration}ms",
+                "ATO Audit | ReqId: {RequestId} | Method: {Method} | Path: {Path} | IP: {IP} | User: {UserId}",
                 requestId,
-                context.Response.StatusCode,
-                stopwatch.ElapsedMilliseconds);
-        }
-        catch (Exception ex)
-        {
-            stopwatch.Stop();
+                context.Request.Method,
+                context.Request.Path,
+                context.Connection.RemoteIpAddress,
+                redactedUserId);
 
-            _logger.LogError(ex,
-                "ATO Audit | ReqId: {RequestId} | FAILED | Duration: {Duration}ms | Error: {Error}",
-                requestId,
-                stopwatch.ElapsedMilliseconds,
-                ex.Message);
+            try
+            {
+                await _next(context);
+                stopwatch.Stop();
 
-            throw;
+                _logger.LogInformation(
+                    "ATO Audit | ReqId: {RequestId} | Status: {Status} | Duration: {Duration}ms",
+                    requestId,
+                    context.Response.StatusCode,
+                    stopwatch.ElapsedMilliseconds);
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+
+                _logger.LogError(ex,
+                    "ATO Audit | ReqId: {RequestId} | FAILED | Duration: {Duration}ms | Error: {Error}",
+                    requestId,
+                    stopwatch.ElapsedMilliseconds,
+                    ex.Message);
+
+                throw;
+            }
         }
     }
 }

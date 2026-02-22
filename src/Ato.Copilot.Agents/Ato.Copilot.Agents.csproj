@@ -12,6 +12,7 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.4" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.4" />
     <PackageReference Include="System.Text.Json" Version="9.0.5" />
+    <PackageReference Include="Microsoft.Graph" Version="5.70.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -22,6 +23,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Compliance\Prompts\ComplianceAgent.prompt.txt" />
     <EmbeddedResource Include="Compliance\Prompts\KanbanAgent.prompt.txt" />
+    <EmbeddedResource Include="Compliance\Prompts\PimAgent.prompt.txt" />
     <EmbeddedResource Include="Compliance\Resources\NIST_SP-800-53_rev5_catalog.json" />
     <EmbeddedResource Include="Configuration\Prompts\ConfigurationAgent.prompt.txt" />
   </ItemGroup>

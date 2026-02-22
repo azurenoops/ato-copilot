@@ -110,7 +110,7 @@ public class KanbanCreateBoardTool : KanbanToolBase
         ["owner"] = new() { Name = "owner", Description = "Board owner identity. Defaults to current user.", Type = "string" }
     };
 
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var name = GetArg<string>(arguments, "name");
         var subscriptionId = GetArg<string>(arguments, "subscription_id") ?? "";
@@ -167,7 +167,7 @@ public class KanbanBoardShowTool : KanbanToolBase
         ["page_size"] = new() { Name = "page_size", Description = "Tasks per page", Type = "integer" }
     };
 
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var boardId = GetArg<string>(arguments, "board_id");
         var includeTaskSummaries = GetArg<bool?>(arguments, "include_task_summaries") ?? true;
@@ -243,7 +243,7 @@ public class KanbanGetTaskTool : KanbanToolBase
         ["board_id"] = new() { Name = "board_id", Description = "Board ID. Required if using task number.", Type = "string" }
     };
 
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var taskId = GetArg<string>(arguments, "task_id");
         if (string.IsNullOrWhiteSpace(taskId))
@@ -300,7 +300,7 @@ public class KanbanCreateTaskTool : KanbanToolBase
         ["validation_criteria"] = new() { Name = "validation_criteria", Description = "How to verify the fix", Type = "string" }
     };
 
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var boardId = GetArg<string>(arguments, "board_id");
         var title = GetArg<string>(arguments, "title");
@@ -371,7 +371,7 @@ public class KanbanAssignTaskTool : KanbanToolBase
         ["assignee_name"] = new() { Name = "assignee_name", Description = "Display name for the assignee", Type = "string" }
     };
 
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var taskId = GetArg<string>(arguments, "task_id");
         var assigneeId = GetArg<string>(arguments, "assignee_id");
@@ -427,7 +427,7 @@ public class KanbanMoveTaskTool : KanbanToolBase
         ["skip_validation"] = new() { Name = "skip_validation", Description = "Skip validation on Done. CO only.", Type = "boolean" }
     };
 
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var taskId = GetArg<string>(arguments, "task_id");
         var targetStatusStr = GetArg<string>(arguments, "target_status");
@@ -500,7 +500,7 @@ public class KanbanTaskListTool : KanbanToolBase
         ["page_size"] = new() { Name = "page_size", Description = "Items per page. Max 100.", Type = "integer" }
     };
 
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var boardId = GetArg<string>(arguments, "board_id");
         var statusStr = GetArg<string>(arguments, "status");
@@ -574,7 +574,7 @@ public class KanbanTaskHistoryTool : KanbanToolBase
         ["page_size"] = new() { Name = "page_size", Description = "Items per page", Type = "integer" }
     };
 
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var taskId = GetArg<string>(arguments, "task_id");
         var eventTypeStr = GetArg<string>(arguments, "event_type");
@@ -626,7 +626,7 @@ public class KanbanValidateTaskTool : KanbanToolBase
         ["subscription_id"] = new() { Name = "subscription_id", Description = "Azure subscription ID", Type = "string" }
     };
 
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var taskId = GetArg<string>(arguments, "task_id");
         var subscriptionId = GetArg<string>(arguments, "subscription_id");
@@ -681,7 +681,7 @@ public class KanbanAddCommentTool : KanbanToolBase
         ["parent_comment_id"] = new() { Name = "parent_comment_id", Description = "Parent comment ID for threading", Type = "string" }
     };
 
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var taskId = GetArg<string>(arguments, "task_id");
         var content = GetArg<string>(arguments, "content");
@@ -735,7 +735,7 @@ public class KanbanTaskCommentsTool : KanbanToolBase
         ["page_size"] = new() { Name = "page_size", Description = "Items per page", Type = "integer" }
     };
 
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var taskId = GetArg<string>(arguments, "task_id");
         var includeDeleted = GetArg<bool?>(arguments, "include_deleted") ?? false;
@@ -785,7 +785,7 @@ public class KanbanEditCommentTool : KanbanToolBase
         ["content"] = new() { Name = "content", Description = "Updated comment text", Type = "string", Required = true }
     };
 
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var commentId = GetArg<string>(arguments, "comment_id");
         var content = GetArg<string>(arguments, "content");
@@ -836,7 +836,7 @@ public class KanbanDeleteCommentTool : KanbanToolBase
         ["board_id"] = new() { Name = "board_id", Description = "Board ID", Type = "string" }
     };
 
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var commentId = GetArg<string>(arguments, "comment_id");
 
@@ -888,7 +888,7 @@ public class KanbanRemediateTaskTool : KanbanToolBase
         ["board_id"] = new() { Name = "board_id", Description = "Board ID", Type = "string" }
     };
 
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var taskId = GetArg<string>(arguments, "task_id");
         if (string.IsNullOrWhiteSpace(taskId)) return Error("Task ID is required.", "TASK_NOT_FOUND");
@@ -932,7 +932,7 @@ public class KanbanCollectEvidenceTool : KanbanToolBase
         ["subscription_id"] = new() { Name = "subscription_id", Description = "Azure subscription ID", Type = "string" }
     };
 
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var taskId = GetArg<string>(arguments, "task_id");
         var subscriptionId = GetArg<string>(arguments, "subscription_id");
@@ -989,7 +989,7 @@ public class KanbanBulkUpdateTool : KanbanToolBase
         ["comment"] = new() { Name = "comment", Description = "Comment for transitions that require one", Type = "string" }
     };
 
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var boardId = GetArg<string>(arguments, "board_id");
         var operation = GetArg<string>(arguments, "operation");
@@ -1075,7 +1075,7 @@ public class KanbanExportTool : KanbanToolBase
         ["include_history"] = new() { Name = "include_history", Description = "Include full history in export", Type = "boolean" }
     };
 
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var boardId = GetArg<string>(arguments, "board_id");
         var format = GetArg<string>(arguments, "format") ?? "csv";
@@ -1127,7 +1127,7 @@ public class KanbanArchiveBoardTool : KanbanToolBase
         ["confirm"] = new() { Name = "confirm", Description = "Confirm archival. Must be true.", Type = "boolean", Required = true }
     };
 
-    public override async Task<string> ExecuteAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
     {
         var boardId = GetArg<string>(arguments, "board_id");
         var confirm = GetArg<bool?>(arguments, "confirm") ?? false;

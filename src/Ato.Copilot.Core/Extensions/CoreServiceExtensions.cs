@@ -30,6 +30,9 @@ public static class CoreServiceExtensions
         // Bind configuration sections
         services.Configure<GatewayOptions>(configuration.GetSection(GatewayOptions.SectionName));
         services.Configure<AzureAdOptions>(configuration.GetSection(AzureAdOptions.SectionName));
+        services.Configure<PimServiceOptions>(configuration.GetSection(PimServiceOptions.SectionName));
+        services.Configure<CacAuthOptions>(configuration.GetSection(CacAuthOptions.SectionName));
+        services.Configure<RetentionPolicyOptions>(configuration.GetSection(RetentionPolicyOptions.SectionName));
 
         // Register HTTP client factory
         services.AddHttpClient();

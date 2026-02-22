@@ -108,7 +108,7 @@ public class ConfigurationTool : BaseTool
     };
 
     /// <inheritdoc />
-    public override async Task<string> ExecuteAsync(
+    public override async Task<string> ExecuteCoreAsync(
         Dictionary<string, object?> arguments,
         CancellationToken cancellationToken = default)
     {
