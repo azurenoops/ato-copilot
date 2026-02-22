@@ -1,5 +1,8 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Ato.Copilot.Core.Interfaces.Auth;
+using Ato.Copilot.Mcp.Models;
 using Ato.Copilot.Mcp.Server;
 using Ato.Copilot.Mcp.Tools;
 
@@ -12,6 +15,10 @@ public static class McpServiceExtensions
     /// </summary>
     public static IServiceCollection AddMcpServer(this IServiceCollection services, IConfiguration configuration)
     {
+        // User context — IHttpContextAccessor enables cross-scope access to request identity
+        services.AddHttpContextAccessor();
+        services.AddScoped<IUserContext, HttpUserContext>();
+
         // MCP Tools
         services.AddSingleton<ComplianceMcpTools>();
 

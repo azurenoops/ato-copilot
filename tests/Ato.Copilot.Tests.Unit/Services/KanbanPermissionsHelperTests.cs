@@ -31,7 +31,7 @@ public class KanbanPermissionsHelperTests
             .Should().BeTrue();
     }
 
-    // ── SecurityLead (7 perms) ────────────────────────────────────────────
+    // ── SecurityLead (8 perms) ────────────────────────────────────────────
 
     [Theory]
     [InlineData(KanbanPermissions.CanCreateBoard, true)]
@@ -40,9 +40,9 @@ public class KanbanPermissionsHelperTests
     [InlineData(KanbanPermissions.CanMoveOwn, true)]
     [InlineData(KanbanPermissions.CanMoveAny, true)]
     [InlineData(KanbanPermissions.CanComment, true)]
+    [InlineData(KanbanPermissions.CanDeleteAnyComment, true)]
     [InlineData(KanbanPermissions.CanExport, true)]
     [InlineData(KanbanPermissions.CanSelfAssign, false)]
-    [InlineData(KanbanPermissions.CanDeleteAnyComment, false)]
     [InlineData(KanbanPermissions.CanCloseWithoutValidation, false)]
     [InlineData(KanbanPermissions.CanArchive, false)]
     public void SecurityLead_HasExpectedPermissions(string permission, bool expected)
