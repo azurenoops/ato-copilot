@@ -28,6 +28,7 @@ namespace Ato.Copilot.Tests.Integration;
 /// including middleware, routing, serialization, and tool execution.
 /// Uses InMemory database and Development environment (bypasses auth middleware).
 /// </summary>
+[Collection("IntegrationTests")]
 public class McpToolEndpointTests : IAsyncLifetime
 {
     private WebApplication _app = null!;

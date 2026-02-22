@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Ato.Copilot.Core.Models.Auth;
 using Ato.Copilot.Core.Models.Compliance;
 using Ato.Copilot.Core.Models.Kanban;
 
@@ -50,6 +51,15 @@ public class AtoCopilotContext : DbContext
 
     /// <summary>Immutable history entries for remediation task changes.</summary>
     public DbSet<TaskHistoryEntry> TaskHistoryEntries => Set<TaskHistoryEntry>();
+
+    /// <summary>CAC/PIV authentication sessions with configurable timeout.</summary>
+    public DbSet<CacSession> CacSessions => Set<CacSession>();
+
+    /// <summary>JIT access requests for PIM role activations and VM network access.</summary>
+    public DbSet<JitRequestEntity> JitRequests => Set<JitRequestEntity>();
+
+    /// <summary>Certificate-to-role mappings for automatic role resolution.</summary>
+    public DbSet<CertificateRoleMapping> CertificateRoleMappings => Set<CertificateRoleMapping>();
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -329,6 +339,75 @@ public class AtoCopilotContext : DbContext
             // Indexes
             entity.HasIndex(e => e.TaskId);
             entity.HasIndex(e => new { e.TaskId, e.Timestamp });
+        });
+
+        // ─── CacSession ─────────────────────────────────────────────────────────
+        modelBuilder.Entity<CacSession>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.DisplayName).HasMaxLength(200);
+            entity.Property(e => e.Email).HasMaxLength(200);
+            entity.Property(e => e.TokenHash).HasMaxLength(64).IsRequired();
+            entity.Property(e => e.IpAddress).HasMaxLength(45);
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.ClientType).HasConversion<string>().HasMaxLength(20);
+
+            entity.HasIndex(e => new { e.UserId, e.Status }).HasDatabaseName("IX_CacSession_UserId_Status");
+            entity.HasIndex(e => e.ExpiresAt).HasDatabaseName("IX_CacSession_ExpiresAt");
+        });
+
+        // ─── JitRequestEntity ────────────────────────────────────────────────────
+        modelBuilder.Entity<JitRequestEntity>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.UserDisplayName).HasMaxLength(200);
+            entity.Property(e => e.ConversationId).HasMaxLength(100);
+            entity.Property(e => e.RoleName).HasMaxLength(200);
+            entity.Property(e => e.Scope).HasMaxLength(500);
+            entity.Property(e => e.ScopeDisplayName).HasMaxLength(500);
+            entity.Property(e => e.Justification).HasMaxLength(500).IsRequired();
+            entity.Property(e => e.TicketNumber).HasMaxLength(50);
+            entity.Property(e => e.TicketSystem).HasMaxLength(50);
+            entity.Property(e => e.PimRequestId).HasMaxLength(100);
+            entity.Property(e => e.ApproverId).HasMaxLength(200);
+            entity.Property(e => e.ApproverDisplayName).HasMaxLength(200);
+            entity.Property(e => e.ApproverComments).HasMaxLength(500);
+            entity.Property(e => e.VmName).HasMaxLength(200);
+            entity.Property(e => e.ResourceGroup).HasMaxLength(200);
+            entity.Property(e => e.SubscriptionId).HasMaxLength(100);
+            entity.Property(e => e.Protocol).HasMaxLength(10);
+            entity.Property(e => e.SourceIp).HasMaxLength(45);
+            entity.Property(e => e.RequestType).HasConversion<string>().HasMaxLength(30);
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(30);
+            entity.Property(e => e.RowVersion).IsConcurrencyToken();
+
+            // Relationship: JitRequest → CacSession (optional, restrict delete)
+            entity.HasOne(e => e.Session)
+                .WithMany()
+                .HasForeignKey(e => e.SessionId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .IsRequired(false);
+
+            entity.HasIndex(e => new { e.UserId, e.Status }).HasDatabaseName("IX_JitRequest_UserId_Status");
+            entity.HasIndex(e => e.SessionId).HasDatabaseName("IX_JitRequest_SessionId");
+            entity.HasIndex(e => e.RequestedAt).HasDatabaseName("IX_JitRequest_RequestedAt");
+            entity.HasIndex(e => new { e.RoleName, e.Scope }).HasDatabaseName("IX_JitRequest_RoleName_Scope");
+            entity.HasIndex(e => new { e.Status, e.ExpiresAt }).HasDatabaseName("IX_JitRequest_Status_ExpiresAt");
+        });
+
+        // ─── CertificateRoleMapping ──────────────────────────────────────────────
+        modelBuilder.Entity<CertificateRoleMapping>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.CertificateThumbprint).HasMaxLength(64).IsRequired();
+            entity.Property(e => e.CertificateSubject).HasMaxLength(500).IsRequired();
+            entity.Property(e => e.MappedRole).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.CreatedBy).HasMaxLength(200);
+
+            entity.HasIndex(e => e.CertificateThumbprint).IsUnique().HasDatabaseName("IX_CertMapping_Thumbprint");
+            entity.HasIndex(e => e.CertificateSubject).IsUnique().HasDatabaseName("IX_CertMapping_Subject");
         });
     }
 

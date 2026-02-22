@@ -3,10 +3,14 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Ato.Copilot.Agents.Common;
 using Ato.Copilot.Agents.Compliance.Tools;
+using Ato.Copilot.Core.Configuration;
 using Ato.Copilot.Core.Data.Context;
+using Ato.Copilot.Core.Interfaces.Auth;
 using Ato.Copilot.Core.Models.Compliance;
 
 namespace Ato.Copilot.Agents.Compliance.Agents;
@@ -29,6 +33,7 @@ public class ComplianceAgent : BaseAgent
     private readonly ComplianceStatusTool _statusTool;
     private readonly ComplianceMonitoringTool _monitoringTool;
     private readonly IDbContextFactory<AtoCopilotContext> _dbFactory;
+    private readonly IServiceScopeFactory _scopeFactory;
 
     // Kanban tools (Phase 3–6)
     private readonly KanbanCreateBoardTool _kanbanCreateBoard;
@@ -49,6 +54,37 @@ public class ComplianceAgent : BaseAgent
     private readonly KanbanBulkUpdateTool _kanbanBulkUpdate;
     private readonly KanbanExportTool _kanbanExport;
     private readonly KanbanArchiveBoardTool _kanbanArchiveBoard;
+
+    // Auth/PIM tools (Phase 3 — US1)
+    private readonly CacStatusTool _cacStatus;
+    private readonly CacSignOutTool _cacSignOut;
+
+    // CAC session config (Phase 10 — US8)
+    private readonly CacSetTimeoutTool _cacSetTimeout;
+
+    // Certificate mapping (Phase 11 — US9)
+    private readonly CacMapCertificateTool _cacMapCertificate;
+
+    // PIM tools (Phase 5 — US3)
+    private readonly PimListEligibleTool _pimListEligible;
+    private readonly PimActivateRoleTool _pimActivateRole;
+    private readonly PimDeactivateRoleTool _pimDeactivateRole;
+
+    // PIM session management tools (Phase 6 — US4)
+    private readonly PimListActiveTool _pimListActive;
+    private readonly PimExtendRoleTool _pimExtendRole;
+
+    // PIM approval workflow tools (Phase 7 — US5)
+    private readonly PimApproveRequestTool _pimApproveRequest;
+    private readonly PimDenyRequestTool _pimDenyRequest;
+
+    // JIT VM access tools (Phase 9 — US7)
+    private readonly JitRequestAccessTool _jitRequestAccess;
+    private readonly JitListSessionsTool _jitListSessions;
+    private readonly JitRevokeAccessTool _jitRevokeAccess;
+
+    // PIM audit trail (Phase 12 — US10)
+    private readonly PimHistoryTool _pimHistory;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ComplianceAgent"/> class.
@@ -83,7 +119,23 @@ public class ComplianceAgent : BaseAgent
         KanbanBulkUpdateTool kanbanBulkUpdate,
         KanbanExportTool kanbanExport,
         KanbanArchiveBoardTool kanbanArchiveBoard,
+        CacStatusTool cacStatus,
+        CacSignOutTool cacSignOut,
+        CacSetTimeoutTool cacSetTimeout,
+        CacMapCertificateTool cacMapCertificate,
+        PimListEligibleTool pimListEligible,
+        PimActivateRoleTool pimActivateRole,
+        PimDeactivateRoleTool pimDeactivateRole,
+        PimListActiveTool pimListActive,
+        PimExtendRoleTool pimExtendRole,
+        PimApproveRequestTool pimApproveRequest,
+        PimDenyRequestTool pimDenyRequest,
+        JitRequestAccessTool jitRequestAccess,
+        JitListSessionsTool jitListSessions,
+        JitRevokeAccessTool jitRevokeAccess,
+        PimHistoryTool pimHistory,
         IDbContextFactory<AtoCopilotContext> dbFactory,
+        IServiceScopeFactory scopeFactory,
         ILogger<ComplianceAgent> logger)
         : base(logger)
     {
@@ -116,7 +168,23 @@ public class ComplianceAgent : BaseAgent
         _kanbanBulkUpdate = kanbanBulkUpdate;
         _kanbanExport = kanbanExport;
         _kanbanArchiveBoard = kanbanArchiveBoard;
+        _cacStatus = cacStatus;
+        _cacSignOut = cacSignOut;
+        _cacSetTimeout = cacSetTimeout;
+        _cacMapCertificate = cacMapCertificate;
+        _pimListEligible = pimListEligible;
+        _pimActivateRole = pimActivateRole;
+        _pimDeactivateRole = pimDeactivateRole;
+        _pimListActive = pimListActive;
+        _pimExtendRole = pimExtendRole;
+        _pimApproveRequest = pimApproveRequest;
+        _pimDenyRequest = pimDenyRequest;
+        _jitRequestAccess = jitRequestAccess;
+        _jitListSessions = jitListSessions;
+        _jitRevokeAccess = jitRevokeAccess;
+        _pimHistory = pimHistory;
         _dbFactory = dbFactory;
+        _scopeFactory = scopeFactory;
 
         // Register all tools per Constitution Principle II
         RegisterTool(_assessmentTool);
@@ -150,6 +218,23 @@ public class ComplianceAgent : BaseAgent
         RegisterTool(_kanbanBulkUpdate);
         RegisterTool(_kanbanExport);
         RegisterTool(_kanbanArchiveBoard);
+
+        // Register Auth/PIM tools
+        RegisterTool(_cacStatus);
+        RegisterTool(_cacSignOut);
+        RegisterTool(_cacSetTimeout);
+        RegisterTool(_cacMapCertificate);
+        RegisterTool(_pimListEligible);
+        RegisterTool(_pimActivateRole);
+        RegisterTool(_pimDeactivateRole);
+        RegisterTool(_pimListActive);
+        RegisterTool(_pimExtendRole);
+        RegisterTool(_pimApproveRequest);
+        RegisterTool(_pimDenyRequest);
+        RegisterTool(_jitRequestAccess);
+        RegisterTool(_jitListSessions);
+        RegisterTool(_jitRevokeAccess);
+        RegisterTool(_pimHistory);
     }
 
     /// <inheritdoc />
@@ -190,8 +275,25 @@ public class ComplianceAgent : BaseAgent
 
         try
         {
+            // ── Auth-gate: check PIM eligibility for Tier 2 operations (FR-019) ──
+            var authGateResult = await CheckAuthGateAsync(message, context, cancellationToken);
+            if (authGateResult != null)
+            {
+                stopwatch.Stop();
+                return new AgentResponse
+                {
+                    Success = true,
+                    Response = authGateResult,
+                    AgentName = AgentName,
+                    ProcessingTimeMs = stopwatch.ElapsedMilliseconds
+                };
+            }
+
             // Analyze intent and route to appropriate tool
             var toolResult = await RouteToToolAsync(message, context, cancellationToken);
+
+            // ── Post-operation deactivation offer (FR-020/FR-021) ────────────
+            toolResult = await AppendDeactivationOfferAsync(toolResult, message, context, cancellationToken);
 
             stopwatch.Stop();
 
@@ -473,11 +575,382 @@ public class ComplianceAgent : BaseAgent
             }, cancellationToken);
         }
 
+        // ─── Auth/PIM routing ────────────────────────────────────────────────
+        if (ContainsAny(lowerMessage, "cac status", "auth status", "am i authenticated", "authentication status"))
+        {
+            return await _cacStatus.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["user_id"] = GetContextValue(context, "user_id")
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "sign out", "cac sign out", "log out", "logout", "cac logout"))
+        {
+            return await _cacSignOut.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["user_id"] = GetContextValue(context, "user_id")
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "set timeout", "session timeout", "cac timeout", "change timeout", "set my timeout", "timeout to"))
+        {
+            return await _cacSetTimeout.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["user_id"] = GetContextValue(context, "user_id"),
+                ["timeoutHours"] = ExtractHours(lowerMessage)
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "map certificate", "map cert", "certificate mapping", "cert mapping", "map my cert", "map my cac", "assign role to cert"))
+        {
+            return await _cacMapCertificate.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["user_id"] = GetContextValue(context, "user_id"),
+                ["role"] = ExtractRole(lowerMessage)
+            }, cancellationToken);
+        }
+
+        // ─── PIM routing ─────────────────────────────────────────────────────
+        if (ContainsAny(lowerMessage, "eligible roles", "pim eligible", "list eligible", "what roles can i activate"))
+        {
+            return await _pimListEligible.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["user_id"] = GetContextValue(context, "user_id"),
+                ["scope"] = GetContextValue(context, "subscription_id")
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "activate role", "pim activate", "i need", "give me access", "enable role"))
+        {
+            return await _pimActivateRole.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["user_id"] = GetContextValue(context, "user_id"),
+                ["session_id"] = GetContextValue(context, "session_id"),
+                ["roleName"] = ExtractRoleName(lowerMessage),
+                ["scope"] = GetContextValue(context, "subscription_id") ?? "default",
+                ["justification"] = message
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "deactivate role", "pim deactivate", "remove access", "revoke role", "disable role"))
+        {
+            return await _pimDeactivateRole.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["user_id"] = GetContextValue(context, "user_id"),
+                ["roleName"] = ExtractRoleName(lowerMessage),
+                ["scope"] = GetContextValue(context, "subscription_id") ?? "default"
+            }, cancellationToken);
+        }
+
+        // ─── PIM Session Management routing ──────────────────────────────────
+        if (ContainsAny(lowerMessage, "active roles", "pim active", "list active", "my active pim", "show my active", "current roles"))
+        {
+            return await _pimListActive.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["user_id"] = GetContextValue(context, "user_id")
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "extend role", "pim extend", "extend by", "extend access", "more time"))
+        {
+            return await _pimExtendRole.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["user_id"] = GetContextValue(context, "user_id"),
+                ["roleName"] = ExtractRoleName(lowerMessage),
+                ["scope"] = GetContextValue(context, "subscription_id") ?? "default",
+                ["additionalHours"] = ExtractHours(lowerMessage)
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "approve request", "pim approve", "approve role", "approve activation"))
+        {
+            return await _pimApproveRequest.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["user_id"] = GetContextValue(context, "user_id"),
+                ["user_role"] = GetContextValue(context, "user_role"),
+                ["requestId"] = ExtractRequestId(lowerMessage),
+                ["comments"] = null
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "deny request", "pim deny", "reject request", "deny activation"))
+        {
+            return await _pimDenyRequest.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["user_id"] = GetContextValue(context, "user_id"),
+                ["user_role"] = GetContextValue(context, "user_role"),
+                ["requestId"] = ExtractRequestId(lowerMessage),
+                ["reason"] = null
+            }, cancellationToken);
+        }
+
+        // ─── JIT VM Access routing (Phase 9 — US7) ──────────────────────
+        if (ContainsAny(lowerMessage, "ssh access", "rdp access", "vm access", "jit access", "jit request", "i need ssh", "i need rdp", "connect to vm"))
+        {
+            var vmName = ExtractVmName(lowerMessage);
+            return await _jitRequestAccess.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["user_id"] = GetContextValue(context, "user_id"),
+                ["session_id"] = GetContextValue(context, "session_id"),
+                ["vmName"] = vmName,
+                ["resourceGroup"] = GetContextValue(context, "resource_group") ?? "default-rg",
+                ["justification"] = message
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "jit sessions", "list jit", "active jit", "my jit sessions", "vm sessions"))
+        {
+            return await _jitListSessions.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["user_id"] = GetContextValue(context, "user_id")
+            }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "revoke jit", "revoke vm", "revoke access", "jit revoke", "remove jit", "close jit"))
+        {
+            var vmName = ExtractVmName(lowerMessage);
+            return await _jitRevokeAccess.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["user_id"] = GetContextValue(context, "user_id"),
+                ["vmName"] = vmName,
+                ["resourceGroup"] = GetContextValue(context, "resource_group") ?? "default-rg"
+            }, cancellationToken);
+        }
+
+        // ─── PIM Audit Trail routing (Phase 12 — US10) ──────────────────
+        if (ContainsAny(lowerMessage, "pim history", "pim audit", "pim log", "activation history", "role history", "audit trail", "compliance evidence"))
+        {
+            return await _pimHistory.ExecuteAsync(new Dictionary<string, object?>
+            {
+                ["user_id"] = GetContextValue(context, "user_id"),
+                ["is_auditor"] = GetContextValue(context, "user_role")?.Equals("Compliance.Auditor", StringComparison.OrdinalIgnoreCase) ?? false,
+                ["scope"] = GetContextValue(context, "subscription_id")
+            }, cancellationToken);
+        }
+
         // Default: return compliance status
         return await _statusTool.ExecuteAsync(new Dictionary<string, object?>
         {
             ["subscription_id"] = GetContextValue(context, "subscription_id")
         }, cancellationToken);
+    }
+
+    // ─── Auth-Gate: PIM Inline Activation (FR-019 / T048) ────────────────────
+
+    /// <summary>
+    /// Maps user intent keywords to the tool name that would be invoked.
+    /// Used to determine if the target operation requires Tier 2 auth.
+    /// </summary>
+    private static string? ResolveTargetToolName(string lowerMessage)
+    {
+        // Tier 2 compliance tools
+        if (ContainsAny(lowerMessage, "assess", "scan", "audit", "check compliance", "run assessment")) return "run_assessment";
+        if (ContainsAny(lowerMessage, "collect evidence", "evidence collection", "gather evidence")) return "collect_evidence";
+        if (ContainsAny(lowerMessage, "remediate", "fix finding", "apply fix")) return "execute_remediation";
+        if (ContainsAny(lowerMessage, "validate remediation", "verify fix")) return "compliance_validate_remediation";
+        if (ContainsAny(lowerMessage, "monitor", "alert", "continuous")) return "compliance_monitoring";
+
+        // Tier 2 kanban tools
+        if (ContainsAny(lowerMessage, "remediate task", "run remediation", "execute fix", "apply remediation")) return "kanban_remediate_task";
+        if (ContainsAny(lowerMessage, "validate task")) return "kanban_validate_task";
+        if (ContainsAny(lowerMessage, "collect evidence", "task evidence")) return "kanban_collect_evidence";
+
+        // PIM tools are themselves Tier 2 but handled via PIM routing directly
+        return null;
+    }
+
+    /// <summary>
+    /// Maps a tool name to the Azure RBAC role typically required for that operation.
+    /// </summary>
+    private static string? GetRequiredRoleForTool(string toolName) => toolName switch
+    {
+        "run_assessment" => "Reader",
+        "collect_evidence" => "Reader",
+        "compliance_monitoring" => "Reader",
+        "execute_remediation" => "Contributor",
+        "compliance_validate_remediation" => "Reader",
+        "kanban_remediate_task" => "Contributor",
+        "kanban_validate_task" => "Reader",
+        "kanban_collect_evidence" => "Reader",
+        _ => null
+    };
+
+    /// <summary>
+    /// Checks if the user needs PIM activation before executing a Tier 2 operation.
+    /// Returns a JSON response with inline activation offer if eligible, null if no gate needed.
+    /// Per FR-019: detects missing RBAC role, checks PIM eligibility, offers inline activation.
+    /// </summary>
+    private async Task<string?> CheckAuthGateAsync(
+        string message,
+        AgentConversationContext context,
+        CancellationToken cancellationToken)
+    {
+        var lowerMessage = message.ToLowerInvariant();
+        var targetTool = ResolveTargetToolName(lowerMessage);
+
+        // Not a Tier 2 operation or not a tool we track
+        if (targetTool == null || !AuthTierClassification.IsTier2(targetTool))
+            return null;
+
+        var userId = GetContextValue(context, "user_id");
+        if (string.IsNullOrEmpty(userId))
+            return null; // Auth check handled by middleware
+
+        // Check if user already has active PIM roles for this scope
+        var scope = GetContextValue(context, "subscription_id") ?? "default";
+        var requiredRole = GetRequiredRoleForTool(targetTool);
+        if (requiredRole == null)
+            return null; // No role mapping for this tool
+
+        using var serviceScope = _scopeFactory.CreateScope();
+        var pimService = serviceScope.ServiceProvider.GetRequiredService<IPimService>();
+
+        // Check if user already has the required role active
+        var activeRoles = await pimService.ListActiveRolesAsync(userId, cancellationToken);
+        var hasActiveRole = activeRoles.Any(r =>
+            r.RoleName.Contains(requiredRole, StringComparison.OrdinalIgnoreCase) &&
+            (r.Scope.Contains(scope, StringComparison.OrdinalIgnoreCase) ||
+             scope.Equals("default", StringComparison.OrdinalIgnoreCase)));
+
+        if (hasActiveRole)
+            return null; // User has the needed role, proceed with tool execution
+
+        // Check PIM eligibility
+        var eligibleRoles = await pimService.ListEligibleRolesAsync(userId, scope, cancellationToken);
+        var matchingRole = eligibleRoles.FirstOrDefault(r =>
+            r.RoleName.Contains(requiredRole, StringComparison.OrdinalIgnoreCase));
+
+        if (matchingRole == null)
+            return null; // No eligible role found, let the tool handle the error
+
+        // Store the intent for post-activation continuation
+        context.WorkflowState["pending_tool"] = targetTool;
+        context.WorkflowState["pending_role"] = matchingRole.RoleName;
+        context.WorkflowState["pending_scope"] = scope;
+
+        Logger.LogInformation(
+            "Auth-gate: User {UserId} needs {Role} for {Tool}. Offering inline PIM activation.",
+            userId, matchingRole.RoleName, targetTool);
+
+        return JsonSerializer.Serialize(new
+        {
+            status = "auth_gate",
+            data = new
+            {
+                message = $"The operation '{targetTool}' requires the '{matchingRole.RoleName}' role on scope '{scope}'.",
+                eligibleRole = matchingRole.RoleName,
+                scope,
+                requiresApproval = matchingRole.RequiresApproval,
+                maxDuration = matchingRole.MaxDuration,
+                suggestion = matchingRole.RequiresApproval
+                    ? $"You are eligible for '{matchingRole.RoleName}' but it requires approval. Say 'activate role {matchingRole.RoleName}' to submit an activation request."
+                    : $"You are eligible for '{matchingRole.RoleName}'. Say 'activate role {matchingRole.RoleName}' to activate it and proceed.",
+                action = "pim_activate_role"
+            },
+            metadata = new { toolName = targetTool, agentName = AgentName }
+        });
+    }
+
+    // ─── Post-Operation Deactivation Offer (FR-020/FR-021 / T049) ────────────
+
+    /// <summary>
+    /// Checks if a PIM role was activated inline during this conversation and offers deactivation
+    /// after successful Tier 2 operation completion.
+    /// Per FR-020: offers deactivation after triggering operation completes.
+    /// Per FR-021: respects AutoDeactivateAfterRemediation config.
+    /// </summary>
+    private async Task<string> AppendDeactivationOfferAsync(
+        string toolResult,
+        string message,
+        AgentConversationContext context,
+        CancellationToken cancellationToken)
+    {
+        var lowerMessage = message.ToLowerInvariant();
+        var targetTool = ResolveTargetToolName(lowerMessage);
+
+        // Only apply to Tier 2 operations
+        if (targetTool == null || !AuthTierClassification.IsTier2(targetTool))
+            return toolResult;
+
+        // Check if there's a PIM role that was activated inline during this conversation
+        var inlineActivatedRole = GetContextValue(context, "inline_activated_role");
+        var inlineActivatedScope = GetContextValue(context, "inline_activated_scope");
+
+        if (string.IsNullOrEmpty(inlineActivatedRole))
+            return toolResult;
+
+        // Check if AutoDeactivateAfterRemediation is enabled for remediation operations
+        var isRemediation = ContainsAny(lowerMessage, "remediate", "fix finding", "apply fix",
+            "remediate task", "run remediation", "execute fix", "apply remediation");
+
+        using var serviceScope = _scopeFactory.CreateScope();
+        var pimOptions = serviceScope.ServiceProvider.GetRequiredService<IOptions<PimServiceOptions>>();
+
+        if (isRemediation && pimOptions.Value.AutoDeactivateAfterRemediation)
+        {
+            // Auto-deactivate per FR-021
+            var userId = GetContextValue(context, "user_id");
+            if (!string.IsNullOrEmpty(userId))
+            {
+                var pimService = serviceScope.ServiceProvider.GetRequiredService<IPimService>();
+                var deactivateResult = await pimService.DeactivateRoleAsync(
+                    userId, inlineActivatedRole, inlineActivatedScope ?? "default", cancellationToken);
+
+                // Clear the inline activation tracking
+                context.WorkflowState.Remove("inline_activated_role");
+                context.WorkflowState.Remove("inline_activated_scope");
+
+                Logger.LogInformation(
+                    "Auto-deactivated PIM role {Role} after remediation (FR-021)",
+                    inlineActivatedRole);
+
+                // Parse and augment the tool result with deactivation info
+                try
+                {
+                    var doc = JsonDocument.Parse(toolResult);
+                    var resultObj = new Dictionary<string, object?>
+                    {
+                        ["status"] = doc.RootElement.GetProperty("status").GetString(),
+                        ["data"] = JsonSerializer.Deserialize<object>(doc.RootElement.GetProperty("data").GetRawText()),
+                        ["deactivation"] = new
+                        {
+                            autoDeactivated = true,
+                            role = inlineActivatedRole,
+                            message = $"PIM role '{inlineActivatedRole}' was automatically deactivated after remediation."
+                        },
+                        ["metadata"] = JsonSerializer.Deserialize<object>(doc.RootElement.GetProperty("metadata").GetRawText())
+                    };
+                    return JsonSerializer.Serialize(resultObj);
+                }
+                catch
+                {
+                    return toolResult;
+                }
+            }
+        }
+
+        // Offer to deactivate per FR-020
+        try
+        {
+            var doc = JsonDocument.Parse(toolResult);
+            var resultObj = new Dictionary<string, object?>
+            {
+                ["status"] = doc.RootElement.GetProperty("status").GetString(),
+                ["data"] = JsonSerializer.Deserialize<object>(doc.RootElement.GetProperty("data").GetRawText()),
+                ["deactivation_offer"] = new
+                {
+                    role = inlineActivatedRole,
+                    scope = inlineActivatedScope,
+                    message = $"Operation complete. The PIM role '{inlineActivatedRole}' is still active. Say 'deactivate role {inlineActivatedRole}' to restore least-privilege access."
+                },
+                ["metadata"] = JsonSerializer.Deserialize<object>(doc.RootElement.GetProperty("metadata").GetRawText())
+            };
+            return JsonSerializer.Serialize(resultObj);
+        }
+        catch
+        {
+            return toolResult;
+        }
     }
 
     /// <summary>Returns true if the text contains any of the specified keywords (case-insensitive).</summary>
@@ -498,6 +971,58 @@ public class ComplianceAgent : BaseAgent
                 return family;
         }
         return "AC";
+    }
+
+    /// <summary>Extracts an Azure role name from user message text.</summary>
+    private static string? ExtractRoleName(string message)
+    {
+        var roles = new[] { "Owner", "Contributor", "Reader", "User Access Administrator",
+            "Security Administrator", "Global Administrator", "Privileged Role Administrator" };
+        foreach (var role in roles)
+        {
+            if (message.Contains(role, StringComparison.OrdinalIgnoreCase))
+                return role;
+        }
+        return null;
+    }
+
+    /// <summary>Extracts a numeric hours value from user message text (e.g., "extend by 2 hours" → 2).</summary>
+    private static int ExtractHours(string message)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(message, @"(\d+)\s*hour");
+        if (match.Success && int.TryParse(match.Groups[1].Value, out var hours))
+            return hours;
+        return 2; // Default extension of 2 hours
+    }
+
+    /// <summary>Extracts a GUID request ID from user message text.</summary>
+    private static string? ExtractRequestId(string message)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(message, @"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+        return match.Success ? match.Value : null;
+    }
+
+    /// <summary>Extracts a VM name from user message text (e.g., "SSH access to vm-web01" → "vm-web01").</summary>
+    private static string? ExtractVmName(string message)
+    {
+        // Match common VM naming patterns: vm-xxx, hostname with dots, or alphanumeric-with-dashes
+        var match = System.Text.RegularExpressions.Regex.Match(message, @"(?:to|for|on|access)\s+([a-zA-Z][a-zA-Z0-9\-\.]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (match.Success)
+            return match.Groups[1].Value;
+        return null;
+    }
+
+    /// <summary>Extracts a platform role name from user message text (e.g., "map cert as Auditor" → "Auditor").</summary>
+    private static string? ExtractRole(string message)
+    {
+        var roles = new[] { "Administrator", "Admin", "Auditor", "Analyst", "Viewer",
+            "SecurityLead", "Security Lead", "PlatformEngineer", "Platform Engineer", "Engineer" };
+        foreach (var role in roles)
+        {
+            if (message.Contains(role, StringComparison.OrdinalIgnoreCase))
+                return role;
+        }
+        return null;
     }
 
     /// <summary>Extracts the document type (ssp, poam, sar) from the user message.</summary>

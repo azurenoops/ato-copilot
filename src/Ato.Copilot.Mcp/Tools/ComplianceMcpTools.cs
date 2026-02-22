@@ -41,6 +41,37 @@ public class ComplianceMcpTools
     private readonly KanbanExportTool _kanbanExport;
     private readonly KanbanArchiveBoardTool _kanbanArchiveBoard;
 
+    // Auth/PIM tools
+    private readonly CacStatusTool _cacStatus;
+    private readonly CacSignOutTool _cacSignOut;
+
+    // CAC session config (Phase 10 — US8)
+    private readonly CacSetTimeoutTool _cacSetTimeout;
+
+    // Certificate mapping (Phase 11 — US9)
+    private readonly CacMapCertificateTool _cacMapCertificate;
+
+    // PIM role management tools
+    private readonly PimListEligibleTool _pimListEligible;
+    private readonly PimActivateRoleTool _pimActivateRole;
+    private readonly PimDeactivateRoleTool _pimDeactivateRole;
+
+    // PIM session management tools (Phase 6 — US4)
+    private readonly PimListActiveTool _pimListActive;
+    private readonly PimExtendRoleTool _pimExtendRole;
+
+    // PIM approval workflow tools (Phase 7 — US5)
+    private readonly PimApproveRequestTool _pimApproveRequest;
+    private readonly PimDenyRequestTool _pimDenyRequest;
+
+    // JIT VM access tools (Phase 9 — US7)
+    private readonly JitRequestAccessTool _jitRequestAccess;
+    private readonly JitListSessionsTool _jitListSessions;
+    private readonly JitRevokeAccessTool _jitRevokeAccess;
+
+    // PIM audit trail (Phase 12 — US10)
+    private readonly PimHistoryTool _pimHistory;
+
     public ComplianceMcpTools(
         ComplianceAssessmentTool assessmentTool,
         ControlFamilyTool controlFamilyTool,
@@ -70,7 +101,22 @@ public class ComplianceMcpTools
         KanbanCollectEvidenceTool kanbanCollectEvidence,
         KanbanBulkUpdateTool kanbanBulkUpdate,
         KanbanExportTool kanbanExport,
-        KanbanArchiveBoardTool kanbanArchiveBoard)
+        KanbanArchiveBoardTool kanbanArchiveBoard,
+        CacStatusTool cacStatus,
+        CacSignOutTool cacSignOut,
+        CacSetTimeoutTool cacSetTimeout,
+        CacMapCertificateTool cacMapCertificate,
+        PimListEligibleTool pimListEligible,
+        PimActivateRoleTool pimActivateRole,
+        PimDeactivateRoleTool pimDeactivateRole,
+        PimListActiveTool pimListActive,
+        PimExtendRoleTool pimExtendRole,
+        PimApproveRequestTool pimApproveRequest,
+        PimDenyRequestTool pimDenyRequest,
+        JitRequestAccessTool jitRequestAccess,
+        JitListSessionsTool jitListSessions,
+        JitRevokeAccessTool jitRevokeAccess,
+        PimHistoryTool pimHistory)
     {
         _assessmentTool = assessmentTool;
         _controlFamilyTool = controlFamilyTool;
@@ -101,6 +147,21 @@ public class ComplianceMcpTools
         _kanbanBulkUpdate = kanbanBulkUpdate;
         _kanbanExport = kanbanExport;
         _kanbanArchiveBoard = kanbanArchiveBoard;
+        _cacStatus = cacStatus;
+        _cacSignOut = cacSignOut;
+        _cacSetTimeout = cacSetTimeout;
+        _cacMapCertificate = cacMapCertificate;
+        _pimListEligible = pimListEligible;
+        _pimActivateRole = pimActivateRole;
+        _pimDeactivateRole = pimDeactivateRole;
+        _pimListActive = pimListActive;
+        _pimExtendRole = pimExtendRole;
+        _pimApproveRequest = pimApproveRequest;
+        _pimDenyRequest = pimDenyRequest;
+        _jitRequestAccess = jitRequestAccess;
+        _jitListSessions = jitListSessions;
+        _jitRevokeAccess = jitRevokeAccess;
+        _pimHistory = pimHistory;
     }
 
     [Description("Run a NIST 800-53 compliance assessment. Scan types: quick, policy, full.")]
@@ -486,5 +547,191 @@ public class ComplianceMcpTools
             ["board_id"] = boardId, ["confirm"] = confirm
         };
         return await _kanbanArchiveBoard.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ─── Auth/PIM MCP Wrappers ───────────────────────────────────────────
+
+    [Description("Check current CAC authentication status, session information, and active PIM roles.")]
+    public async Task<string> CacStatusAsync(
+        string? userId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["user_id"] = userId };
+        return await _cacStatus.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("End the current CAC session, clear cached tokens, and revert to unauthenticated state.")]
+    public async Task<string> CacSignOutAsync(
+        string? userId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["user_id"] = userId };
+        return await _cacSignOut.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Set the CAC session timeout duration within policy limits (1-24 hours).")]
+    public async Task<string> CacSetTimeoutAsync(
+        string? userId = null, int? timeoutHours = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["user_id"] = userId, ["timeoutHours"] = timeoutHours };
+        return await _cacSetTimeout.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Map the current CAC certificate identity to a platform role for automatic role resolution.")]
+    public async Task<string> CacMapCertificateAsync(
+        string? userId = null, string? role = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["user_id"] = userId, ["role"] = role };
+        return await _cacMapCertificate.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ─── PIM Role Management MCP Wrappers ────────────────────────────────
+
+    [Description("List all PIM-eligible role assignments for the authenticated user.")]
+    public async Task<string> PimListEligibleAsync(
+        string? userId = null, string? scope = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["user_id"] = userId, ["scope"] = scope };
+        return await _pimListEligible.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Activate an eligible PIM role with justification and optional ticket number.")]
+    public async Task<string> PimActivateRoleAsync(
+        string? userId = null, string? roleName = null, string? scope = null,
+        string? justification = null, string? ticketNumber = null,
+        int? durationHours = null, string? sessionId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["user_id"] = userId, ["roleName"] = roleName, ["scope"] = scope,
+            ["justification"] = justification, ["ticketNumber"] = ticketNumber,
+            ["durationHours"] = durationHours, ["session_id"] = sessionId
+        };
+        return await _pimActivateRole.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Deactivate an active PIM role to restore least-privilege posture.")]
+    public async Task<string> PimDeactivateRoleAsync(
+        string? userId = null, string? roleName = null, string? scope = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["user_id"] = userId, ["roleName"] = roleName, ["scope"] = scope };
+        return await _pimDeactivateRole.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ─── PIM Session Management MCP Wrappers ─────────────────────────────
+
+    [Description("List all currently active PIM role assignments for the authenticated user.")]
+    public async Task<string> PimListActiveAsync(
+        string? userId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["user_id"] = userId };
+        return await _pimListActive.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Extend an active PIM role's duration within policy limits.")]
+    public async Task<string> PimExtendRoleAsync(
+        string? userId = null, string? roleName = null, string? scope = null,
+        int? additionalHours = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["user_id"] = userId, ["roleName"] = roleName,
+            ["scope"] = scope, ["additionalHours"] = additionalHours
+        };
+        return await _pimExtendRole.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Approve a pending PIM role activation request. Requires SecurityLead or Administrator role.")]
+    public async Task<string> PimApproveRequestAsync(
+        string? userId = null, string? userRole = null, string? requestId = null,
+        string? comments = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["user_id"] = userId, ["user_role"] = userRole,
+            ["requestId"] = requestId, ["comments"] = comments
+        };
+        return await _pimApproveRequest.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Deny a pending PIM role activation request. Requires SecurityLead or Administrator role.")]
+    public async Task<string> PimDenyRequestAsync(
+        string? userId = null, string? userRole = null, string? requestId = null,
+        string? reason = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["user_id"] = userId, ["user_role"] = userRole,
+            ["requestId"] = requestId, ["reason"] = reason
+        };
+        return await _pimDenyRequest.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ─── JIT VM Access Wrappers (Phase 9 — US7) ─────────────────────────
+
+    [Description("Request Just-in-Time VM access through Azure Defender for Cloud. Creates a temporary NSG rule.")]
+    public async Task<string> JitRequestAccessAsync(
+        string? userId = null, string? vmName = null, string? resourceGroup = null,
+        string? subscriptionId = null, int? port = null, string? protocol = null,
+        string? sourceIp = null, int? durationHours = null,
+        string? justification = null, string? ticketNumber = null,
+        string? sessionId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["user_id"] = userId, ["vmName"] = vmName, ["resourceGroup"] = resourceGroup,
+            ["subscriptionId"] = subscriptionId, ["port"] = port, ["protocol"] = protocol,
+            ["sourceIp"] = sourceIp, ["durationHours"] = durationHours,
+            ["justification"] = justification, ["ticketNumber"] = ticketNumber,
+            ["session_id"] = sessionId
+        };
+        return await _jitRequestAccess.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("List all active JIT VM access sessions for the authenticated user.")]
+    public async Task<string> JitListSessionsAsync(
+        string? userId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["user_id"] = userId };
+        return await _jitListSessions.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Immediately revoke JIT VM access, removing the NSG rule.")]
+    public async Task<string> JitRevokeAccessAsync(
+        string? userId = null, string? vmName = null, string? resourceGroup = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["user_id"] = userId, ["vmName"] = vmName, ["resourceGroup"] = resourceGroup
+        };
+        return await _jitRevokeAccess.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ─── PIM Audit Trail MCP Wrapper ────────────────────────────────────────
+
+    [Description("Query PIM action history for compliance evidence and audit trail.")]
+    public async Task<string> PimHistoryAsync(
+        string? userId = null, int? days = null, string? roleName = null,
+        string? filterUserId = null, string? scope = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["user_id"] = userId, ["days"] = days, ["roleName"] = roleName,
+            ["filterUserId"] = filterUserId, ["scope"] = scope
+        };
+        return await _pimHistory.ExecuteAsync(args, cancellationToken);
     }
 }

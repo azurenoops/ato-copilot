@@ -67,6 +67,23 @@ public class ComplianceAgentTests
         var kanbanExport = new KanbanExportTool(scopeFactory, Mock.Of<ILogger<KanbanExportTool>>());
         var kanbanArchiveBoard = new KanbanArchiveBoardTool(scopeFactory, Mock.Of<ILogger<KanbanArchiveBoardTool>>());
 
+        // Create Auth/PIM tool instances
+        var cacStatus = new CacStatusTool(scopeFactory, Mock.Of<ILogger<CacStatusTool>>());
+        var cacSignOut = new CacSignOutTool(scopeFactory, Mock.Of<ILogger<CacSignOutTool>>());
+        var cacSetTimeout = new CacSetTimeoutTool(scopeFactory, Mock.Of<ILogger<CacSetTimeoutTool>>());
+        var cacMapCertificate = new CacMapCertificateTool(scopeFactory, Mock.Of<ILogger<CacMapCertificateTool>>());
+        var pimListEligible = new PimListEligibleTool(scopeFactory, Mock.Of<ILogger<PimListEligibleTool>>());
+        var pimActivateRole = new PimActivateRoleTool(scopeFactory, Mock.Of<ILogger<PimActivateRoleTool>>());
+        var pimDeactivateRole = new PimDeactivateRoleTool(scopeFactory, Mock.Of<ILogger<PimDeactivateRoleTool>>());
+        var pimListActive = new PimListActiveTool(scopeFactory, Mock.Of<ILogger<PimListActiveTool>>());
+        var pimExtendRole = new PimExtendRoleTool(scopeFactory, Mock.Of<ILogger<PimExtendRoleTool>>());
+        var pimApproveRequest = new PimApproveRequestTool(scopeFactory, Mock.Of<ILogger<PimApproveRequestTool>>());
+        var pimDenyRequest = new PimDenyRequestTool(scopeFactory, Mock.Of<ILogger<PimDenyRequestTool>>());
+        var jitRequestAccess = new JitRequestAccessTool(scopeFactory, Mock.Of<ILogger<JitRequestAccessTool>>());
+        var jitListSessions = new JitListSessionsTool(scopeFactory, Mock.Of<ILogger<JitListSessionsTool>>());
+        var jitRevokeAccess = new JitRevokeAccessTool(scopeFactory, Mock.Of<ILogger<JitRevokeAccessTool>>());
+        var pimHistory = new PimHistoryTool(scopeFactory, Mock.Of<ILogger<PimHistoryTool>>());
+
         _agent = new ComplianceAgent(
             assessmentTool,
             controlFamilyTool,
@@ -97,10 +114,26 @@ public class ComplianceAgentTests
             kanbanBulkUpdate,
             kanbanExport,
             kanbanArchiveBoard,
+            cacStatus,
+            cacSignOut,
+            cacSetTimeout,
+            cacMapCertificate,
+            pimListEligible,
+            pimActivateRole,
+            pimDeactivateRole,
+            pimListActive,
+            pimExtendRole,
+            pimApproveRequest,
+            pimDenyRequest,
+            jitRequestAccess,
+            jitListSessions,
+            jitRevokeAccess,
+            pimHistory,
             new InMemoryDbContextFactory(
                 new DbContextOptionsBuilder<AtoCopilotContext>()
                     .UseInMemoryDatabase($"AgentTests_{Guid.NewGuid()}")
                     .Options),
+            scopeFactory,
             logger);
     }
 

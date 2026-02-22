@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Ato.Copilot.Mcp.Models;
 using System.Text.Json;
@@ -133,19 +134,47 @@ public class McpHttpBridge
         }
     }
 
-    /// <summary>Returns server health status and capabilities.</summary>
-    private Task<IResult> HandleHealthAsync(HttpContext context)
+    /// <summary>Returns server health status, capabilities, and agent health check results.</summary>
+    private async Task<IResult> HandleHealthAsync(HttpContext context)
     {
+        // Run ASP.NET Core health checks if registered
+        var healthCheckService = context.RequestServices.GetService<Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckService>();
+        var agentHealthEntries = new List<object>();
+        var overallStatus = "healthy";
+
+        if (healthCheckService is not null)
+        {
+            var report = await healthCheckService.CheckHealthAsync(context.RequestAborted);
+            overallStatus = report.Status switch
+            {
+                Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy => "healthy",
+                Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Degraded => "degraded",
+                _ => "unhealthy"
+            };
+
+            foreach (var entry in report.Entries)
+            {
+                agentHealthEntries.Add(new
+                {
+                    name = entry.Key,
+                    status = entry.Value.Status.ToString(),
+                    description = entry.Value.Description ?? string.Empty
+                });
+            }
+        }
+
         var health = new
         {
-            status = "healthy",
+            status = overallStatus,
             service = "ATO Copilot MCP",
             version = "1.0.0",
             timestamp = DateTime.UtcNow,
-            capabilities = new[] { "compliance-assessment", "nist-800-53", "fedramp", "remediation", "evidence-collection" }
+            capabilities = new[] { "compliance-assessment", "nist-800-53", "fedramp", "remediation", "evidence-collection" },
+            agents = agentHealthEntries,
+            totalDurationMs = healthCheckService is not null ? 0 : -1
         };
 
-        return Task.FromResult(Results.Json(health, _jsonOptions));
+        return Results.Json(health, _jsonOptions);
     }
 
     /// <summary>Returns the list of available compliance tools.</summary>
@@ -164,7 +193,36 @@ public class McpHttpBridge
             new { name = "compliance_history", description = "Get compliance history" },
             new { name = "compliance_status", description = "Get compliance status" },
             new { name = "compliance_monitoring", description = "Compliance monitoring operations" },
-            new { name = "compliance_chat", description = "Natural language compliance interaction" }
+            new { name = "compliance_chat", description = "Natural language compliance interaction" },
+            // CAC Authentication tools (Tier 2)
+            new { name = "cac_status", description = "Check CAC/PIV session status" },
+            new { name = "cac_sign_out", description = "Terminate CAC/PIV session" },
+            new { name = "cac_set_timeout", description = "Configure session timeout" },
+            new { name = "cac_map_certificate", description = "Map certificate to compliance role" },
+            // PIM tools (Tier 2)
+            new { name = "pim_list_eligible", description = "List eligible PIM roles" },
+            new { name = "pim_activate_role", description = "Activate a PIM role" },
+            new { name = "pim_deactivate_role", description = "Deactivate a PIM role" },
+            new { name = "pim_list_active", description = "List active PIM roles" },
+            new { name = "pim_extend_role", description = "Extend a PIM role activation" },
+            new { name = "pim_approve_request", description = "Approve a PIM activation request" },
+            new { name = "pim_deny_request", description = "Deny a PIM activation request" },
+            new { name = "pim_history", description = "Query PIM activation history" },
+            // JIT VM Access tools (Tier 2)
+            new { name = "jit_request_access", description = "Request JIT VM access" },
+            new { name = "jit_list_sessions", description = "List active JIT sessions" },
+            new { name = "jit_revoke_access", description = "Revoke JIT VM access" },
+            // Kanban tools
+            new { name = "kanban_create_board", description = "Create a remediation kanban board" },
+            new { name = "kanban_board_show", description = "Show a kanban board" },
+            new { name = "kanban_get_task", description = "Get task details" },
+            new { name = "kanban_create_task", description = "Create a remediation task" },
+            new { name = "kanban_assign_task", description = "Assign a task" },
+            new { name = "kanban_move_task", description = "Move a task between columns" },
+            new { name = "kanban_add_task_comment", description = "Add a comment to a task" },
+            new { name = "kanban_search_tasks", description = "Search tasks" },
+            new { name = "kanban_list_boards", description = "List all boards" },
+            new { name = "kanban_overdue_tasks", description = "List overdue tasks" }
         };
 
         return Task.FromResult(Results.Json(new { tools, count = tools.Length }, _jsonOptions));

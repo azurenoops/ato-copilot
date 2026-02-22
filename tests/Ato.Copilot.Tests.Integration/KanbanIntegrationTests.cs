@@ -29,6 +29,7 @@ namespace Ato.Copilot.Tests.Integration;
 /// Tests T086–T089: board creation, task lifecycle, RBAC enforcement, and
 /// concurrent access through the full HTTP pipeline.
 /// </summary>
+[Collection("IntegrationTests")]
 public class KanbanIntegrationTests : IAsyncLifetime
 {
     private WebApplication _app = null!;

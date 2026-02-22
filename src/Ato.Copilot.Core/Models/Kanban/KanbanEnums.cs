@@ -63,7 +63,15 @@ public enum NotificationEventType
     /// <summary>A task was closed.</summary>
     TaskClosed = 4,
     /// <summary>The user was @mentioned in a comment.</summary>
-    Mentioned = 5
+    Mentioned = 5,
+    /// <summary>A PIM role was activated.</summary>
+    PimRoleActivated = 6,
+    /// <summary>A high-privilege PIM activation requires approval.</summary>
+    PimApprovalRequired = 7,
+    /// <summary>A PIM role or session is about to expire.</summary>
+    PimRoleExpiring = 8,
+    /// <summary>A high-privilege role activation warning for security leads.</summary>
+    PimHighPrivilegeWarning = 9
 }
 
 /// <summary>

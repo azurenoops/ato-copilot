@@ -1,5 +1,8 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Ato.Copilot.Agents.Common;
 using Ato.Copilot.Agents.Compliance.Agents;
 using Ato.Copilot.Agents.Compliance.Configuration;
@@ -7,6 +10,9 @@ using Ato.Copilot.Agents.Compliance.Services;
 using Ato.Copilot.Agents.Compliance.Tools;
 using Ato.Copilot.Agents.Configuration.Agents;
 using Ato.Copilot.Agents.Configuration.Tools;
+using Ato.Copilot.Core.Configuration;
+using Ato.Copilot.Core.Data.Context;
+using Ato.Copilot.Core.Interfaces.Auth;
 using Ato.Copilot.Core.Interfaces.Compliance;
 using Ato.Copilot.Core.Interfaces.Kanban;
 
@@ -74,6 +80,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IKanbanService, KanbanService>();
         services.AddSingleton<INotificationService, NotificationService>();
         services.AddHostedService<OverdueScanHostedService>();
+        services.AddHostedService<SessionCleanupHostedService>();
 
         // ─── Kanban Tools (Singleton — uses IServiceScopeFactory for scoped IKanbanService)
         services.AddSingleton<KanbanCreateBoardTool>();
@@ -114,6 +121,58 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanBulkUpdateTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanExportTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanArchiveBoardTool>());
+
+        // ─── CAC/Auth Services ───────────────────────────────────────────────
+        services.AddScoped<ICacSessionService, CacSessionService>();
+        services.AddScoped<IPimService>(sp => new PimService(
+            sp.GetRequiredService<IDbContextFactory<AtoCopilotContext>>(),
+            sp.GetRequiredService<IOptions<PimServiceOptions>>(),
+            sp.GetRequiredService<ILogger<PimService>>(),
+            sp.GetRequiredService<INotificationService>()));
+        services.AddScoped<IJitVmAccessService, JitVmAccessService>();
+        services.AddScoped<ICertificateRoleResolver, CertificateRoleResolver>();
+
+        // ─── Data Retention Cleanup ──────────────────────────────────────────
+        var retentionConfig = configuration.GetSection(RetentionPolicyOptions.SectionName);
+        var enableCleanup = retentionConfig.GetValue("EnableAutomaticCleanup", true);
+        if (enableCleanup)
+        {
+            services.AddHostedService<RetentionCleanupHostedService>();
+        }
+
+        // ─── Auth/PIM Tools (Singleton — uses IServiceScopeFactory for scoped services)
+        services.AddSingleton<CacStatusTool>();
+        services.AddSingleton<CacSignOutTool>();
+        services.AddSingleton<CacSetTimeoutTool>();
+        services.AddSingleton<CacMapCertificateTool>();
+        services.AddSingleton<PimListEligibleTool>();
+        services.AddSingleton<PimActivateRoleTool>();
+        services.AddSingleton<PimDeactivateRoleTool>();
+        services.AddSingleton<PimListActiveTool>();
+        services.AddSingleton<PimExtendRoleTool>();
+        services.AddSingleton<PimApproveRequestTool>();
+        services.AddSingleton<PimDenyRequestTool>();
+        services.AddSingleton<JitRequestAccessTool>();
+        services.AddSingleton<JitListSessionsTool>();
+        services.AddSingleton<JitRevokeAccessTool>();
+        services.AddSingleton<PimHistoryTool>();
+
+        // Register Auth/PIM tools as BaseTool collection
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<CacStatusTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<CacSignOutTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<CacSetTimeoutTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<CacMapCertificateTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<PimListEligibleTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<PimActivateRoleTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<PimDeactivateRoleTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<PimListActiveTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<PimExtendRoleTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<PimApproveRequestTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<PimDenyRequestTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<JitRequestAccessTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<JitListSessionsTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<JitRevokeAccessTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<PimHistoryTool>());
 
         return services;
     }
