@@ -33,6 +33,10 @@ public static class CoreServiceExtensions
         services.Configure<PimServiceOptions>(configuration.GetSection(PimServiceOptions.SectionName));
         services.Configure<CacAuthOptions>(configuration.GetSection(CacAuthOptions.SectionName));
         services.Configure<RetentionPolicyOptions>(configuration.GetSection(RetentionPolicyOptions.SectionName));
+        services.Configure<MonitoringOptions>(configuration.GetSection(MonitoringOptions.SectionName));
+        services.Configure<AlertOptions>(configuration.GetSection(AlertOptions.SectionName));
+        services.Configure<NotificationOptions>(configuration.GetSection(NotificationOptions.SectionName));
+        services.Configure<EscalationOptions>(configuration.GetSection(EscalationOptions.SectionName));
 
         // Register HTTP client factory
         services.AddHttpClient();

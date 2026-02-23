@@ -61,6 +61,8 @@ public class RetentionCleanupHostedService : BackgroundService
             try
             {
                 await CleanupExpiredAssessmentsAsync(stoppingToken);
+                await CleanupExpiredSnapshotsAsync(stoppingToken);
+                await CleanupExpiredAlertsAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -103,5 +105,73 @@ public class RetentionCleanupHostedService : BackgroundService
             expiredAssessments.Count,
             cutoffDate,
             _options.AssessmentRetentionDays);
+    }
+
+    /// <summary>
+    /// Deletes daily snapshots older than <see cref="RetentionPolicyOptions.DailySnapshotRetentionDays"/> (default 90 days)
+    /// and weekly snapshots older than <see cref="RetentionPolicyOptions.WeeklySnapshotRetentionDays"/> (default 730 days / 2 years).
+    /// </summary>
+    private async Task CleanupExpiredSnapshotsAsync(CancellationToken cancellationToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+
+        // Delete daily snapshots older than configured retention
+        var dailyCutoff = DateTimeOffset.UtcNow.AddDays(-_options.DailySnapshotRetentionDays);
+        var expiredDaily = await db.ComplianceSnapshots
+            .Where(s => !s.IsWeeklySnapshot && s.CapturedAt < dailyCutoff)
+            .ToListAsync(cancellationToken);
+
+        // Delete weekly snapshots older than configured retention
+        var weeklyCutoff = DateTimeOffset.UtcNow.AddDays(-_options.WeeklySnapshotRetentionDays);
+        var expiredWeekly = await db.ComplianceSnapshots
+            .Where(s => s.IsWeeklySnapshot && s.CapturedAt < weeklyCutoff)
+            .ToListAsync(cancellationToken);
+
+        var totalExpired = expiredDaily.Count + expiredWeekly.Count;
+        if (totalExpired == 0)
+        {
+            _logger.LogDebug("Retention cleanup: no expired snapshots found");
+            return;
+        }
+
+        db.ComplianceSnapshots.RemoveRange(expiredDaily);
+        db.ComplianceSnapshots.RemoveRange(expiredWeekly);
+        await db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Snapshot retention cleanup — deleted {DailyCount} daily snapshots (>{DailyDays}d) and {WeeklyCount} weekly snapshots (>{WeeklyDays}d)",
+            expiredDaily.Count, _options.DailySnapshotRetentionDays,
+            expiredWeekly.Count, _options.WeeklySnapshotRetentionDays);
+    }
+
+    /// <summary>
+    /// Deletes compliance alerts older than <see cref="RetentionPolicyOptions.AlertRetentionDays"/> (default 730 days / 2 years).
+    /// Only deletes alerts in terminal states (Resolved or Dismissed).
+    /// </summary>
+    private async Task CleanupExpiredAlertsAsync(CancellationToken cancellationToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+        var cutoff = DateTimeOffset.UtcNow.AddDays(-_options.AlertRetentionDays);
+
+        var expiredAlerts = await db.ComplianceAlerts
+            .Where(a => a.CreatedAt < cutoff
+                && (a.Status == Core.Models.Compliance.AlertStatus.Resolved
+                    || a.Status == Core.Models.Compliance.AlertStatus.Dismissed))
+            .ToListAsync(cancellationToken);
+
+        if (expiredAlerts.Count == 0)
+        {
+            _logger.LogDebug("Retention cleanup: no expired alerts found (cutoff: {CutoffDate:yyyy-MM-dd})", cutoff);
+            return;
+        }
+
+        db.ComplianceAlerts.RemoveRange(expiredAlerts);
+        await db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Alert retention cleanup — deleted {Count} resolved/dismissed alerts older than {RetentionDays} days",
+            expiredAlerts.Count, _options.AlertRetentionDays);
     }
 }

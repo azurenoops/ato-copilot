@@ -42,6 +42,17 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAssessmentAuditService>(sp => sp.GetRequiredService<ComplianceMonitoringService>());
         services.AddSingleton<IComplianceStatusService>(sp => sp.GetRequiredService<ComplianceMonitoringService>());
 
+        // ─── Compliance Watch Services ───────────────────────────────────────
+        services.AddSingleton<AlertCorrelationService>();
+        services.AddSingleton<IAlertCorrelationService>(sp => sp.GetRequiredService<AlertCorrelationService>());
+        services.AddSingleton<AlertManager>();
+        services.AddSingleton<IAlertManager>(sp => sp.GetRequiredService<AlertManager>());
+        services.AddSingleton<ComplianceWatchService>();
+        services.AddSingleton<IComplianceWatchService>(sp => sp.GetRequiredService<ComplianceWatchService>());
+        services.AddSingleton<ActivityLogEventSource>();
+        services.AddSingleton<IComplianceEventSource>(sp => sp.GetRequiredService<ActivityLogEventSource>());
+        services.AddHostedService<ComplianceWatchHostedService>();
+
         // HttpClient for NistControlsService online catalog fetch
         services.AddHttpClient<NistControlsService>();
 
@@ -59,6 +70,50 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ComplianceMonitoringTool>();
         services.AddSingleton<ComplianceChatTool>();
 
+        // Compliance Watch monitoring tools
+        services.AddSingleton<WatchEnableMonitoringTool>();
+        services.AddSingleton<WatchDisableMonitoringTool>();
+        services.AddSingleton<WatchConfigureMonitoringTool>();
+        services.AddSingleton<WatchMonitoringStatusTool>();
+
+        // Compliance Watch alert lifecycle tools (US2)
+        services.AddSingleton<WatchShowAlertsTool>();
+        services.AddSingleton<WatchGetAlertTool>();
+        services.AddSingleton<WatchAcknowledgeAlertTool>();
+        services.AddSingleton<WatchFixAlertTool>();
+        services.AddSingleton<WatchDismissAlertTool>();
+
+        // Compliance Watch alert rules & suppression tools (US3)
+        services.AddSingleton<WatchCreateRuleTool>();
+        services.AddSingleton<WatchListRulesTool>();
+        services.AddSingleton<WatchSuppressAlertsTool>();
+        services.AddSingleton<WatchListSuppressionsTool>();
+        services.AddSingleton<WatchConfigureQuietHoursTool>();
+
+        // Compliance Watch notification & escalation tools (US4)
+        services.AddSingleton<WatchConfigureNotificationsTool>();
+        services.AddSingleton<WatchConfigureEscalationTool>();
+
+        // Compliance Watch dashboard & reporting tools (US5)
+        services.AddSingleton<WatchAlertHistoryTool>();
+        services.AddSingleton<WatchComplianceTrendTool>();
+        services.AddSingleton<WatchAlertStatisticsTool>();
+
+        // Compliance Watch integration tools (US8)
+        services.AddSingleton<WatchCreateTaskFromAlertTool>();
+        services.AddSingleton<WatchCollectEvidenceFromAlertTool>();
+
+        // Compliance Watch auto-remediation tools (US9)
+        services.AddSingleton<WatchCreateAutoRemediationRuleTool>();
+        services.AddSingleton<WatchListAutoRemediationRulesTool>();
+
+        // Compliance Watch notification & escalation services (US4)
+        services.AddSingleton<AlertNotificationService>();
+        services.AddSingleton<IAlertNotificationService>(sp => sp.GetRequiredService<AlertNotificationService>());
+        services.AddSingleton<EscalationHostedService>();
+        services.AddSingleton<IEscalationService>(sp => sp.GetRequiredService<EscalationHostedService>());
+        services.AddHostedService(sp => sp.GetRequiredService<EscalationHostedService>());
+
         // Register tools as BaseTool collection
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ComplianceAssessmentTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ControlFamilyTool>());
@@ -71,6 +126,31 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ComplianceHistoryTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ComplianceStatusTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ComplianceMonitoringTool>());
+
+        // Compliance Watch tools as BaseTool
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchEnableMonitoringTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchDisableMonitoringTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchConfigureMonitoringTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchMonitoringStatusTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchShowAlertsTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchGetAlertTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchAcknowledgeAlertTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchFixAlertTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchDismissAlertTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchCreateRuleTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchListRulesTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchSuppressAlertsTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchListSuppressionsTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchConfigureQuietHoursTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchConfigureNotificationsTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchConfigureEscalationTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchAlertHistoryTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchComplianceTrendTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchAlertStatisticsTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchCreateTaskFromAlertTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchCollectEvidenceFromAlertTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchCreateAutoRemediationRuleTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchListAutoRemediationRulesTool>());
 
         // Register the agent
         services.AddSingleton<ComplianceAgent>();

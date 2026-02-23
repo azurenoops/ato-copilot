@@ -86,6 +86,43 @@ public class ComplianceAgent : BaseAgent
     // PIM audit trail (Phase 12 — US10)
     private readonly PimHistoryTool _pimHistory;
 
+    // Compliance Watch monitoring tools (Feature 005)
+    private readonly WatchEnableMonitoringTool _watchEnableMonitoring;
+    private readonly WatchDisableMonitoringTool _watchDisableMonitoring;
+    private readonly WatchConfigureMonitoringTool _watchConfigureMonitoring;
+    private readonly WatchMonitoringStatusTool _watchMonitoringStatus;
+
+    // Compliance Watch alert lifecycle tools (Feature 005 — US2)
+    private readonly WatchShowAlertsTool _watchShowAlerts;
+    private readonly WatchGetAlertTool _watchGetAlert;
+    private readonly WatchAcknowledgeAlertTool _watchAcknowledgeAlert;
+    private readonly WatchFixAlertTool _watchFixAlert;
+    private readonly WatchDismissAlertTool _watchDismissAlert;
+
+    // Compliance Watch alert rules & suppression tools (Feature 005 — US3)
+    private readonly WatchCreateRuleTool _watchCreateRule;
+    private readonly WatchListRulesTool _watchListRules;
+    private readonly WatchSuppressAlertsTool _watchSuppressAlerts;
+    private readonly WatchListSuppressionsTool _watchListSuppressions;
+    private readonly WatchConfigureQuietHoursTool _watchConfigureQuietHours;
+
+    // Compliance Watch notification & escalation tools (US4)
+    private readonly WatchConfigureNotificationsTool _watchConfigureNotifications;
+    private readonly WatchConfigureEscalationTool _watchConfigureEscalation;
+
+    // Compliance Watch dashboard & reporting tools (US5)
+    private readonly WatchAlertHistoryTool _watchAlertHistory;
+    private readonly WatchComplianceTrendTool _watchComplianceTrend;
+    private readonly WatchAlertStatisticsTool _watchAlertStatistics;
+
+    // Compliance Watch integration tools (US8)
+    private readonly WatchCreateTaskFromAlertTool _watchCreateTaskFromAlert;
+    private readonly WatchCollectEvidenceFromAlertTool _watchCollectEvidenceFromAlert;
+
+    // Compliance Watch auto-remediation tools (US9)
+    private readonly WatchCreateAutoRemediationRuleTool _watchCreateAutoRemediationRule;
+    private readonly WatchListAutoRemediationRulesTool _watchListAutoRemediationRules;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="ComplianceAgent"/> class.
     /// </summary>
@@ -134,6 +171,29 @@ public class ComplianceAgent : BaseAgent
         JitListSessionsTool jitListSessions,
         JitRevokeAccessTool jitRevokeAccess,
         PimHistoryTool pimHistory,
+        WatchEnableMonitoringTool watchEnableMonitoring,
+        WatchDisableMonitoringTool watchDisableMonitoring,
+        WatchConfigureMonitoringTool watchConfigureMonitoring,
+        WatchMonitoringStatusTool watchMonitoringStatus,
+        WatchShowAlertsTool watchShowAlerts,
+        WatchGetAlertTool watchGetAlert,
+        WatchAcknowledgeAlertTool watchAcknowledgeAlert,
+        WatchFixAlertTool watchFixAlert,
+        WatchDismissAlertTool watchDismissAlert,
+        WatchCreateRuleTool watchCreateRule,
+        WatchListRulesTool watchListRules,
+        WatchSuppressAlertsTool watchSuppressAlerts,
+        WatchListSuppressionsTool watchListSuppressions,
+        WatchConfigureQuietHoursTool watchConfigureQuietHours,
+        WatchConfigureNotificationsTool watchConfigureNotifications,
+        WatchConfigureEscalationTool watchConfigureEscalation,
+        WatchAlertHistoryTool watchAlertHistory,
+        WatchComplianceTrendTool watchComplianceTrend,
+        WatchAlertStatisticsTool watchAlertStatistics,
+        WatchCreateTaskFromAlertTool watchCreateTaskFromAlert,
+        WatchCollectEvidenceFromAlertTool watchCollectEvidenceFromAlert,
+        WatchCreateAutoRemediationRuleTool watchCreateAutoRemediationRule,
+        WatchListAutoRemediationRulesTool watchListAutoRemediationRules,
         IDbContextFactory<AtoCopilotContext> dbFactory,
         IServiceScopeFactory scopeFactory,
         ILogger<ComplianceAgent> logger)
@@ -183,6 +243,29 @@ public class ComplianceAgent : BaseAgent
         _jitListSessions = jitListSessions;
         _jitRevokeAccess = jitRevokeAccess;
         _pimHistory = pimHistory;
+        _watchEnableMonitoring = watchEnableMonitoring;
+        _watchDisableMonitoring = watchDisableMonitoring;
+        _watchConfigureMonitoring = watchConfigureMonitoring;
+        _watchMonitoringStatus = watchMonitoringStatus;
+        _watchShowAlerts = watchShowAlerts;
+        _watchGetAlert = watchGetAlert;
+        _watchAcknowledgeAlert = watchAcknowledgeAlert;
+        _watchFixAlert = watchFixAlert;
+        _watchDismissAlert = watchDismissAlert;
+        _watchCreateRule = watchCreateRule;
+        _watchListRules = watchListRules;
+        _watchSuppressAlerts = watchSuppressAlerts;
+        _watchListSuppressions = watchListSuppressions;
+        _watchConfigureQuietHours = watchConfigureQuietHours;
+        _watchConfigureNotifications = watchConfigureNotifications;
+        _watchConfigureEscalation = watchConfigureEscalation;
+        _watchAlertHistory = watchAlertHistory;
+        _watchComplianceTrend = watchComplianceTrend;
+        _watchAlertStatistics = watchAlertStatistics;
+        _watchCreateTaskFromAlert = watchCreateTaskFromAlert;
+        _watchCollectEvidenceFromAlert = watchCollectEvidenceFromAlert;
+        _watchCreateAutoRemediationRule = watchCreateAutoRemediationRule;
+        _watchListAutoRemediationRules = watchListAutoRemediationRules;
         _dbFactory = dbFactory;
         _scopeFactory = scopeFactory;
 
@@ -235,6 +318,43 @@ public class ComplianceAgent : BaseAgent
         RegisterTool(_jitListSessions);
         RegisterTool(_jitRevokeAccess);
         RegisterTool(_pimHistory);
+
+        // Register Compliance Watch tools
+        RegisterTool(_watchEnableMonitoring);
+        RegisterTool(_watchDisableMonitoring);
+        RegisterTool(_watchConfigureMonitoring);
+        RegisterTool(_watchMonitoringStatus);
+
+        // Register Compliance Watch alert lifecycle tools
+        RegisterTool(_watchShowAlerts);
+        RegisterTool(_watchGetAlert);
+        RegisterTool(_watchAcknowledgeAlert);
+        RegisterTool(_watchFixAlert);
+        RegisterTool(_watchDismissAlert);
+
+        // Register Compliance Watch alert rules & suppression tools
+        RegisterTool(_watchCreateRule);
+        RegisterTool(_watchListRules);
+        RegisterTool(_watchSuppressAlerts);
+        RegisterTool(_watchListSuppressions);
+        RegisterTool(_watchConfigureQuietHours);
+
+        // Register Compliance Watch notification & escalation tools
+        RegisterTool(_watchConfigureNotifications);
+        RegisterTool(_watchConfigureEscalation);
+
+        // Register Compliance Watch dashboard & reporting tools
+        RegisterTool(_watchAlertHistory);
+        RegisterTool(_watchComplianceTrend);
+        RegisterTool(_watchAlertStatistics);
+
+        // Register Compliance Watch integration tools
+        RegisterTool(_watchCreateTaskFromAlert);
+        RegisterTool(_watchCollectEvidenceFromAlert);
+
+        // Register Compliance Watch auto-remediation tools
+        RegisterTool(_watchCreateAutoRemediationRule);
+        RegisterTool(_watchListAutoRemediationRules);
     }
 
     /// <inheritdoc />

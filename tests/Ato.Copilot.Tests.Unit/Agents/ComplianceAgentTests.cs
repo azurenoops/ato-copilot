@@ -83,6 +83,50 @@ public class ComplianceAgentTests
         var jitListSessions = new JitListSessionsTool(scopeFactory, Mock.Of<ILogger<JitListSessionsTool>>());
         var jitRevokeAccess = new JitRevokeAccessTool(scopeFactory, Mock.Of<ILogger<JitRevokeAccessTool>>());
         var pimHistory = new PimHistoryTool(scopeFactory, Mock.Of<ILogger<PimHistoryTool>>());
+        var watchService = Mock.Of<IComplianceWatchService>();
+        var watchEnable = new WatchEnableMonitoringTool(watchService, Mock.Of<ILogger<WatchEnableMonitoringTool>>());
+        var watchDisable = new WatchDisableMonitoringTool(watchService, Mock.Of<ILogger<WatchDisableMonitoringTool>>());
+        var watchConfigure = new WatchConfigureMonitoringTool(watchService, Mock.Of<ILogger<WatchConfigureMonitoringTool>>());
+        var watchStatus = new WatchMonitoringStatusTool(watchService, Mock.Of<ILogger<WatchMonitoringStatusTool>>());
+        var alertManager = Mock.Of<IAlertManager>();
+        var watchShowAlerts = new WatchShowAlertsTool(alertManager, Mock.Of<ILogger<WatchShowAlertsTool>>());
+        var watchGetAlert = new WatchGetAlertTool(alertManager, Mock.Of<ILogger<WatchGetAlertTool>>());
+        var watchAckAlert = new WatchAcknowledgeAlertTool(alertManager, Mock.Of<ILogger<WatchAcknowledgeAlertTool>>());
+        var watchFixAlert = new WatchFixAlertTool(alertManager, Mock.Of<IAtoComplianceEngine>(), Mock.Of<ILogger<WatchFixAlertTool>>());
+        var watchDismissAlert = new WatchDismissAlertTool(alertManager, Mock.Of<ILogger<WatchDismissAlertTool>>());
+        var watchCreateRule = new WatchCreateRuleTool(watchService, Mock.Of<ILogger<WatchCreateRuleTool>>());
+        var watchListRules = new WatchListRulesTool(watchService, Mock.Of<ILogger<WatchListRulesTool>>());
+        var watchSuppressAlerts = new WatchSuppressAlertsTool(watchService, Mock.Of<ILogger<WatchSuppressAlertsTool>>());
+        var watchListSuppressions = new WatchListSuppressionsTool(watchService, Mock.Of<ILogger<WatchListSuppressionsTool>>());
+        var watchConfigureQuietHours = new WatchConfigureQuietHoursTool(watchService, Mock.Of<ILogger<WatchConfigureQuietHoursTool>>());
+        var watchConfigureNotifications = new WatchConfigureNotificationsTool(Mock.Of<IEscalationService>(), Mock.Of<ILogger<WatchConfigureNotificationsTool>>());
+        var watchConfigureEscalation = new WatchConfigureEscalationTool(Mock.Of<IEscalationService>(), Mock.Of<ILogger<WatchConfigureEscalationTool>>());
+        var watchAlertHistory = new WatchAlertHistoryTool(alertManager, Mock.Of<ILogger<WatchAlertHistoryTool>>());
+        var watchComplianceTrend = new WatchComplianceTrendTool(
+            new InMemoryDbContextFactory(
+                new DbContextOptionsBuilder<AtoCopilotContext>()
+                    .UseInMemoryDatabase($"AgentTests_Trend_{Guid.NewGuid()}")
+                    .Options),
+            Mock.Of<ILogger<WatchComplianceTrendTool>>());
+        var watchAlertStatistics = new WatchAlertStatisticsTool(
+            new InMemoryDbContextFactory(
+                new DbContextOptionsBuilder<AtoCopilotContext>()
+                    .UseInMemoryDatabase($"AgentTests_Stats_{Guid.NewGuid()}")
+                    .Options),
+            Mock.Of<ILogger<WatchAlertStatisticsTool>>());
+        var watchCreateTaskFromAlert = new WatchCreateTaskFromAlertTool(
+            alertManager, scopeFactory, Mock.Of<ILogger<WatchCreateTaskFromAlertTool>>());
+        var watchCollectEvidenceFromAlert = new WatchCollectEvidenceFromAlertTool(
+            alertManager,
+            new InMemoryDbContextFactory(
+                new DbContextOptionsBuilder<AtoCopilotContext>()
+                    .UseInMemoryDatabase($"AgentTests_Evidence_{Guid.NewGuid()}")
+                    .Options),
+            Mock.Of<ILogger<WatchCollectEvidenceFromAlertTool>>());
+        var watchCreateAutoRemediationRule = new WatchCreateAutoRemediationRuleTool(
+            watchService, Mock.Of<ILogger<WatchCreateAutoRemediationRuleTool>>());
+        var watchListAutoRemediationRules = new WatchListAutoRemediationRulesTool(
+            watchService, Mock.Of<ILogger<WatchListAutoRemediationRulesTool>>());
 
         _agent = new ComplianceAgent(
             assessmentTool,
@@ -129,6 +173,29 @@ public class ComplianceAgentTests
             jitListSessions,
             jitRevokeAccess,
             pimHistory,
+            watchEnable,
+            watchDisable,
+            watchConfigure,
+            watchStatus,
+            watchShowAlerts,
+            watchGetAlert,
+            watchAckAlert,
+            watchFixAlert,
+            watchDismissAlert,
+            watchCreateRule,
+            watchListRules,
+            watchSuppressAlerts,
+            watchListSuppressions,
+            watchConfigureQuietHours,
+            watchConfigureNotifications,
+            watchConfigureEscalation,
+            watchAlertHistory,
+            watchComplianceTrend,
+            watchAlertStatistics,
+            watchCreateTaskFromAlert,
+            watchCollectEvidenceFromAlert,
+            watchCreateAutoRemediationRule,
+            watchListAutoRemediationRules,
             new InMemoryDbContextFactory(
                 new DbContextOptionsBuilder<AtoCopilotContext>()
                     .UseInMemoryDatabase($"AgentTests_{Guid.NewGuid()}")

@@ -85,6 +85,12 @@ public interface IKanbanService
         List<string>? affectedResources = null,
         string? remediationScript = null,
         string? validationCriteria = null,
+        string? linkedAlertId = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Gets a task linked to a specific compliance alert.</summary>
+    Task<RemediationTask?> GetTaskByLinkedAlertIdAsync(
+        string alertId,
         CancellationToken cancellationToken = default);
 
     /// <summary>Gets a single task with full details.</summary>

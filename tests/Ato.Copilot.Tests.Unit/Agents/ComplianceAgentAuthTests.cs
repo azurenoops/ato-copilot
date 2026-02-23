@@ -117,6 +117,31 @@ public class ComplianceAgentAuthTests
         var jitListSessions = new JitListSessionsTool(_scopeFactory, Mock.Of<ILogger<JitListSessionsTool>>());
         var jitRevokeAccess = new JitRevokeAccessTool(_scopeFactory, Mock.Of<ILogger<JitRevokeAccessTool>>());
         var pimHistory = new PimHistoryTool(_scopeFactory, Mock.Of<ILogger<PimHistoryTool>>());
+        var watchService = Mock.Of<IComplianceWatchService>();
+        var watchEnable = new WatchEnableMonitoringTool(watchService, Mock.Of<ILogger<WatchEnableMonitoringTool>>());
+        var watchDisable = new WatchDisableMonitoringTool(watchService, Mock.Of<ILogger<WatchDisableMonitoringTool>>());
+        var watchConfigure = new WatchConfigureMonitoringTool(watchService, Mock.Of<ILogger<WatchConfigureMonitoringTool>>());
+        var watchStatus = new WatchMonitoringStatusTool(watchService, Mock.Of<ILogger<WatchMonitoringStatusTool>>());
+        var alertMgr = Mock.Of<IAlertManager>();
+        var watchShowAlerts = new WatchShowAlertsTool(alertMgr, Mock.Of<ILogger<WatchShowAlertsTool>>());
+        var watchGetAlert = new WatchGetAlertTool(alertMgr, Mock.Of<ILogger<WatchGetAlertTool>>());
+        var watchAckAlert = new WatchAcknowledgeAlertTool(alertMgr, Mock.Of<ILogger<WatchAcknowledgeAlertTool>>());
+        var watchFixAlert = new WatchFixAlertTool(alertMgr, Mock.Of<IAtoComplianceEngine>(), Mock.Of<ILogger<WatchFixAlertTool>>());
+        var watchDismissAlert = new WatchDismissAlertTool(alertMgr, Mock.Of<ILogger<WatchDismissAlertTool>>());
+        var watchCreateRule = new WatchCreateRuleTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchCreateRuleTool>>());
+        var watchListRules = new WatchListRulesTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchListRulesTool>>());
+        var watchSuppressAlerts = new WatchSuppressAlertsTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchSuppressAlertsTool>>());
+        var watchListSuppressions = new WatchListSuppressionsTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchListSuppressionsTool>>());
+        var watchConfigureQuietHours = new WatchConfigureQuietHoursTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchConfigureQuietHoursTool>>());
+        var watchConfigureNotifications = new WatchConfigureNotificationsTool(Mock.Of<IEscalationService>(), Mock.Of<ILogger<WatchConfigureNotificationsTool>>());
+        var watchConfigureEscalation = new WatchConfigureEscalationTool(Mock.Of<IEscalationService>(), Mock.Of<ILogger<WatchConfigureEscalationTool>>());
+        var watchAlertHistory = new WatchAlertHistoryTool(alertMgr, Mock.Of<ILogger<WatchAlertHistoryTool>>());
+        var watchComplianceTrend = new WatchComplianceTrendTool(dbFactory, Mock.Of<ILogger<WatchComplianceTrendTool>>());
+        var watchAlertStatistics = new WatchAlertStatisticsTool(dbFactory, Mock.Of<ILogger<WatchAlertStatisticsTool>>());
+        var watchCreateTaskFromAlert = new WatchCreateTaskFromAlertTool(alertMgr, _scopeFactory, Mock.Of<ILogger<WatchCreateTaskFromAlertTool>>());
+        var watchCollectEvidenceFromAlert = new WatchCollectEvidenceFromAlertTool(alertMgr, dbFactory, Mock.Of<ILogger<WatchCollectEvidenceFromAlertTool>>());
+        var watchCreateAutoRemediationRule = new WatchCreateAutoRemediationRuleTool(watchService, Mock.Of<ILogger<WatchCreateAutoRemediationRuleTool>>());
+        var watchListAutoRemediationRules = new WatchListAutoRemediationRulesTool(watchService, Mock.Of<ILogger<WatchListAutoRemediationRulesTool>>());
 
         _agent = new ComplianceAgent(
             assessmentTool, controlFamilyTool, documentGenerationTool, evidenceCollectionTool,
@@ -130,6 +155,13 @@ public class ComplianceAgentAuthTests
             cacStatus, cacSignOut, cacSetTimeout, cacMapCertificate, pimListEligible, pimActivateRole, pimDeactivateRole,
             pimListActive, pimExtendRole, pimApproveRequest, pimDenyRequest,
             jitRequestAccess, jitListSessions, jitRevokeAccess, pimHistory,
+            watchEnable, watchDisable, watchConfigure, watchStatus,
+            watchShowAlerts, watchGetAlert, watchAckAlert, watchFixAlert, watchDismissAlert,
+            watchCreateRule, watchListRules, watchSuppressAlerts, watchListSuppressions, watchConfigureQuietHours,
+            watchConfigureNotifications, watchConfigureEscalation,
+            watchAlertHistory, watchComplianceTrend, watchAlertStatistics,
+            watchCreateTaskFromAlert, watchCollectEvidenceFromAlert,
+            watchCreateAutoRemediationRule, watchListAutoRemediationRules,
             dbFactory, _scopeFactory,
             Mock.Of<ILogger<ComplianceAgent>>());
     }
@@ -375,6 +407,29 @@ public class ComplianceAgentAuthTests
             new JitListSessionsTool(scopeFactory, Mock.Of<ILogger<JitListSessionsTool>>()),
             new JitRevokeAccessTool(scopeFactory, Mock.Of<ILogger<JitRevokeAccessTool>>()),
             new PimHistoryTool(scopeFactory, Mock.Of<ILogger<PimHistoryTool>>()),
+            new WatchEnableMonitoringTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchEnableMonitoringTool>>()),
+            new WatchDisableMonitoringTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchDisableMonitoringTool>>()),
+            new WatchConfigureMonitoringTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchConfigureMonitoringTool>>()),
+            new WatchMonitoringStatusTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchMonitoringStatusTool>>()),
+            new WatchShowAlertsTool(Mock.Of<IAlertManager>(), Mock.Of<ILogger<WatchShowAlertsTool>>()),
+            new WatchGetAlertTool(Mock.Of<IAlertManager>(), Mock.Of<ILogger<WatchGetAlertTool>>()),
+            new WatchAcknowledgeAlertTool(Mock.Of<IAlertManager>(), Mock.Of<ILogger<WatchAcknowledgeAlertTool>>()),
+            new WatchFixAlertTool(Mock.Of<IAlertManager>(), Mock.Of<IAtoComplianceEngine>(), Mock.Of<ILogger<WatchFixAlertTool>>()),
+            new WatchDismissAlertTool(Mock.Of<IAlertManager>(), Mock.Of<ILogger<WatchDismissAlertTool>>()),
+            new WatchCreateRuleTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchCreateRuleTool>>()),
+            new WatchListRulesTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchListRulesTool>>()),
+            new WatchSuppressAlertsTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchSuppressAlertsTool>>()),
+            new WatchListSuppressionsTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchListSuppressionsTool>>()),
+            new WatchConfigureQuietHoursTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchConfigureQuietHoursTool>>()),
+            new WatchConfigureNotificationsTool(Mock.Of<IEscalationService>(), Mock.Of<ILogger<WatchConfigureNotificationsTool>>()),
+            new WatchConfigureEscalationTool(Mock.Of<IEscalationService>(), Mock.Of<ILogger<WatchConfigureEscalationTool>>()),
+            new WatchAlertHistoryTool(Mock.Of<IAlertManager>(), Mock.Of<ILogger<WatchAlertHistoryTool>>()),
+            new WatchComplianceTrendTool(dbFactory, Mock.Of<ILogger<WatchComplianceTrendTool>>()),
+            new WatchAlertStatisticsTool(dbFactory, Mock.Of<ILogger<WatchAlertStatisticsTool>>()),
+            new WatchCreateTaskFromAlertTool(Mock.Of<IAlertManager>(), scopeFactory, Mock.Of<ILogger<WatchCreateTaskFromAlertTool>>()),
+            new WatchCollectEvidenceFromAlertTool(Mock.Of<IAlertManager>(), dbFactory, Mock.Of<ILogger<WatchCollectEvidenceFromAlertTool>>()),
+            new WatchCreateAutoRemediationRuleTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchCreateAutoRemediationRuleTool>>()),
+            new WatchListAutoRemediationRulesTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchListAutoRemediationRulesTool>>()),
             dbFactory, scopeFactory,
             Mock.Of<ILogger<ComplianceAgent>>());
     }

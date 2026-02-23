@@ -72,6 +72,43 @@ public class ComplianceMcpTools
     // PIM audit trail (Phase 12 — US10)
     private readonly PimHistoryTool _pimHistory;
 
+    // Compliance Watch monitoring tools (Feature 005)
+    private readonly WatchEnableMonitoringTool _watchEnableMonitoring;
+    private readonly WatchDisableMonitoringTool _watchDisableMonitoring;
+    private readonly WatchConfigureMonitoringTool _watchConfigureMonitoring;
+    private readonly WatchMonitoringStatusTool _watchMonitoringStatus;
+
+    // Compliance Watch alert lifecycle tools (Feature 005 — US2)
+    private readonly WatchShowAlertsTool _watchShowAlerts;
+    private readonly WatchGetAlertTool _watchGetAlert;
+    private readonly WatchAcknowledgeAlertTool _watchAcknowledgeAlert;
+    private readonly WatchFixAlertTool _watchFixAlert;
+    private readonly WatchDismissAlertTool _watchDismissAlert;
+
+    // Compliance Watch alert rules & suppression tools (Feature 005 — US3)
+    private readonly WatchCreateRuleTool _watchCreateRule;
+    private readonly WatchListRulesTool _watchListRules;
+    private readonly WatchSuppressAlertsTool _watchSuppressAlerts;
+    private readonly WatchListSuppressionsTool _watchListSuppressions;
+    private readonly WatchConfigureQuietHoursTool _watchConfigureQuietHours;
+
+    // Compliance Watch notification & escalation tools (Feature 005 — US4)
+    private readonly WatchConfigureNotificationsTool _watchConfigureNotifications;
+    private readonly WatchConfigureEscalationTool _watchConfigureEscalation;
+
+    // Compliance Watch dashboard & reporting tools (Feature 005 — US5)
+    private readonly WatchAlertHistoryTool _watchAlertHistory;
+    private readonly WatchComplianceTrendTool _watchComplianceTrend;
+    private readonly WatchAlertStatisticsTool _watchAlertStatistics;
+
+    // Compliance Watch integration tools (Feature 005 — US8)
+    private readonly WatchCreateTaskFromAlertTool _watchCreateTaskFromAlert;
+    private readonly WatchCollectEvidenceFromAlertTool _watchCollectEvidenceFromAlert;
+
+    // Compliance Watch auto-remediation tools (Feature 005 — US9)
+    private readonly WatchCreateAutoRemediationRuleTool _watchCreateAutoRemediationRule;
+    private readonly WatchListAutoRemediationRulesTool _watchListAutoRemediationRules;
+
     public ComplianceMcpTools(
         ComplianceAssessmentTool assessmentTool,
         ControlFamilyTool controlFamilyTool,
@@ -116,7 +153,30 @@ public class ComplianceMcpTools
         JitRequestAccessTool jitRequestAccess,
         JitListSessionsTool jitListSessions,
         JitRevokeAccessTool jitRevokeAccess,
-        PimHistoryTool pimHistory)
+        PimHistoryTool pimHistory,
+        WatchEnableMonitoringTool watchEnableMonitoring,
+        WatchDisableMonitoringTool watchDisableMonitoring,
+        WatchConfigureMonitoringTool watchConfigureMonitoring,
+        WatchMonitoringStatusTool watchMonitoringStatus,
+        WatchShowAlertsTool watchShowAlerts,
+        WatchGetAlertTool watchGetAlert,
+        WatchAcknowledgeAlertTool watchAcknowledgeAlert,
+        WatchFixAlertTool watchFixAlert,
+        WatchDismissAlertTool watchDismissAlert,
+        WatchCreateRuleTool watchCreateRule,
+        WatchListRulesTool watchListRules,
+        WatchSuppressAlertsTool watchSuppressAlerts,
+        WatchListSuppressionsTool watchListSuppressions,
+        WatchConfigureQuietHoursTool watchConfigureQuietHours,
+        WatchConfigureNotificationsTool watchConfigureNotifications,
+        WatchConfigureEscalationTool watchConfigureEscalation,
+        WatchAlertHistoryTool watchAlertHistory,
+        WatchComplianceTrendTool watchComplianceTrend,
+        WatchAlertStatisticsTool watchAlertStatistics,
+        WatchCreateTaskFromAlertTool watchCreateTaskFromAlert,
+        WatchCollectEvidenceFromAlertTool watchCollectEvidenceFromAlert,
+        WatchCreateAutoRemediationRuleTool watchCreateAutoRemediationRule,
+        WatchListAutoRemediationRulesTool watchListAutoRemediationRules)
     {
         _assessmentTool = assessmentTool;
         _controlFamilyTool = controlFamilyTool;
@@ -162,6 +222,29 @@ public class ComplianceMcpTools
         _jitListSessions = jitListSessions;
         _jitRevokeAccess = jitRevokeAccess;
         _pimHistory = pimHistory;
+        _watchEnableMonitoring = watchEnableMonitoring;
+        _watchDisableMonitoring = watchDisableMonitoring;
+        _watchConfigureMonitoring = watchConfigureMonitoring;
+        _watchMonitoringStatus = watchMonitoringStatus;
+        _watchShowAlerts = watchShowAlerts;
+        _watchGetAlert = watchGetAlert;
+        _watchAcknowledgeAlert = watchAcknowledgeAlert;
+        _watchFixAlert = watchFixAlert;
+        _watchDismissAlert = watchDismissAlert;
+        _watchCreateRule = watchCreateRule;
+        _watchListRules = watchListRules;
+        _watchSuppressAlerts = watchSuppressAlerts;
+        _watchListSuppressions = watchListSuppressions;
+        _watchConfigureQuietHours = watchConfigureQuietHours;
+        _watchConfigureNotifications = watchConfigureNotifications;
+        _watchConfigureEscalation = watchConfigureEscalation;
+        _watchAlertHistory = watchAlertHistory;
+        _watchComplianceTrend = watchComplianceTrend;
+        _watchAlertStatistics = watchAlertStatistics;
+        _watchCreateTaskFromAlert = watchCreateTaskFromAlert;
+        _watchCollectEvidenceFromAlert = watchCollectEvidenceFromAlert;
+        _watchCreateAutoRemediationRule = watchCreateAutoRemediationRule;
+        _watchListAutoRemediationRules = watchListAutoRemediationRules;
     }
 
     [Description("Run a NIST 800-53 compliance assessment. Scan types: quick, policy, full.")]
@@ -733,5 +816,391 @@ public class ComplianceMcpTools
             ["filterUserId"] = filterUserId, ["scope"] = scope
         };
         return await _pimHistory.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ─── Compliance Watch Monitoring MCP Wrappers ────────────────────────────
+
+    [Description("Enable continuous compliance monitoring for a subscription or resource group.")]
+    public async Task<string> WatchEnableMonitoringAsync(
+        string subscriptionId, string? resourceGroup = null,
+        string? frequency = null, string? mode = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["subscription_id"] = subscriptionId, ["resource_group"] = resourceGroup,
+            ["frequency"] = frequency, ["mode"] = mode
+        };
+        return await _watchEnableMonitoring.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Disable monitoring for a subscription or resource group.")]
+    public async Task<string> WatchDisableMonitoringAsync(
+        string subscriptionId, string? resourceGroup = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["subscription_id"] = subscriptionId, ["resource_group"] = resourceGroup
+        };
+        return await _watchDisableMonitoring.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Update monitoring settings for an existing configuration.")]
+    public async Task<string> WatchConfigureMonitoringAsync(
+        string subscriptionId, string? resourceGroup = null,
+        string? frequency = null, string? mode = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["subscription_id"] = subscriptionId, ["resource_group"] = resourceGroup,
+            ["frequency"] = frequency, ["mode"] = mode
+        };
+        return await _watchConfigureMonitoring.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Show current monitoring configuration and status.")]
+    public async Task<string> WatchMonitoringStatusAsync(
+        string? subscriptionId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["subscription_id"] = subscriptionId
+        };
+        return await _watchMonitoringStatus.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ─── Alert Lifecycle Tools (US2) ────────────────────────────────────────
+
+    [Description("List active compliance alerts with optional severity, status, control family, and date filters.")]
+    public async Task<string> WatchShowAlertsAsync(
+        string? subscriptionId = null,
+        string? severity = null,
+        string? status = null,
+        string? controlFamily = null,
+        int? days = null,
+        int? page = null,
+        int? pageSize = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["subscription_id"] = subscriptionId, ["severity"] = severity,
+            ["status"] = status, ["control_family"] = controlFamily,
+            ["days"] = days, ["page"] = page, ["page_size"] = pageSize
+        };
+        return await _watchShowAlerts.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Get full details of a specific compliance alert.")]
+    public async Task<string> WatchGetAlertAsync(
+        string alertId,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["alert_id"] = alertId };
+        return await _watchGetAlert.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Acknowledge a compliance alert, pausing the escalation timer.")]
+    public async Task<string> WatchAcknowledgeAlertAsync(
+        string alertId,
+        string userId,
+        string userRole,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["alert_id"] = alertId, ["user_id"] = userId, ["user_role"] = userRole
+        };
+        return await _watchAcknowledgeAlert.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Execute remediation for an alert and transition to Resolved.")]
+    public async Task<string> WatchFixAlertAsync(
+        string alertId,
+        string userId,
+        string userRole,
+        bool dryRun = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["alert_id"] = alertId, ["user_id"] = userId,
+            ["user_role"] = userRole, ["dry_run"] = dryRun
+        };
+        return await _watchFixAlert.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Dismiss a compliance alert. Requires Compliance Officer role and justification.")]
+    public async Task<string> WatchDismissAlertAsync(
+        string alertId,
+        string justification,
+        string userId,
+        string userRole,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["alert_id"] = alertId, ["justification"] = justification,
+            ["user_id"] = userId, ["user_role"] = userRole
+        };
+        return await _watchDismissAlert.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ─── Alert Rules & Suppression MCP Tools (US3) ───────────────────────
+
+    [Description("Create a custom alert rule to control severity and routing for compliance alerts.")]
+    public async Task<string> WatchCreateRuleAsync(
+        string name,
+        string userRole,
+        string? description = null,
+        string? subscriptionId = null,
+        string? resourceGroup = null,
+        string? resourceType = null,
+        string? resourceId = null,
+        string? controlFamily = null,
+        string? controlId = null,
+        string? severityOverride = null,
+        string? userId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["name"] = name, ["description"] = description,
+            ["subscription_id"] = subscriptionId, ["resource_group"] = resourceGroup,
+            ["resource_type"] = resourceType, ["resource_id"] = resourceId,
+            ["control_family"] = controlFamily, ["control_id"] = controlId,
+            ["severity_override"] = severityOverride,
+            ["user_role"] = userRole, ["user_id"] = userId
+        };
+        return await _watchCreateRule.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("List configured alert rules for a subscription.")]
+    public async Task<string> WatchListRulesAsync(
+        string? subscriptionId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["subscription_id"] = subscriptionId };
+        return await _watchListRules.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Create a suppression rule to suppress alerts matching specific criteria.")]
+    public async Task<string> WatchSuppressAlertsAsync(
+        string type,
+        string userRole,
+        string? subscriptionId = null,
+        string? resourceId = null,
+        string? controlFamily = null,
+        string? controlId = null,
+        string? justification = null,
+        string? expiresAt = null,
+        string? userId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["subscription_id"] = subscriptionId, ["resource_id"] = resourceId,
+            ["control_family"] = controlFamily, ["control_id"] = controlId,
+            ["type"] = type, ["justification"] = justification,
+            ["expires_at"] = expiresAt,
+            ["user_role"] = userRole, ["user_id"] = userId
+        };
+        return await _watchSuppressAlerts.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("List active alert suppression rules.")]
+    public async Task<string> WatchListSuppressionsAsync(
+        string? subscriptionId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["subscription_id"] = subscriptionId };
+        return await _watchListSuppressions.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Configure quiet hours during which non-Critical alerts are suppressed. Critical alerts always deliver.")]
+    public async Task<string> WatchConfigureQuietHoursAsync(
+        string subscriptionId,
+        string startTime,
+        string endTime,
+        string userRole,
+        string? userId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["subscription_id"] = subscriptionId,
+            ["start_time"] = startTime, ["end_time"] = endTime,
+            ["user_role"] = userRole, ["user_id"] = userId
+        };
+        return await _watchConfigureQuietHours.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Configure notification channels (email, webhook) for compliance alerts.")]
+    public async Task<string> WatchConfigureNotificationsAsync(
+        string channel,
+        string target,
+        string userRole,
+        string? severity = null,
+        string? subscriptionId = null,
+        string? userId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["channel"] = channel, ["target"] = target,
+            ["severity"] = severity, ["subscription_id"] = subscriptionId,
+            ["role"] = userRole, ["user_id"] = userId
+        };
+        return await _watchConfigureNotifications.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Configure an escalation path for SLA violation detection and automatic escalation.")]
+    public async Task<string> WatchConfigureEscalationAsync(
+        string name,
+        string severity,
+        int delayMinutes,
+        string recipients,
+        string userRole,
+        string? channel = null,
+        int? repeatMinutes = null,
+        string? webhookUrl = null,
+        string? userId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["name"] = name, ["severity"] = severity,
+            ["delay_minutes"] = delayMinutes.ToString(),
+            ["recipients"] = recipients, ["channel"] = channel,
+            ["repeat_minutes"] = repeatMinutes?.ToString(),
+            ["webhook_url"] = webhookUrl,
+            ["role"] = userRole, ["user_id"] = userId
+        };
+        return await _watchConfigureEscalation.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ── Dashboard & Reporting tools (Feature 005 — US5) ─────────────────
+
+    [Description("Query compliance alert history with natural-language support. " +
+        "Supports queries like 'What drifted this week?' or structured filters by severity, status, control family.")]
+    public async Task<string> WatchAlertHistoryAsync(
+        string? query = null,
+        string? subscriptionId = null,
+        string? severity = null,
+        string? status = null,
+        string? controlFamily = null,
+        int? days = null,
+        int? page = null,
+        int? pageSize = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["query"] = query, ["subscriptionId"] = subscriptionId,
+            ["severity"] = severity, ["status"] = status,
+            ["controlFamily"] = controlFamily,
+            ["days"] = days?.ToString(), ["page"] = page?.ToString(),
+            ["pageSize"] = pageSize?.ToString()
+        };
+        return await _watchAlertHistory.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("View compliance score trends over time with direction indicators (improving/declining/stable).")]
+    public async Task<string> WatchComplianceTrendAsync(
+        string subscriptionId,
+        int? days = null,
+        bool? weekly = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["subscriptionId"] = subscriptionId,
+            ["days"] = days?.ToString(),
+            ["weekly"] = weekly?.ToString()
+        };
+        return await _watchComplianceTrend.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Get alert statistics including counts by severity, type, and status; " +
+        "average resolution time; escalation count; and auto-resolved count.")]
+    public async Task<string> WatchAlertStatisticsAsync(
+        string? subscriptionId = null,
+        int? days = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["subscriptionId"] = subscriptionId,
+            ["days"] = days?.ToString()
+        };
+        return await _watchAlertStatistics.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Create a Kanban remediation task from a compliance alert. " +
+        "Pre-populates title, description, severity, and control mapping.")]
+    public async Task<string> WatchCreateTaskFromAlertAsync(
+        string alertId,
+        string? boardId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["alertId"] = alertId,
+            ["boardId"] = boardId
+        };
+        return await _watchCreateTaskFromAlert.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Capture alert details, timeline, and context as compliance evidence for audit trails.")]
+    public async Task<string> WatchCollectEvidenceFromAlertAsync(
+        string alertId,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["alertId"] = alertId
+        };
+        return await _watchCollectEvidenceFromAlert.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Create an opt-in auto-remediation rule. AC, IA, SC control families are blocked and always require human approval.")]
+    public async Task<string> WatchCreateAutoRemediationRuleAsync(
+        string name,
+        string action,
+        string? subscriptionId = null,
+        string? resourceGroup = null,
+        string? controlFamily = null,
+        string? controlId = null,
+        string? approvalMode = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["name"] = name,
+            ["action"] = action,
+            ["subscriptionId"] = subscriptionId,
+            ["resourceGroup"] = resourceGroup,
+            ["controlFamily"] = controlFamily,
+            ["controlId"] = controlId,
+            ["approvalMode"] = approvalMode
+        };
+        return await _watchCreateAutoRemediationRule.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("List auto-remediation rules and their execution history.")]
+    public async Task<string> WatchListAutoRemediationRulesAsync(
+        string? subscriptionId = null,
+        bool includeDisabled = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["subscriptionId"] = subscriptionId,
+            ["includeDisabled"] = includeDisabled.ToString()
+        };
+        return await _watchListAutoRemediationRules.ExecuteAsync(args, cancellationToken);
     }
 }

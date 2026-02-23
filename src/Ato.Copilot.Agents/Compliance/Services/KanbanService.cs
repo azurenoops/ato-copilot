@@ -319,7 +319,8 @@ public class KanbanService : IKanbanService
         string? description = null, FindingSeverity? severity = null,
         string? assigneeId = null, DateTime? dueDate = null,
         List<string>? affectedResources = null, string? remediationScript = null,
-        string? validationCriteria = null, CancellationToken cancellationToken = default)
+        string? validationCriteria = null, string? linkedAlertId = null,
+        CancellationToken cancellationToken = default)
     {
         if (!Regex.IsMatch(controlId, KanbanConstants.ControlIdPattern))
             throw new ArgumentException($"Invalid control ID format: '{controlId}'. Expected pattern: {KanbanConstants.ControlIdPattern}");
@@ -346,6 +347,7 @@ public class KanbanService : IKanbanService
             AffectedResources = affectedResources ?? new List<string>(),
             RemediationScript = remediationScript,
             ValidationCriteria = validationCriteria,
+            LinkedAlertId = linkedAlertId,
             CreatedBy = createdBy,
         };
 
@@ -365,6 +367,14 @@ public class KanbanService : IKanbanService
 
         _logger.LogInformation("Task created: {TaskNumber} on board {BoardId}", taskNumber, boardId);
         return task;
+    }
+
+    /// <inheritdoc />
+    public async Task<RemediationTask?> GetTaskByLinkedAlertIdAsync(
+        string alertId, CancellationToken cancellationToken = default)
+    {
+        return await _context.RemediationTasks
+            .FirstOrDefaultAsync(t => t.LinkedAlertId == alertId, cancellationToken);
     }
 
     /// <inheritdoc />
