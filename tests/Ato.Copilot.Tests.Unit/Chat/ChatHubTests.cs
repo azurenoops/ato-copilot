@@ -1,0 +1,299 @@
+using FluentAssertions;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Moq;
+using Xunit;
+using Ato.Copilot.Chat.Hubs;
+using Ato.Copilot.Chat.Models;
+using Ato.Copilot.Chat.Services;
+
+namespace Ato.Copilot.Tests.Unit.Chat;
+
+/// <summary>
+/// Unit tests for ChatHub SignalR methods (US3):
+/// JoinConversation, LeaveConversation, SendMessage, NotifyTyping.
+/// </summary>
+public class ChatHubTests
+{
+    private readonly Mock<IServiceScopeFactory> _scopeFactoryMock;
+    private readonly Mock<ILogger<ChatHub>> _loggerMock;
+    private readonly Mock<IHubCallerClients> _clientsMock;
+    private readonly Mock<IGroupManager> _groupsMock;
+    private readonly Mock<HubCallerContext> _contextMock;
+    private readonly Mock<IClientProxy> _clientProxyMock;
+
+    public ChatHubTests()
+    {
+        _scopeFactoryMock = new Mock<IServiceScopeFactory>();
+        _loggerMock = new Mock<ILogger<ChatHub>>();
+        _clientsMock = new Mock<IHubCallerClients>();
+        _groupsMock = new Mock<IGroupManager>();
+        _contextMock = new Mock<HubCallerContext>();
+        _clientProxyMock = new Mock<IClientProxy>();
+
+        _contextMock.Setup(c => c.ConnectionId).Returns("test-connection-id");
+    }
+
+    private ChatHub CreateHub()
+    {
+        var hub = new ChatHub(_scopeFactoryMock.Object, _loggerMock.Object)
+        {
+            Clients = _clientsMock.Object,
+            Groups = _groupsMock.Object,
+            Context = _contextMock.Object
+        };
+        return hub;
+    }
+
+    // ─── Positive Tests ──────────────────────────────────────────
+
+    [Fact]
+    public async Task JoinConversation_AddsConnectionToGroup()
+    {
+        // Arrange
+        var hub = CreateHub();
+        var conversationId = "conv-123";
+
+        // Act
+        await hub.JoinConversation(conversationId);
+
+        // Assert
+        _groupsMock.Verify(
+            g => g.AddToGroupAsync("test-connection-id", conversationId, default),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task LeaveConversation_RemovesConnectionFromGroup()
+    {
+        // Arrange
+        var hub = CreateHub();
+        var conversationId = "conv-123";
+
+        // Act
+        await hub.LeaveConversation(conversationId);
+
+        // Assert
+        _groupsMock.Verify(
+            g => g.RemoveFromGroupAsync("test-connection-id", conversationId, default),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task SendMessage_BroadcastsMessageProcessingAndReceived()
+    {
+        // Arrange
+        var hub = CreateHub();
+        var conversationId = "conv-456";
+
+        // Setup scoped ChatService
+        var chatServiceMock = new Mock<IChatService>();
+        chatServiceMock.Setup(s => s.SendMessageAsync(It.IsAny<SendMessageRequest>()))
+            .ReturnsAsync(new ChatResponse
+            {
+                MessageId = "msg-789",
+                Content = "AI response",
+                Success = true,
+                Metadata = new Dictionary<string, object> { ["processingTimeMs"] = 150 }
+            });
+
+        var scopeMock = new Mock<IServiceScope>();
+        var serviceProviderMock = new Mock<IServiceProvider>();
+        serviceProviderMock.Setup(p => p.GetService(typeof(IChatService))).Returns(chatServiceMock.Object);
+        scopeMock.Setup(s => s.ServiceProvider).Returns(serviceProviderMock.Object);
+        _scopeFactoryMock.Setup(f => f.CreateScope()).Returns(scopeMock.Object);
+
+        _clientsMock.Setup(c => c.Group(conversationId)).Returns(_clientProxyMock.Object);
+
+        var request = new SendMessageRequest
+        {
+            ConversationId = conversationId,
+            Message = "Hello AI"
+        };
+
+        // Act
+        await hub.SendMessage(request);
+
+        // Assert — should have been called at least twice (MessageProcessing + MessageReceived)
+        _clientProxyMock.Verify(
+            p => p.SendCoreAsync("MessageProcessing", It.IsAny<object?[]>(), default),
+            Times.Once);
+        _clientProxyMock.Verify(
+            p => p.SendCoreAsync("MessageReceived", It.IsAny<object?[]>(), default),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task NotifyTyping_BroadcastsToOthersInGroup()
+    {
+        // Arrange
+        var hub = CreateHub();
+        var conversationId = "conv-123";
+        var userId = "user-1";
+
+        _clientsMock.Setup(c => c.OthersInGroup(conversationId)).Returns(_clientProxyMock.Object);
+
+        // Act
+        await hub.NotifyTyping(conversationId, userId);
+
+        // Assert
+        _clientProxyMock.Verify(
+            p => p.SendCoreAsync("UserTyping", It.IsAny<object?[]>(), default),
+            Times.Once);
+    }
+
+    // ─── Negative Tests ──────────────────────────────────────────
+
+    [Fact]
+    public async Task JoinConversation_WithNullConversationId_ThrowsHubException()
+    {
+        // Arrange
+        var hub = CreateHub();
+
+        // Act
+        var act = () => hub.JoinConversation(null!);
+
+        // Assert
+        await act.Should().ThrowAsync<HubException>()
+            .WithMessage("*required*");
+    }
+
+    [Fact]
+    public async Task JoinConversation_WithEmptyConversationId_ThrowsHubException()
+    {
+        // Arrange
+        var hub = CreateHub();
+
+        // Act
+        var act = () => hub.JoinConversation("");
+
+        // Assert
+        await act.Should().ThrowAsync<HubException>()
+            .WithMessage("*required*");
+    }
+
+    [Fact]
+    public async Task SendMessage_WithEmptyConversationId_ThrowsHubException()
+    {
+        // Arrange
+        var hub = CreateHub();
+        var request = new SendMessageRequest
+        {
+            ConversationId = "",
+            Message = "Test"
+        };
+
+        // Act
+        var act = () => hub.SendMessage(request);
+
+        // Assert
+        await act.Should().ThrowAsync<HubException>()
+            .WithMessage("*required*");
+    }
+
+    [Fact]
+    public async Task SendMessage_WithContentOver10000Chars_ThrowsHubException()
+    {
+        // Arrange
+        var hub = CreateHub();
+        var request = new SendMessageRequest
+        {
+            ConversationId = "conv-123",
+            Message = new string('A', 10_001)
+        };
+
+        // Act
+        var act = () => hub.SendMessage(request);
+
+        // Assert
+        await act.Should().ThrowAsync<HubException>()
+            .WithMessage("*10,000*");
+    }
+
+    // ─── Boundary Tests ──────────────────────────────────────────
+
+    [Fact]
+    public async Task SendMessage_WithExactly10000Chars_DoesNotThrow()
+    {
+        // Arrange
+        var hub = CreateHub();
+        var conversationId = "conv-boundary";
+
+        var chatServiceMock = new Mock<IChatService>();
+        chatServiceMock.Setup(s => s.SendMessageAsync(It.IsAny<SendMessageRequest>()))
+            .ReturnsAsync(new ChatResponse
+            {
+                MessageId = "msg-boundary",
+                Content = "Response",
+                Success = true
+            });
+
+        var scopeMock = new Mock<IServiceScope>();
+        var serviceProviderMock = new Mock<IServiceProvider>();
+        serviceProviderMock.Setup(p => p.GetService(typeof(IChatService))).Returns(chatServiceMock.Object);
+        scopeMock.Setup(s => s.ServiceProvider).Returns(serviceProviderMock.Object);
+        _scopeFactoryMock.Setup(f => f.CreateScope()).Returns(scopeMock.Object);
+
+        _clientsMock.Setup(c => c.Group(conversationId)).Returns(_clientProxyMock.Object);
+
+        var request = new SendMessageRequest
+        {
+            ConversationId = conversationId,
+            Message = new string('A', 10_000)
+        };
+
+        // Act
+        var act = () => hub.SendMessage(request);
+
+        // Assert — should not throw
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task NotifyTyping_WithEmptyConversationId_DoesNotBroadcast()
+    {
+        // Arrange
+        var hub = CreateHub();
+
+        // Act
+        await hub.NotifyTyping("", "user-1");
+
+        // Assert — should not call OthersInGroup
+        _clientsMock.Verify(c => c.OthersInGroup(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SendMessage_WhenServiceFails_BroadcastsMessageError()
+    {
+        // Arrange
+        var hub = CreateHub();
+        var conversationId = "conv-error";
+
+        var chatServiceMock = new Mock<IChatService>();
+        chatServiceMock.Setup(s => s.SendMessageAsync(It.IsAny<SendMessageRequest>()))
+            .ThrowsAsync(new Exception("Unexpected error"));
+
+        var scopeMock = new Mock<IServiceScope>();
+        var serviceProviderMock = new Mock<IServiceProvider>();
+        serviceProviderMock.Setup(p => p.GetService(typeof(IChatService))).Returns(chatServiceMock.Object);
+        scopeMock.Setup(s => s.ServiceProvider).Returns(serviceProviderMock.Object);
+        _scopeFactoryMock.Setup(f => f.CreateScope()).Returns(scopeMock.Object);
+
+        _clientsMock.Setup(c => c.Group(conversationId)).Returns(_clientProxyMock.Object);
+
+        var request = new SendMessageRequest
+        {
+            ConversationId = conversationId,
+            Message = "Test"
+        };
+
+        // Act
+        await hub.SendMessage(request);
+
+        // Assert
+        _clientProxyMock.Verify(
+            p => p.SendCoreAsync("MessageError", It.IsAny<object?[]>(), default),
+            Times.Once);
+    }
+}
