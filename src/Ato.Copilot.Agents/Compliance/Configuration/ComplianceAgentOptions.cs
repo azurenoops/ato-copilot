@@ -21,6 +21,7 @@ public class ComplianceAgentOptions
     public EvidenceOptions Evidence { get; set; } = new();
     public NistControlsOptions NistControls { get; set; } = new();
     public AssessmentPurgeOptions AssessmentPurge { get; set; } = new();
+    public RemediationOptions Remediation { get; set; } = new();
 }
 
 public class DefenderForCloudOptions
@@ -93,4 +94,32 @@ public class AssessmentPurgeOptions
     public int IntervalHours { get; set; } = 24;
     public int InitialDelayMinutes { get; set; } = 5;
     public int RetentionDays { get; set; } = 90;
+}
+
+/// <summary>
+/// Configuration options for the Remediation Engine.
+/// Bound from <c>Agents:Compliance:Remediation</c> config section.
+/// </summary>
+public class RemediationOptions
+{
+    /// <summary>Maximum number of concurrent remediation operations (SemaphoreSlim limit).</summary>
+    public int MaxConcurrentRemediations { get; set; } = 3;
+
+    /// <summary>Script execution timeout in seconds (default 5 minutes).</summary>
+    public int ScriptTimeoutSeconds { get; set; } = 300;
+
+    /// <summary>Maximum retry attempts for failed script executions.</summary>
+    public int MaxRetries { get; set; } = 3;
+
+    /// <summary>Default approval requirement for remediation operations.</summary>
+    public bool RequireApproval { get; set; }
+
+    /// <summary>Default auto-validation after execution.</summary>
+    public bool AutoValidate { get; set; } = true;
+
+    /// <summary>Default auto-rollback on validation failure.</summary>
+    public bool AutoRollbackOnFailure { get; set; }
+
+    /// <summary>Default AI script generation usage (Tier 1).</summary>
+    public bool UseAiScript { get; set; } = true;
 }

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -421,7 +422,9 @@ public class RemediationExecuteTool : BaseTool
         ["batch"] = new() { Name = "batch", Description = "Set to true for batch remediation by severity or family", Type = "boolean" },
         ["severity"] = new() { Name = "severity", Description = "Severity filter for batch remediation (Critical, High, Medium, Low)", Type = "string" },
         ["family"] = new() { Name = "family", Description = "Control family filter for batch remediation (e.g., AC, IA, SC)", Type = "string" },
-        ["subscription_id"] = new() { Name = "subscription_id", Description = "Subscription ID for batch remediation", Type = "string" }
+        ["subscription_id"] = new() { Name = "subscription_id", Description = "Subscription ID for batch remediation", Type = "string" },
+        ["require_approval"] = new() { Name = "require_approval", Description = "Require approval before execution (single-finding mode only)", Type = "boolean" },
+        ["use_ai"] = new() { Name = "use_ai", Description = "Use AI-generated remediation scripts (single-finding mode only, default true)", Type = "boolean" }
     };
 
     /// <inheritdoc />
@@ -443,9 +446,49 @@ public class RemediationExecuteTool : BaseTool
             var findingId = GetArg<string>(arguments, "finding_id") ?? "";
             var applyRemediation = GetArg<bool?>(arguments, "apply_remediation") ?? false;
             var dryRun = GetArg<bool?>(arguments, "dry_run") ?? true;
+            var requireApproval = GetArg<bool?>(arguments, "require_approval") ?? false;
+            var useAi = GetArg<bool?>(arguments, "use_ai") ?? true;
+
+            // When applying, use the enhanced typed overload for richer results
+            if (applyRemediation && !dryRun)
+            {
+                var options = new RemediationExecutionOptions
+                {
+                    DryRun = false,
+                    RequireApproval = requireApproval,
+                    UseAiScript = useAi,
+                    AutoValidate = true
+                };
+
+                var execution = await _remediationEngine.ExecuteRemediationAsync(findingId, options, cancellationToken);
+                return FormatExecutionResult(execution);
+            }
 
             return await _remediationEngine.ExecuteRemediationAsync(findingId, applyRemediation, dryRun, cancellationToken);
         }
+    }
+
+    private static string FormatExecutionResult(RemediationExecution execution)
+    {
+        var status = execution.Status == RemediationExecutionStatus.Completed ? "success" : "error";
+        return JsonSerializer.Serialize(new
+        {
+            status,
+            data = new
+            {
+                mode = "executed",
+                findingId = execution.FindingId,
+                executionId = execution.Id,
+                executionStatus = execution.Status.ToString(),
+                tierUsed = execution.TierUsed,
+                stepsExecuted = execution.StepsExecuted,
+                changesApplied = execution.ChangesApplied,
+                dryRun = execution.DryRun,
+                duration = execution.Duration?.TotalSeconds,
+                error = execution.Error,
+                hasBackup = execution.BackupId != null
+            }
+        }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
     }
 }
 
@@ -473,7 +516,7 @@ public class ValidateRemediationTool : BaseTool
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
         ["finding_id"] = new() { Name = "finding_id", Description = "Finding ID to validate", Type = "string", Required = true },
-        ["execution_id"] = new() { Name = "execution_id", Description = "Execution ID to validate", Type = "string" },
+        ["execution_id"] = new() { Name = "execution_id", Description = "Execution ID to validate (use for typed validation with detailed checks)", Type = "string" },
         ["subscription_id"] = new() { Name = "subscription_id", Description = "Azure subscription", Type = "string" }
     };
 
@@ -484,6 +527,31 @@ public class ValidateRemediationTool : BaseTool
         var executionId = GetArg<string>(arguments, "execution_id");
         var subscriptionId = GetArg<string>(arguments, "subscription_id");
 
+        // When execution_id is provided, use the enhanced typed validation
+        if (!string.IsNullOrEmpty(executionId))
+        {
+            var result = await _remediationEngine.ValidateRemediationAsync(executionId, cancellationToken);
+            return JsonSerializer.Serialize(new
+            {
+                status = result.IsValid ? "success" : "error",
+                data = new
+                {
+                    executionId = result.ExecutionId,
+                    isValid = result.IsValid,
+                    failureReason = result.FailureReason,
+                    validatedAt = result.ValidatedAt,
+                    checks = result.Checks.Select(c => new
+                    {
+                        name = c.Name,
+                        passed = c.Passed,
+                        expected = c.ExpectedValue,
+                        actual = c.ActualValue
+                    })
+                }
+            }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        }
+
+        // Backward-compatible path
         return await _remediationEngine.ValidateRemediationAsync(findingId, executionId, subscriptionId, cancellationToken);
     }
 }
@@ -512,7 +580,11 @@ public class RemediationPlanTool : BaseTool
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
         ["subscription_id"] = new() { Name = "subscription_id", Description = "Azure subscription", Type = "string" },
-        ["resource_group_name"] = new() { Name = "resource_group_name", Description = "Resource group filter", Type = "string" }
+        ["resource_group_name"] = new() { Name = "resource_group_name", Description = "Resource group filter", Type = "string" },
+        ["include_families"] = new() { Name = "include_families", Description = "Comma-separated control families to include (e.g., AC,IA,SC)", Type = "string" },
+        ["exclude_families"] = new() { Name = "exclude_families", Description = "Comma-separated control families to exclude", Type = "string" },
+        ["automatable_only"] = new() { Name = "automatable_only", Description = "Only include auto-remediable findings", Type = "boolean" },
+        ["severity_filter"] = new() { Name = "severity_filter", Description = "Minimum severity to include (Critical, High, Medium, Low)", Type = "string" }
     };
 
     /// <inheritdoc />
@@ -520,15 +592,86 @@ public class RemediationPlanTool : BaseTool
     {
         var subscriptionId = GetArg<string>(arguments, "subscription_id");
         var resourceGroupName = GetArg<string>(arguments, "resource_group_name");
+        var includeFamilies = GetArg<string>(arguments, "include_families");
+        var excludeFamilies = GetArg<string>(arguments, "exclude_families");
+        var automatableOnly = GetArg<bool?>(arguments, "automatable_only") ?? false;
+        var severityFilter = GetArg<string>(arguments, "severity_filter");
 
-        var plan = await _remediationEngine.GeneratePlanAsync(subscriptionId ?? "", resourceGroupName, cancellationToken);
+        // Use enhanced overload when any filter option is provided
+        var optionsProvided =
+            !string.IsNullOrWhiteSpace(includeFamilies) ||
+            !string.IsNullOrWhiteSpace(excludeFamilies) ||
+            automatableOnly ||
+            !string.IsNullOrWhiteSpace(severityFilter);
 
-        return $"## Remediation Plan\n\n" +
-               $"**Total Findings**: {plan.TotalFindings}\n" +
-               $"**Auto-Remediable**: {plan.AutoRemediableCount}\n\n" +
-               $"### Steps\n\n" +
-               string.Join("\n", plan.Steps.Select((s, i) =>
-                   $"{i + 1}. [{s.ControlId}] {s.Description} (Priority: {s.Priority}, Effort: {s.Effort})"));
+        static List<string>? SplitFamilies(string? csv) =>
+            string.IsNullOrWhiteSpace(csv)
+                ? null
+                : csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+        var plan = optionsProvided
+            ? await _remediationEngine.GenerateRemediationPlanAsync(
+                subscriptionId ?? "",
+                new RemediationPlanOptions
+                {
+                    IncludeFamilies = SplitFamilies(includeFamilies),
+                    ExcludeFamilies = SplitFamilies(excludeFamilies),
+                    AutomatableOnly = automatableOnly,
+                    MinSeverity = severityFilter
+                },
+                cancellationToken)
+            : await _remediationEngine.GeneratePlanAsync(subscriptionId ?? "", resourceGroupName, cancellationToken);
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"## Remediation Plan\n");
+        sb.AppendLine($"**Total Findings**: {plan.TotalFindings}");
+        sb.AppendLine($"**Auto-Remediable**: {plan.AutoRemediableCount}");
+
+        // Show enhanced details if available
+        if (plan.ExecutiveSummary != null)
+        {
+            sb.AppendLine($"\n### Executive Summary");
+            sb.AppendLine($"- **Critical**: {plan.ExecutiveSummary.CriticalCount}");
+            sb.AppendLine($"- **High**: {plan.ExecutiveSummary.HighCount}");
+            sb.AppendLine($"- **Medium**: {plan.ExecutiveSummary.MediumCount}");
+            sb.AppendLine($"- **Low**: {plan.ExecutiveSummary.LowCount}");
+        }
+
+        if (plan.RiskMetrics != null)
+        {
+            sb.AppendLine($"\n### Risk Metrics");
+            sb.AppendLine($"- **Current Risk Score**: {plan.RiskMetrics.CurrentRiskScore:F1}");
+            sb.AppendLine($"- **Projected Risk Score**: {plan.RiskMetrics.ProjectedRiskScore:F1}");
+            sb.AppendLine($"- **Risk Reduction**: {plan.RiskMetrics.RiskReductionPercentage:F1}%");
+        }
+
+        // Use Items (enhanced) if available, fall back to Steps
+        var items = plan.Items?.Count > 0 ? plan.Items : null;
+        if (items != null)
+        {
+            sb.AppendLine($"\n### Prioritized Items ({items.Count})");
+            foreach (var (item, idx) in items.Select((item, i) => (item, i)))
+            {
+                sb.AppendLine($"{idx + 1}. [{item.Finding.ControlId}] {item.Finding.Title} (Priority: {item.Priority}, Auto: {item.IsAutoRemediable})");
+            }
+        }
+        else
+        {
+            sb.AppendLine($"\n### Steps");
+            sb.AppendLine(string.Join("\n", plan.Steps.Select((s, i) =>
+                $"{i + 1}. [{s.ControlId}] {s.Description} (Priority: {s.Priority}, Effort: {s.Effort})")));
+        }
+
+        if (plan.Timeline != null)
+        {
+            sb.AppendLine($"\n### Timeline");
+            foreach (var phase in plan.Timeline.Phases)
+            {
+                sb.AppendLine($"- **{phase.Name}**: {phase.Items.Count} items ({phase.EstimatedDuration.TotalHours:F0}h)");
+            }
+        }
+
+        return sb.ToString();
     }
 }
 
