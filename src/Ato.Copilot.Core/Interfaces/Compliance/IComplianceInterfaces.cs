@@ -61,24 +61,83 @@ public interface IRemediationEngine
 }
 
 /// <summary>
-/// NIST 800-53 controls catalog service
+/// NIST 800-53 Rev 5 controls catalog service.
+/// Provides access to the full OSCAL catalog with caching, resilience,
+/// and offline fallback capabilities.
 /// </summary>
 public interface INistControlsService
 {
+    /// <summary>
+    /// Returns the full NIST catalog from cache, fetching on cache miss.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The catalog, or null if unavailable.</returns>
+    Task<NistCatalog?> GetCatalogAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Looks up a single control by ID (case-insensitive).
+    /// Supports base controls ("AC-2") and enhancements ("AC-2(1)", "ac-2.1").
+    /// </summary>
+    /// <param name="controlId">The control identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The matching control, or null if not found.</returns>
     Task<NistControl?> GetControlAsync(
         string controlId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Returns all controls in a given family (case-insensitive prefix match).
+    /// </summary>
+    /// <param name="familyId">The 2-letter family prefix (e.g., "AC", "SC").</param>
+    /// <param name="includeControls">If false, returns summary-only (no nested enhancements).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of controls in the family, or empty list.</returns>
     Task<List<NistControl>> GetControlFamilyAsync(
         string familyId,
         bool includeControls = true,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Full-text search across control IDs, titles, and statement/guidance prose.
+    /// </summary>
+    /// <param name="query">Search query string.</param>
+    /// <param name="controlFamily">Optional family filter.</param>
+    /// <param name="impactLevel">Optional impact level filter.</param>
+    /// <param name="maxResults">Maximum results to return (default: 10).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Matching controls, or empty list.</returns>
     Task<List<NistControl>> SearchControlsAsync(
         string query,
         string? controlFamily = null,
         string? impactLevel = null,
         int maxResults = 10,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the catalog version string from metadata.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Version string (e.g., "5.2.0"), or "Unknown" if unavailable.</returns>
+    Task<string> GetVersionAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Extracts the statement, guidance, and assessment objectives for a control.
+    /// </summary>
+    /// <param name="controlId">The control identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Enriched enhancement view, or null if control not found.</returns>
+    Task<ControlEnhancement?> GetControlEnhancementAsync(
+        string controlId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Validates whether a control ID exists in the loaded catalog.
+    /// </summary>
+    /// <param name="controlId">The control identifier to validate.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if the control exists, false otherwise.</returns>
+    Task<bool> ValidateControlIdAsync(
+        string controlId,
         CancellationToken cancellationToken = default);
 }
 

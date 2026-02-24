@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Ato.Copilot.Agents.Compliance.Configuration;
 
 /// <summary>
@@ -47,15 +49,42 @@ public class EvidenceOptions
     public bool EnableImmutability { get; set; } = true;
 }
 
+/// <summary>
+/// Configuration options for the NIST Controls service.
+/// Bound from <c>Agents:Compliance:NistControls</c> config section via <c>IOptions&lt;NistControlsOptions&gt;</c>.
+/// </summary>
 public class NistControlsOptions
 {
-    public string BaseUrl { get; set; } = "https://raw.githubusercontent.com/usnistgov/oscal-content/main/nist.gov/SP800-53/rev5/json";
+    /// <summary>OSCAL catalog remote URL.</summary>
+    [Required]
+    public string BaseUrl { get; set; } = "https://raw.githubusercontent.com/usnistgov/oscal-content/main/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json";
+
+    /// <summary>HTTP request timeout in seconds.</summary>
+    [Range(10, 300)]
     public int TimeoutSeconds { get; set; } = 60;
+
+    /// <summary>Cache TTL in hours.</summary>
+    [Range(1, 168)]
     public int CacheDurationHours { get; set; } = 24;
+
+    /// <summary>Polly retry limit.</summary>
+    [Range(1, 5)]
     public int MaxRetryAttempts { get; set; } = 3;
+
+    /// <summary>Polly base delay in seconds for exponential backoff.</summary>
+    [Range(1, 60)]
     public int RetryDelaySeconds { get; set; } = 2;
+
+    /// <summary>
+    /// Controls whether the embedded OSCAL resource is used as fallback when the remote fetch fails.
+    /// When false, the service returns null on remote failure (useful for testing remote-only scenarios).
+    /// The embedded resource is always compiled into the assembly regardless of this setting.
+    /// </summary>
     public bool EnableOfflineFallback { get; set; } = true;
-    public string OfflineFallbackPath { get; set; } = "Data/nist-800-53-fallback.json";
+
+    /// <summary>Initial warmup delay in seconds after application startup.</summary>
+    [Range(5, 60)]
+    public int WarmupDelaySeconds { get; set; } = 10;
 }
 
 public class AssessmentPurgeOptions
