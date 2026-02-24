@@ -38,6 +38,12 @@ docker-compose.override.yml
 *.nupkg
 nuget.config
 
+# Node.js / React
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
 # Test results
 TestResults/
 coverage/

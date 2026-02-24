@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\src\Ato.Copilot.Agents\Ato.Copilot.Agents.csproj" />
     <ProjectReference Include="..\..\src\Ato.Copilot.Core\Ato.Copilot.Core.csproj" />
     <ProjectReference Include="..\..\src\Ato.Copilot.State\Ato.Copilot.State.csproj" />
+    <ProjectReference Include="..\..\src\Ato.Copilot.Chat\Ato.Copilot.Chat.csproj" />
   </ItemGroup>
 
 </Project>

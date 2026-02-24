@@ -1,0 +1,214 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Serilog;
+using Serilog.Events;
+using Serilog.Sinks.ApplicationInsights.TelemetryConverters;
+using System.Text.Json;
+using Ato.Copilot.Chat.Data;
+using Ato.Copilot.Chat.Hubs;
+using Ato.Copilot.Chat.Services;
+
+// ────────────────────────────────────────────────────────────────
+//  ATO Copilot — Chat Application
+//  Full-stack SPA + REST API + SignalR hub
+// ────────────────────────────────────────────────────────────────
+
+var logConfig = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+    .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+    .MinimumLevel.Override("System", LogEventLevel.Warning)
+    .Enrich.FromLogContext()
+    .Enrich.WithProperty("Application", "ATO Copilot Chat")
+    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .WriteTo.File(
+        path: "logs/ato-copilot-chat-.log",
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 14,
+        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}");
+
+// Conditionally add Application Insights sink when connection string is available
+var appInsightsConnectionString = Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING");
+if (!string.IsNullOrEmpty(appInsightsConnectionString))
+{
+    logConfig = logConfig.WriteTo.ApplicationInsights(appInsightsConnectionString, TelemetryConverter.Traces);
+}
+
+Log.Logger = logConfig.CreateLogger();
+
+try
+{
+    Log.Information("ATO Copilot Chat starting");
+
+    var builder = WebApplication.CreateBuilder(args);
+    builder.Host.UseSerilog();
+
+    // ─── Configuration ───────────────────────────────────────────────
+
+    builder.Configuration
+        .AddJsonFile("appsettings.json", optional: true)
+        .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
+        .AddEnvironmentVariables("ATO_");
+
+    // ─── Database ────────────────────────────────────────────────────
+
+    var connectionString = builder.Configuration.GetConnectionString("ChatDb")
+                           ?? "Data Source=chat.db";
+
+    builder.Services.AddDbContext<ChatDbContext>(options =>
+    {
+        if (connectionString.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase))
+            options.UseSqlite(connectionString, sqliteOptions => sqliteOptions.CommandTimeout(30));
+        else
+            options.UseSqlServer(connectionString, sqlOptions =>
+            {
+                sqlOptions.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: null);
+                sqlOptions.CommandTimeout(30);
+            });
+    });
+
+    // ─── Services ────────────────────────────────────────────────────
+
+    builder.Services.AddScoped<IChatService, ChatService>();
+    builder.Services.AddHttpClient("McpServer", client =>
+    {
+        var mcpBaseUrl = builder.Configuration.GetValue<string>("McpServer:BaseUrl") ?? "http://localhost:3001";
+        client.BaseAddress = new Uri(mcpBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(180);
+    });
+    builder.Services.AddControllers()
+        .AddJsonOptions(options =>
+        {
+            options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+            options.JsonSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+        });
+    builder.Services.AddSignalR()
+        .AddJsonProtocol(options =>
+        {
+            options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        });
+    builder.Services.AddHealthChecks();
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("AllowAll", policy =>
+        {
+            var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+                          ?? new[] { "http://localhost:3000", "http://localhost:5173" };
+            policy.WithOrigins(origins)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+        });
+    });
+
+    var app = builder.Build();
+
+    // ─── Database Initialization ─────────────────────────────────────
+
+    using (var scope = app.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<ChatDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<ChatDbContext>>();
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            logger.LogInformation("Ensuring chat database is created...");
+            await db.Database.EnsureCreatedAsync(cts.Token);
+            logger.LogInformation("Chat database ready");
+        }
+        catch (Exception ex)
+        {
+            logger.LogCritical(ex, "Chat database initialization failed — shutting down");
+            Environment.ExitCode = 1;
+            throw;
+        }
+    }
+
+    // ─── Middleware Pipeline ─────────────────────────────────────────
+    // Order per research.md Topic 4: Middleware Pipeline Order
+
+    app.UseSerilogRequestLogging();
+
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseDeveloperExceptionPage();
+    }
+
+    app.UseHttpsRedirection();
+    app.UseStaticFiles();
+    app.UseRouting();
+    app.UseCors("AllowAll");
+
+    // ─── Endpoints ───────────────────────────────────────────────────
+
+    app.MapControllers();
+    app.MapHub<ChatHub>("/hubs/chat");
+    app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+    {
+        ResponseWriter = WriteHealthCheckResponseAsync
+    });
+
+    app.MapGet("/", () => Results.Json(new
+    {
+        service = "ATO Copilot Chat",
+        version = "1.0.0",
+        endpoints = new
+        {
+            conversations = "GET /api/conversations",
+            messages = "GET /api/messages",
+            hub = "ws /hubs/chat",
+            health = "GET /health"
+        }
+    }));
+
+    // SPA fallback — MUST be last
+    app.MapFallbackToFile("index.html");
+
+    var port = builder.Configuration.GetValue("Server:Port", 5001);
+    var urls = builder.Configuration.GetValue("Server:Urls", $"http://0.0.0.0:{port}");
+    app.Urls.Add(urls!);
+
+    Log.Information("ATO Copilot Chat listening on {Urls}", urls);
+
+    await app.RunAsync();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "ATO Copilot Chat terminated unexpectedly");
+    Environment.ExitCode = 1;
+}
+finally
+{
+    Log.CloseAndFlush();
+}
+
+// ────────────────────────────────────────────────────────────────
+//  Health Check Response Writer
+// ────────────────────────────────────────────────────────────────
+async Task WriteHealthCheckResponseAsync(HttpContext context, HealthReport report)
+{
+    context.Response.ContentType = "application/json; charset=utf-8";
+
+    var response = new
+    {
+        status = report.Status.ToString(),
+        totalDurationMs = report.TotalDuration.TotalMilliseconds,
+        entries = report.Entries.Select(e => new
+        {
+            name = e.Key,
+            status = e.Value.Status.ToString(),
+            description = e.Value.Description ?? string.Empty
+        })
+    };
+
+    var json = JsonSerializer.Serialize(response, new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = true
+    });
+
+    await context.Response.WriteAsync(json);
+}
+
+// Make Program class accessible for WebApplicationFactory in integration tests
+public partial class Program { }

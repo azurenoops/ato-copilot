@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ────────────────────────────────────────────────────────────────
+   ATO Copilot Chat — Custom Styles (T045)
+   ──────────────────────────────────────────────────────────────── */
+
+/* ─── Animations ──────────────────────────────────────────────── */
+
+/* Typing indicator pulse */
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Message fade-in */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* Sidebar slide transition handled via Tailwind transition-all */
+
+/* ─── Scrollbar Styles ────────────────────────────────────────── */
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+
+/* ─── Prose Overrides ─────────────────────────────────────────── */
+
+.prose code {
+  @apply text-sm bg-gray-100 px-1 py-0.5 rounded;
+}
+
+.prose pre {
+  @apply bg-transparent p-0 m-0;
+}
+
+.prose pre code {
+  @apply bg-transparent p-0;
+}
+
+/* ─── Button Focus Styles ─────────────────────────────────────── */
+
+button:focus-visible {
+  @apply outline-none ring-2 ring-blue-500 ring-offset-2;
+}
+
+textarea:focus-visible {
+  @apply outline-none ring-2 ring-blue-500;
+}
+
+/* ─── Modal Backdrop ──────────────────────────────────────────── */
+
+@keyframes backdrop-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.fixed.inset-0.bg-black {
+  animation: backdrop-fade 0.2s ease-out;
+}
