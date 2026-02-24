@@ -1,36 +1,47 @@
+using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Ato.Copilot.Core.Constants;
+using Microsoft.Extensions.Options;
+using Ato.Copilot.Agents.Compliance.Configuration;
+using Ato.Copilot.Agents.Compliance.Models;
+using Ato.Copilot.Agents.Observability;
 using Ato.Copilot.Core.Interfaces.Compliance;
 using Ato.Copilot.Core.Models.Compliance;
 
 namespace Ato.Copilot.Agents.Compliance.Services;
 
 /// <summary>
-/// NIST 800-53 Rev 5 controls catalog service with dual-source loading:
-/// 1. Online fetch from usnistgov/oscal-content GitHub repo (when NistCatalog:PreferOnline is true)
-/// 2. Local file cache with configurable max age
-/// 3. Embedded resource fallback for air-gapped/offline environments
+/// NIST 800-53 Rev 5 controls catalog service with IMemoryCache-backed loading:
+/// 1. Online fetch from usnistgov/oscal-content GitHub repo with Polly resilience
+/// 2. Embedded resource fallback for air-gapped/offline environments
+/// 3. IMemoryCache with configurable TTL and CacheItemPriority.High
 /// Tracks LastSyncedAt and CatalogSource for observability.
 /// </summary>
 public class NistControlsService : INistControlsService
 {
+    private const string CatalogCacheKey = "NistControls:Catalog";
+    private const string ControlsCacheKey = "NistControls:Controls";
+    private const string EmbeddedResourceName = "Ato.Copilot.Agents.Compliance.Resources.NIST_SP-800-53_rev5_catalog.json";
+
+    private static readonly ActivitySource ActivitySource = new("Ato.Copilot.NistControls");
+
     private readonly ILogger<NistControlsService> _logger;
-    private readonly IConfiguration _configuration;
+    private readonly IMemoryCache _cache;
+    private readonly NistControlsOptions _options;
     private readonly HttpClient _httpClient;
+    private readonly IConfiguration _configuration;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
 
-    private List<NistControl> _controls = new();
-    private bool _loaded;
     private DateTime? _lastSyncedAt;
     private string _catalogSource = "none";
 
     /// <summary>UTC timestamp of the last successful catalog load.</summary>
     public DateTime? LastSyncedAt => _lastSyncedAt;
 
-    /// <summary>Source of the currently loaded catalog: "online", "cache", "embedded", or "none".</summary>
+    /// <summary>Source of the currently loaded catalog: "online", "embedded", or "none".</summary>
     public string CatalogSource => _catalogSource;
 
     /// <summary>
@@ -38,19 +49,91 @@ public class NistControlsService : INistControlsService
     /// </summary>
     public NistControlsService(
         ILogger<NistControlsService> logger,
-        IConfiguration configuration,
-        HttpClient httpClient)
+        IMemoryCache cache,
+        IOptions<NistControlsOptions> options,
+        HttpClient httpClient,
+        IConfiguration configuration)
     {
         _logger = logger;
-        _configuration = configuration;
+        _cache = cache;
+        _options = options.Value;
         _httpClient = httpClient;
+        _configuration = configuration;
+    }
+
+    /// <summary>
+    /// Backward-compatible constructor for existing consumers and tests.
+    /// </summary>
+    public NistControlsService(
+        ILogger<NistControlsService> logger,
+        IConfiguration configuration,
+        HttpClient httpClient)
+        : this(
+            logger,
+            new MemoryCache(new MemoryCacheOptions()),
+            Options.Create(new NistControlsOptions()),
+            httpClient,
+            configuration)
+    {
+    }
+
+    // ─── Interface Methods ───────────────────────────────────────────────────
+
+    /// <inheritdoc />
+    public async Task<NistCatalog?> GetCatalogAsync(CancellationToken cancellationToken = default)
+    {
+        using var activity = ActivitySource.StartActivity("GetCatalog");
+        var sw = Stopwatch.StartNew();
+
+        try
+        {
+            if (_cache.TryGetValue(CatalogCacheKey, out NistCatalog? cached) && cached is not null)
+            {
+                activity?.SetTag("cache.hit", true);
+                activity?.SetTag("control.count", cached.Groups.Sum(g => g.Controls.Count));
+                ComplianceMetricsService.RecordApiCall("GetCatalog", success: true);
+                sw.Stop();
+                ComplianceMetricsService.RecordDuration("GetCatalog", sw.Elapsed.TotalSeconds);
+                return cached;
+            }
+
+            activity?.SetTag("cache.hit", false);
+            var catalog = await LoadAndCacheCatalogAsync(cancellationToken);
+
+            activity?.SetTag("success", catalog is not null);
+            activity?.SetTag("fallback.used", _catalogSource == "embedded");
+            if (catalog is not null)
+                activity?.SetTag("control.count", catalog.Groups.Sum(g => g.Controls.Count));
+
+            ComplianceMetricsService.RecordApiCall("GetCatalog", success: catalog is not null);
+            sw.Stop();
+            ComplianceMetricsService.RecordDuration("GetCatalog", sw.Elapsed.TotalSeconds);
+
+            return catalog;
+        }
+        catch (Exception ex)
+        {
+            activity?.SetTag("error", ex.Message);
+            activity?.SetTag("success", false);
+            ComplianceMetricsService.RecordApiCall("GetCatalog", success: false);
+            sw.Stop();
+            ComplianceMetricsService.RecordDuration("GetCatalog", sw.Elapsed.TotalSeconds);
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<string> GetVersionAsync(CancellationToken cancellationToken = default)
+    {
+        var catalog = await GetCatalogAsync(cancellationToken);
+        return catalog?.Metadata.Version ?? "Unknown";
     }
 
     /// <inheritdoc />
     public async Task<NistControl?> GetControlAsync(string controlId, CancellationToken cancellationToken = default)
     {
-        await EnsureLoadedAsync(cancellationToken);
-        return _controls.FirstOrDefault(c =>
+        var controls = await GetControlsAsync(cancellationToken);
+        return controls.FirstOrDefault(c =>
             string.Equals(c.Id, controlId, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -60,18 +143,17 @@ public class NistControlsService : INistControlsService
         bool includeControls = true,
         CancellationToken cancellationToken = default)
     {
-        await EnsureLoadedAsync(cancellationToken);
+        var controls = await GetControlsAsync(cancellationToken);
 
         var familyUpper = familyId.ToUpperInvariant();
-        var controls = _controls
+        var familyControls = controls
             .Where(c => string.Equals(c.Family, familyUpper, StringComparison.OrdinalIgnoreCase)
                         && !c.IsEnhancement)
             .ToList();
 
         if (!includeControls)
         {
-            // Return summary — just family info without nested enhancements
-            return controls.Select(c => new NistControl
+            return familyControls.Select(c => new NistControl
             {
                 Id = c.Id,
                 Family = c.Family,
@@ -82,7 +164,7 @@ public class NistControlsService : INistControlsService
             }).ToList();
         }
 
-        return controls;
+        return familyControls;
     }
 
     /// <inheritdoc />
@@ -93,11 +175,11 @@ public class NistControlsService : INistControlsService
         int maxResults = 10,
         CancellationToken cancellationToken = default)
     {
-        await EnsureLoadedAsync(cancellationToken);
+        var controls = await GetControlsAsync(cancellationToken);
 
         var queryLower = query.ToLowerInvariant();
 
-        var results = _controls.AsEnumerable();
+        var results = controls.AsEnumerable();
 
         if (!string.IsNullOrEmpty(controlFamily))
             results = results.Where(c =>
@@ -115,64 +197,119 @@ public class NistControlsService : INistControlsService
         return results.Take(maxResults).ToList();
     }
 
+    /// <inheritdoc />
+    public async Task<ControlEnhancement?> GetControlEnhancementAsync(string controlId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(controlId);
+
+        var catalog = await GetCatalogAsync(cancellationToken);
+        if (catalog is null) return null;
+
+        var oscalControl = FindOscalControl(catalog, controlId);
+        if (oscalControl is null) return null;
+
+        var statement = ExtractPartProse(oscalControl.Parts, "statement");
+        var guidance = ExtractPartProse(oscalControl.Parts, "guidance");
+        var objectives = ExtractObjectives(oscalControl.Parts);
+
+        return new ControlEnhancement(
+            Id: oscalControl.Id.ToUpperInvariant(),
+            Title: oscalControl.Title,
+            Statement: statement,
+            Guidance: guidance,
+            Objectives: objectives,
+            LastUpdated: DateTime.UtcNow);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> ValidateControlIdAsync(string controlId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(controlId);
+
+        var catalog = await GetCatalogAsync(cancellationToken);
+        if (catalog is null) return false;
+
+        return FindOscalControl(catalog, controlId) is not null;
+    }
+
     /// <summary>
     /// Returns the status of the catalog including source, sync time, and control count.
     /// </summary>
     public async Task<CatalogStatus> GetCatalogStatusAsync(CancellationToken cancellationToken = default)
     {
-        await EnsureLoadedAsync(cancellationToken);
+        var controls = await GetControlsAsync(cancellationToken);
 
         return new CatalogStatus
         {
             Source = _catalogSource,
             LastSyncedAt = _lastSyncedAt,
-            TotalControls = _controls.Count,
-            Families = _controls.Select(c => c.Family).Distinct().Count(),
-            IsLoaded = _loaded
+            TotalControls = controls.Count,
+            Families = controls.Select(c => c.Family).Distinct().Count(),
+            IsLoaded = _cache.TryGetValue(CatalogCacheKey, out _)
         };
     }
 
-    /// <summary>
-    /// Ensures the catalog is loaded, using the dual-source strategy:
-    /// online → cache → embedded resource.
-    /// </summary>
-    private async Task EnsureLoadedAsync(CancellationToken cancellationToken)
-    {
-        if (_loaded) return;
+    // ─── Cache Loading ───────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Gets the backward-compatible NistControl list from cache, loading if needed.
+    /// </summary>
+    private async Task<List<NistControl>> GetControlsAsync(CancellationToken cancellationToken)
+    {
+        if (_cache.TryGetValue(ControlsCacheKey, out List<NistControl>? controls) && controls is not null)
+            return controls;
+
+        // Ensure catalog is loaded first
+        await LoadAndCacheCatalogAsync(cancellationToken);
+
+        if (_cache.TryGetValue(ControlsCacheKey, out controls) && controls is not null)
+            return controls;
+
+        return new List<NistControl>();
+    }
+
+    /// <summary>
+    /// Loads the catalog using a SemaphoreSlim to prevent concurrent loads,
+    /// then caches both the typed catalog and backward-compatible control list.
+    /// </summary>
+    private async Task<NistCatalog?> LoadAndCacheCatalogAsync(CancellationToken cancellationToken)
+    {
         await _loadLock.WaitAsync(cancellationToken);
         try
         {
-            if (_loaded) return; // double-check after acquiring lock
+            // Double-check after acquiring lock
+            if (_cache.TryGetValue(CatalogCacheKey, out NistCatalog? cached))
+                return cached;
 
-            var preferOnline = _configuration.GetValue("NistCatalog:PreferOnline", true);
-            var cachePathConfig = _configuration.GetValue<string>("NistCatalog:CachePath")
-                                  ?? "data/nist-catalog-cache.json";
-            var cacheMaxAgeDays = _configuration.GetValue("NistCatalog:CacheMaxAgeDays", 30);
-            var timeoutSeconds = _configuration.GetValue("NistCatalog:FetchTimeoutSeconds", 15);
-            var onlineUrl = _configuration.GetValue<string>("NistCatalog:OnlineUrl")
-                            ?? "https://raw.githubusercontent.com/usnistgov/oscal-content/main/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json";
+            var catalog = await LoadCatalogFromSourcesAsync(cancellationToken);
+            if (catalog is null) return null;
 
-            // Try cache first if it exists and is not expired
-            if (await TryLoadFromCacheAsync(cachePathConfig, cacheMaxAgeDays, cancellationToken))
+            // Cache with configured TTL and high priority
+            var absoluteExpiration = TimeSpan.FromHours(_options.CacheDurationHours);
+            var slidingExpiration = TimeSpan.FromHours(_options.CacheDurationHours * 0.25);
+
+            var cacheOptions = new MemoryCacheEntryOptions
             {
-                _logger.LogInformation("NIST catalog loaded from cache ({Count} controls)", _controls.Count);
-                return;
-            }
+                AbsoluteExpirationRelativeToNow = absoluteExpiration,
+                SlidingExpiration = slidingExpiration,
+                Priority = CacheItemPriority.High
+            };
 
-            // Try online fetch
-            if (preferOnline)
-            {
-                if (await TryLoadFromOnlineAsync(onlineUrl, timeoutSeconds, cachePathConfig, cancellationToken))
-                {
-                    _logger.LogInformation("NIST catalog loaded from online ({Count} controls)", _controls.Count);
-                    return;
-                }
-            }
+            _cache.Set(CatalogCacheKey, catalog, cacheOptions);
 
-            // Fallback to embedded resource
-            await LoadFromEmbeddedResourceAsync(cancellationToken);
-            _logger.LogInformation("NIST catalog loaded from embedded resource ({Count} controls)", _controls.Count);
+            // Also cache backward-compatible NistControl list
+            var controls = BuildNistControlList(catalog);
+            _cache.Set(ControlsCacheKey, controls, cacheOptions);
+
+            _logger.LogInformation(
+                "NIST catalog cached: version {Version}, {GroupCount} groups, {ControlCount} controls, source={Source}, TTL={Hours}h",
+                catalog.Metadata.Version,
+                catalog.Groups.Count,
+                controls.Count,
+                _catalogSource,
+                _options.CacheDurationHours);
+
+            return catalog;
         }
         finally
         {
@@ -180,282 +317,266 @@ public class NistControlsService : INistControlsService
         }
     }
 
-    /// <summary>Try loading from local file cache.</summary>
-    private async Task<bool> TryLoadFromCacheAsync(string cachePath, int maxAgeDays, CancellationToken ct)
+    /// <summary>Loads catalog from remote URL then falls back to embedded resource.</summary>
+    private async Task<NistCatalog?> LoadCatalogFromSourcesAsync(CancellationToken cancellationToken)
     {
-        try
+        // Try online fetch first
+        var catalog = await TryLoadFromOnlineAsync(cancellationToken);
+        if (catalog is not null) return catalog;
+
+        // Fallback to embedded resource
+        if (_options.EnableOfflineFallback)
         {
-            if (!File.Exists(cachePath)) return false;
-
-            var fileInfo = new FileInfo(cachePath);
-            if (fileInfo.LastWriteTimeUtc < DateTime.UtcNow.AddDays(-maxAgeDays))
-            {
-                _logger.LogInformation("NIST catalog cache expired (>{MaxAge} days old)", maxAgeDays);
-                return false;
-            }
-
-            var json = await File.ReadAllTextAsync(cachePath, ct);
-            var controls = ParseOscalCatalog(json);
-            if (controls.Count == 0) return false;
-
-            _controls = controls;
-            _loaded = true;
-            _lastSyncedAt = fileInfo.LastWriteTimeUtc;
-            _catalogSource = "cache";
-            return true;
+            catalog = await LoadFromEmbeddedResourceAsync(cancellationToken);
+            if (catalog is not null) return catalog;
         }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to load NIST catalog from cache");
-            return false;
-        }
+
+        _logger.LogError("All NIST catalog sources failed. No catalog available");
+        return null;
     }
 
-    /// <summary>Try fetching catalog from online (GitHub) with configured timeout.</summary>
-    private async Task<bool> TryLoadFromOnlineAsync(
-        string url, int timeoutSeconds, string cachePath, CancellationToken ct)
+    /// <summary>Try fetching catalog from remote URL with typed deserialization.</summary>
+    private async Task<NistCatalog?> TryLoadFromOnlineAsync(CancellationToken ct)
     {
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+            cts.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
 
-            _logger.LogInformation("Fetching NIST catalog from {Url}", url);
-            var json = await _httpClient.GetStringAsync(url, cts.Token);
+            _logger.LogInformation("Fetching NIST catalog from {Url}", _options.BaseUrl);
+            using var stream = await _httpClient.GetStreamAsync(_options.BaseUrl, cts.Token);
+            var root = await JsonSerializer.DeserializeAsync<NistCatalogRoot>(stream, cancellationToken: cts.Token);
 
-            var controls = ParseOscalCatalog(json);
-            if (controls.Count == 0) return false;
+            if (root?.Catalog is null)
+            {
+                _logger.LogWarning("Online NIST catalog deserialized as null");
+                return null;
+            }
 
-            _controls = controls;
-            _loaded = true;
             _lastSyncedAt = DateTime.UtcNow;
             _catalogSource = "online";
 
-            // Save to cache
-            try
-            {
-                var dir = Path.GetDirectoryName(cachePath);
-                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                    Directory.CreateDirectory(dir);
-                await File.WriteAllTextAsync(cachePath, json, ct);
-                _logger.LogDebug("NIST catalog cached to {CachePath}", cachePath);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to cache NIST catalog to {CachePath}", cachePath);
-            }
-
-            return true;
+            _logger.LogInformation("NIST catalog loaded from online ({GroupCount} groups)", root.Catalog.Groups.Count);
+            return root.Catalog;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            _logger.LogWarning("NIST catalog online fetch timed out after {Timeout}s", timeoutSeconds);
-            return false;
+            _logger.LogWarning("NIST catalog online fetch timed out after {Timeout}s", _options.TimeoutSeconds);
+            return null;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to fetch NIST catalog from online");
-            return false;
+            return null;
         }
     }
 
     /// <summary>Load from embedded OSCAL catalog resource (air-gapped fallback).</summary>
-    private async Task LoadFromEmbeddedResourceAsync(CancellationToken ct)
-    {
-        var assembly = Assembly.GetExecutingAssembly();
-        var resourceName = "Ato.Copilot.Agents.Compliance.Resources.NIST_SP-800-53_rev5_catalog.json";
-
-        using var stream = assembly.GetManifestResourceStream(resourceName);
-        if (stream == null)
-        {
-            _logger.LogError("Embedded NIST catalog resource not found: {Resource}", resourceName);
-            _controls = new List<NistControl>();
-            _loaded = true;
-            _catalogSource = "embedded-missing";
-            return;
-        }
-
-        using var reader = new StreamReader(stream);
-        var json = await reader.ReadToEndAsync(ct);
-
-        _controls = ParseOscalCatalog(json);
-        _loaded = true;
-        _lastSyncedAt = DateTime.UtcNow;
-        _catalogSource = "embedded";
-    }
-
-    /// <summary>
-    /// Parse NIST OSCAL JSON catalog into NistControl objects.
-    /// The OSCAL catalog has structure: catalog → groups[] → controls[] → controls[] (enhancements).
-    /// </summary>
-    private List<NistControl> ParseOscalCatalog(string json)
-    {
-        var controls = new List<NistControl>();
-
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-
-            // OSCAL structure: { "catalog": { "groups": [ ... ] } }
-            if (!root.TryGetProperty("catalog", out var catalog))
-            {
-                _logger.LogWarning("OSCAL catalog root element 'catalog' not found");
-                return controls;
-            }
-
-            if (!catalog.TryGetProperty("groups", out var groups))
-            {
-                _logger.LogWarning("OSCAL catalog 'groups' not found");
-                return controls;
-            }
-
-            foreach (var group in groups.EnumerateArray())
-            {
-                var familyId = group.TryGetProperty("id", out var gid) ? gid.GetString() ?? "" : "";
-                var familyUpper = familyId.ToUpperInvariant();
-
-                if (!group.TryGetProperty("controls", out var groupControls))
-                    continue;
-
-                foreach (var control in groupControls.EnumerateArray())
-                {
-                    var parsed = ParseControl(control, familyUpper, isEnhancement: false, parentId: null);
-                    if (parsed != null)
-                    {
-                        controls.Add(parsed);
-
-                        // Parse enhancements (depth 1)
-                        if (control.TryGetProperty("controls", out var enhancements))
-                        {
-                            foreach (var enh in enhancements.EnumerateArray())
-                            {
-                                var enhControl = ParseControl(enh, familyUpper, isEnhancement: true, parentId: parsed.Id);
-                                if (enhControl != null)
-                                {
-                                    parsed.ControlEnhancements.Add(enhControl);
-                                    controls.Add(enhControl);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            _logger.LogDebug("Parsed {Count} controls from OSCAL catalog", controls.Count);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to parse OSCAL catalog JSON");
-        }
-
-        return controls;
-    }
-
-    /// <summary>Parse a single OSCAL control element into a NistControl.</summary>
-    private NistControl? ParseControl(JsonElement element, string family, bool isEnhancement, string? parentId)
+    private async Task<NistCatalog?> LoadFromEmbeddedResourceAsync(CancellationToken ct)
     {
         try
         {
-            var id = element.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? "" : "";
-            var title = element.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? "" : "";
-
-            // Extract description from parts
-            var description = ExtractDescription(element);
-
-            var control = new NistControl
+            var assembly = Assembly.GetExecutingAssembly();
+            using var stream = assembly.GetManifestResourceStream(EmbeddedResourceName);
+            if (stream is null)
             {
-                Id = id,
-                Family = family,
-                Title = title,
-                Description = description,
-                IsEnhancement = isEnhancement,
-                ParentControlId = parentId,
-                // Baseline mapping will be derived from OSCAL props
-                Baselines = ExtractBaselines(element),
-                FedRampParameters = ExtractFedRampParams(element)
-            };
+                _logger.LogError("Embedded NIST catalog resource not found: {Resource}", EmbeddedResourceName);
+                return null;
+            }
 
-            return control;
+            var root = await JsonSerializer.DeserializeAsync<NistCatalogRoot>(stream, cancellationToken: ct);
+            if (root?.Catalog is null)
+            {
+                _logger.LogWarning("Embedded NIST catalog deserialized as null");
+                return null;
+            }
+
+            _lastSyncedAt = DateTime.UtcNow;
+            _catalogSource = "embedded";
+
+            _logger.LogInformation("NIST catalog loaded from embedded resource ({GroupCount} groups)", root.Catalog.Groups.Count);
+            return root.Catalog;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to parse control from OSCAL element");
+            _logger.LogError(ex, "Failed to load embedded NIST catalog");
             return null;
         }
     }
 
-    /// <summary>Extract description text from OSCAL control parts.</summary>
-    private static string ExtractDescription(JsonElement control)
+    // ─── Backward-Compatible NistControl Entity Building ─────────────────────
+
+    /// <summary>
+    /// Builds the backward-compatible <see cref="NistControl"/> EF entity list from the typed catalog.
+    /// </summary>
+    private List<NistControl> BuildNistControlList(NistCatalog catalog)
     {
-        if (!control.TryGetProperty("parts", out var parts))
-            return string.Empty;
+        var controls = new List<NistControl>();
 
-        foreach (var part in parts.EnumerateArray())
+        foreach (var group in catalog.Groups)
         {
-            var partName = part.TryGetProperty("name", out var nameProp) ? nameProp.GetString() : null;
-            if (partName == "statement" && part.TryGetProperty("prose", out var prose))
-                return prose.GetString() ?? string.Empty;
-        }
+            var familyUpper = group.Id.ToUpperInvariant();
 
-        // Try first part with prose
-        foreach (var part in parts.EnumerateArray())
-        {
-            if (part.TryGetProperty("prose", out var prose))
-                return prose.GetString() ?? string.Empty;
-        }
-
-        return string.Empty;
-    }
-
-    /// <summary>Extract applicable baselines from OSCAL props.</summary>
-    private static List<string> ExtractBaselines(JsonElement control)
-    {
-        var baselines = new List<string>();
-
-        if (!control.TryGetProperty("props", out var props))
-            return baselines;
-
-        foreach (var prop in props.EnumerateArray())
-        {
-            var name = prop.TryGetProperty("name", out var n) ? n.GetString() : null;
-            if (name == "label") continue;
-
-            // OSCAL uses class "sp800-53a" with properties indicating baseline inclusion
-            var cls = prop.TryGetProperty("class", out var c) ? c.GetString() : null;
-            if (cls?.Contains("baseline") == true || name?.Contains("baseline") == true)
+            foreach (var oscalControl in group.Controls)
             {
-                var value = prop.TryGetProperty("value", out var v) ? v.GetString() : null;
-                if (!string.IsNullOrEmpty(value) && !baselines.Contains(value))
-                    baselines.Add(value);
+                var parsed = ConvertToNistControl(oscalControl, familyUpper, isEnhancement: false, parentId: null);
+                controls.Add(parsed);
+
+                if (oscalControl.Controls is { Count: > 0 })
+                {
+                    foreach (var enhancement in oscalControl.Controls)
+                    {
+                        var enhParsed = ConvertToNistControl(enhancement, familyUpper, isEnhancement: true, parentId: parsed.Id);
+                        parsed.ControlEnhancements.Add(enhParsed);
+                        controls.Add(enhParsed);
+                    }
+                }
             }
         }
 
-        // Default to all baselines if none found (base controls are typically in all)
-        if (baselines.Count == 0)
+        _logger.LogDebug("Built {Count} NistControl entities from typed catalog", controls.Count);
+        return controls;
+    }
+
+    /// <summary>Convert a typed OscalControl to a backward-compatible NistControl EF entity.</summary>
+    private static NistControl ConvertToNistControl(OscalControl oscal, string family, bool isEnhancement, string? parentId)
+    {
+        var description = ExtractPartProse(oscal.Parts, "statement");
+
+        return new NistControl
         {
-            baselines.AddRange(new[] { "Low", "Moderate", "High" });
+            Id = oscal.Id,
+            Family = family,
+            Title = oscal.Title,
+            Description = description,
+            IsEnhancement = isEnhancement,
+            ParentControlId = parentId,
+            Baselines = ExtractBaselinesFromProps(oscal.Props),
+            FedRampParameters = ExtractFedRampParamsFromTyped(oscal.Params)
+        };
+    }
+
+    /// <summary>Extract baselines from typed ControlProperty props.</summary>
+    private static List<string> ExtractBaselinesFromProps(List<ControlProperty>? props)
+    {
+        var baselines = new List<string>();
+
+        if (props is null) return new List<string> { "Low", "Moderate", "High" };
+
+        foreach (var prop in props)
+        {
+            if (prop.Name == "label") continue;
+            if (prop.Class?.Contains("baseline") == true || prop.Name.Contains("baseline"))
+            {
+                if (!string.IsNullOrEmpty(prop.Value) && !baselines.Contains(prop.Value))
+                    baselines.Add(prop.Value);
+            }
         }
+
+        if (baselines.Count == 0)
+            baselines.AddRange(["Low", "Moderate", "High"]);
 
         return baselines;
     }
 
-    /// <summary>Extract FedRAMP parameter values from OSCAL params.</summary>
-    private static string? ExtractFedRampParams(JsonElement control)
+    /// <summary>Extract FedRAMP params from typed ControlParam list.</summary>
+    private static string? ExtractFedRampParamsFromTyped(List<ControlParam>? parameters)
     {
-        if (!control.TryGetProperty("params", out var parameters))
-            return null;
+        if (parameters is null or { Count: 0 }) return null;
 
-        var paramList = new List<string>();
-        foreach (var param in parameters.EnumerateArray())
-        {
-            var paramId = param.TryGetProperty("id", out var pid) ? pid.GetString() : "?";
-            var label = param.TryGetProperty("label", out var lbl) ? lbl.GetString() : null;
-            if (label != null)
-                paramList.Add($"{paramId}: {label}");
-        }
+        var paramList = parameters
+            .Where(p => p.Label is not null)
+            .Select(p => $"{p.Id}: {p.Label}")
+            .ToList();
 
         return paramList.Count > 0 ? string.Join("; ", paramList) : null;
+    }
+
+    // ─── OSCAL Typed Model Helpers ───────────────────────────────────────────
+
+    /// <summary>Find an OSCAL control by ID (case-insensitive) across all groups and nested enhancements.</summary>
+    private static OscalControl? FindOscalControl(NistCatalog catalog, string controlId)
+    {
+        foreach (var group in catalog.Groups)
+        {
+            foreach (var control in group.Controls)
+            {
+                if (string.Equals(control.Id, controlId, StringComparison.OrdinalIgnoreCase))
+                    return control;
+
+                if (control.Controls is { Count: > 0 })
+                {
+                    foreach (var enhancement in control.Controls)
+                    {
+                        if (string.Equals(enhancement.Id, controlId, StringComparison.OrdinalIgnoreCase))
+                            return enhancement;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Extract concatenated prose from parts matching the given name (e.g., "statement", "guidance").</summary>
+    private static string ExtractPartProse(List<ControlPart>? parts, string partName)
+    {
+        if (parts is null) return string.Empty;
+
+        var matchingPart = parts.FirstOrDefault(p =>
+            string.Equals(p.Name, partName, StringComparison.OrdinalIgnoreCase));
+
+        if (matchingPart is null) return string.Empty;
+
+        return CollectProse(matchingPart);
+    }
+
+    /// <summary>Recursively collect all prose text from a part and its sub-parts.</summary>
+    private static string CollectProse(ControlPart part)
+    {
+        var prose = part.Prose ?? string.Empty;
+
+        if (part.Parts is { Count: > 0 })
+        {
+            var subProse = string.Join(" ", part.Parts.Select(CollectProse).Where(p => !string.IsNullOrEmpty(p)));
+            if (!string.IsNullOrEmpty(subProse))
+            {
+                prose = string.IsNullOrEmpty(prose) ? subProse : $"{prose} {subProse}";
+            }
+        }
+
+        return prose;
+    }
+
+    /// <summary>Extract assessment objective prose strings from parts named "assessment-objective".</summary>
+    private static List<string> ExtractObjectives(List<ControlPart>? parts)
+    {
+        if (parts is null) return new List<string>();
+
+        var objectives = new List<string>();
+        var objPart = parts.FirstOrDefault(p =>
+            string.Equals(p.Name, "assessment-objective", StringComparison.OrdinalIgnoreCase));
+
+        if (objPart is null) return objectives;
+
+        CollectObjectiveProse(objPart, objectives);
+        return objectives;
+    }
+
+    /// <summary>Recursively collects all objective prose from nested parts.</summary>
+    private static void CollectObjectiveProse(ControlPart part, List<string> objectives)
+    {
+        if (!string.IsNullOrEmpty(part.Prose))
+        {
+            objectives.Add(part.Prose);
+        }
+
+        if (part.Parts is { Count: > 0 })
+        {
+            foreach (var subPart in part.Parts)
+            {
+                CollectObjectiveProse(subPart, objectives);
+            }
+        }
     }
 }
 

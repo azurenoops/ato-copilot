@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Http.Resilience;
 using Ato.Copilot.Agents.Common;
 using Ato.Copilot.Agents.Compliance.Agents;
 using Ato.Copilot.Agents.Compliance.Configuration;
@@ -15,6 +16,7 @@ using Ato.Copilot.Core.Data.Context;
 using Ato.Copilot.Core.Interfaces.Auth;
 using Ato.Copilot.Core.Interfaces.Compliance;
 using Ato.Copilot.Core.Interfaces.Kanban;
+using Polly;
 
 namespace Ato.Copilot.Agents.Extensions;
 
@@ -27,6 +29,15 @@ public static class ServiceCollectionExtensions
     {
         // Bind compliance agent options
         services.Configure<ComplianceAgentOptions>(configuration.GetSection("Agents:Compliance"));
+
+        // Bind NIST Controls options with validation
+        services.AddOptions<NistControlsOptions>()
+            .Bind(configuration.GetSection("Agents:Compliance:NistControls"))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // Add in-memory cache for NIST catalog caching
+        services.AddMemoryCache();
 
         // Register compliance services (Phase 4)
         services.AddSingleton<INistControlsService, NistControlsService>();
@@ -53,8 +64,24 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IComplianceEventSource>(sp => sp.GetRequiredService<ActivityLogEventSource>());
         services.AddHostedService<ComplianceWatchHostedService>();
 
-        // HttpClient for NistControlsService online catalog fetch
-        services.AddHttpClient<NistControlsService>();
+        // HttpClient for NistControlsService with Polly resilience
+        services.AddHttpClient<NistControlsService>()
+            .AddResilienceHandler("nist-catalog", builder =>
+            {
+                builder.AddRetry(new HttpRetryStrategyOptions
+                {
+                    MaxRetryAttempts = 3,
+                    Delay = TimeSpan.FromSeconds(2),
+                    BackoffType = DelayBackoffType.Exponential,
+                    UseJitter = true,
+                });
+            });
+
+        // NIST Controls cache warmup background service
+        services.AddHostedService<NistControlsCacheWarmupService>();
+
+        // Compliance validation service (validates 11 system-critical control IDs)
+        services.AddSingleton<ComplianceValidationService>();
 
         // Register compliance tools
         services.AddSingleton<ComplianceAssessmentTool>();
@@ -107,6 +134,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<WatchCreateAutoRemediationRuleTool>();
         services.AddSingleton<WatchListAutoRemediationRulesTool>();
 
+        // NIST Controls knowledge tools (Feature 007)
+        services.AddSingleton<NistControlSearchTool>();
+        services.AddSingleton<NistControlExplainerTool>();
+
         // Compliance Watch notification & escalation services (US4)
         services.AddSingleton<AlertNotificationService>();
         services.AddSingleton<IAlertNotificationService>(sp => sp.GetRequiredService<AlertNotificationService>());
@@ -151,6 +182,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchCollectEvidenceFromAlertTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchCreateAutoRemediationRuleTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchListAutoRemediationRulesTool>());
+
+        // NIST Controls knowledge tools as BaseTool (Feature 007)
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<NistControlSearchTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<NistControlExplainerTool>());
 
         // Register the agent
         services.AddSingleton<ComplianceAgent>();

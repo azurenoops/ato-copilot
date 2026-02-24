@@ -123,6 +123,10 @@ public class ComplianceAgent : BaseAgent
     private readonly WatchCreateAutoRemediationRuleTool _watchCreateAutoRemediationRule;
     private readonly WatchListAutoRemediationRulesTool _watchListAutoRemediationRules;
 
+    // NIST Controls knowledge tools (Feature 007)
+    private readonly NistControlSearchTool _nistControlSearchTool;
+    private readonly NistControlExplainerTool _nistControlExplainerTool;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="ComplianceAgent"/> class.
     /// </summary>
@@ -194,6 +198,8 @@ public class ComplianceAgent : BaseAgent
         WatchCollectEvidenceFromAlertTool watchCollectEvidenceFromAlert,
         WatchCreateAutoRemediationRuleTool watchCreateAutoRemediationRule,
         WatchListAutoRemediationRulesTool watchListAutoRemediationRules,
+        NistControlSearchTool nistControlSearchTool,
+        NistControlExplainerTool nistControlExplainerTool,
         IDbContextFactory<AtoCopilotContext> dbFactory,
         IServiceScopeFactory scopeFactory,
         ILogger<ComplianceAgent> logger)
@@ -266,6 +272,8 @@ public class ComplianceAgent : BaseAgent
         _watchCollectEvidenceFromAlert = watchCollectEvidenceFromAlert;
         _watchCreateAutoRemediationRule = watchCreateAutoRemediationRule;
         _watchListAutoRemediationRules = watchListAutoRemediationRules;
+        _nistControlSearchTool = nistControlSearchTool;
+        _nistControlExplainerTool = nistControlExplainerTool;
         _dbFactory = dbFactory;
         _scopeFactory = scopeFactory;
 
@@ -355,6 +363,10 @@ public class ComplianceAgent : BaseAgent
         // Register Compliance Watch auto-remediation tools
         RegisterTool(_watchCreateAutoRemediationRule);
         RegisterTool(_watchListAutoRemediationRules);
+
+        // Register NIST Controls knowledge tools (Feature 007)
+        RegisterTool(_nistControlSearchTool);
+        RegisterTool(_nistControlExplainerTool);
     }
 
     /// <inheritdoc />

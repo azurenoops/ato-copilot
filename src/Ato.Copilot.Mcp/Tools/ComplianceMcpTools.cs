@@ -109,6 +109,10 @@ public class ComplianceMcpTools
     private readonly WatchCreateAutoRemediationRuleTool _watchCreateAutoRemediationRule;
     private readonly WatchListAutoRemediationRulesTool _watchListAutoRemediationRules;
 
+    // NIST Controls knowledge tools (Feature 007)
+    private readonly NistControlSearchTool _nistControlSearchTool;
+    private readonly NistControlExplainerTool _nistControlExplainerTool;
+
     public ComplianceMcpTools(
         ComplianceAssessmentTool assessmentTool,
         ControlFamilyTool controlFamilyTool,
@@ -176,7 +180,9 @@ public class ComplianceMcpTools
         WatchCreateTaskFromAlertTool watchCreateTaskFromAlert,
         WatchCollectEvidenceFromAlertTool watchCollectEvidenceFromAlert,
         WatchCreateAutoRemediationRuleTool watchCreateAutoRemediationRule,
-        WatchListAutoRemediationRulesTool watchListAutoRemediationRules)
+        WatchListAutoRemediationRulesTool watchListAutoRemediationRules,
+        NistControlSearchTool nistControlSearchTool,
+        NistControlExplainerTool nistControlExplainerTool)
     {
         _assessmentTool = assessmentTool;
         _controlFamilyTool = controlFamilyTool;
@@ -245,6 +251,8 @@ public class ComplianceMcpTools
         _watchCollectEvidenceFromAlert = watchCollectEvidenceFromAlert;
         _watchCreateAutoRemediationRule = watchCreateAutoRemediationRule;
         _watchListAutoRemediationRules = watchListAutoRemediationRules;
+        _nistControlSearchTool = nistControlSearchTool;
+        _nistControlExplainerTool = nistControlExplainerTool;
     }
 
     [Description("Run a NIST 800-53 compliance assessment. Scan types: quick, policy, full.")]
@@ -1202,5 +1210,33 @@ public class ComplianceMcpTools
             ["includeDisabled"] = includeDisabled.ToString()
         };
         return await _watchListAutoRemediationRules.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Search NIST SP 800-53 Rev 5 controls by keyword, phrase, or control family.")]
+    public async Task<string> SearchNistControlsAsync(
+        string query,
+        string? family = null,
+        int? maxResults = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["query"] = query,
+            ["family"] = family,
+            ["max_results"] = maxResults
+        };
+        return await _nistControlSearchTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Get a detailed explanation of a specific NIST SP 800-53 control including statement, guidance, and assessment objectives.")]
+    public async Task<string> ExplainNistControlAsync(
+        string controlId,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["control_id"] = controlId
+        };
+        return await _nistControlExplainerTool.ExecuteAsync(args, cancellationToken);
     }
 }

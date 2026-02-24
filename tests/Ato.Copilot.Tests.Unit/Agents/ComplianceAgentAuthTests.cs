@@ -162,6 +162,8 @@ public class ComplianceAgentAuthTests
             watchAlertHistory, watchComplianceTrend, watchAlertStatistics,
             watchCreateTaskFromAlert, watchCollectEvidenceFromAlert,
             watchCreateAutoRemediationRule, watchListAutoRemediationRules,
+            new NistControlSearchTool(Mock.Of<INistControlsService>(), Mock.Of<ILogger<NistControlSearchTool>>()),
+            new NistControlExplainerTool(Mock.Of<INistControlsService>(), Mock.Of<ILogger<NistControlExplainerTool>>()),
             dbFactory, _scopeFactory,
             Mock.Of<ILogger<ComplianceAgent>>());
     }
@@ -430,6 +432,8 @@ public class ComplianceAgentAuthTests
             new WatchCollectEvidenceFromAlertTool(Mock.Of<IAlertManager>(), dbFactory, Mock.Of<ILogger<WatchCollectEvidenceFromAlertTool>>()),
             new WatchCreateAutoRemediationRuleTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchCreateAutoRemediationRuleTool>>()),
             new WatchListAutoRemediationRulesTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchListAutoRemediationRulesTool>>()),
+            new NistControlSearchTool(Mock.Of<INistControlsService>(), Mock.Of<ILogger<NistControlSearchTool>>()),
+            new NistControlExplainerTool(Mock.Of<INistControlsService>(), Mock.Of<ILogger<NistControlExplainerTool>>()),
             dbFactory, scopeFactory,
             Mock.Of<ILogger<ComplianceAgent>>());
     }

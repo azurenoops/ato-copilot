@@ -153,9 +153,10 @@ async Task RunHttpModeAsync(string[] args)
     // Register services
     RegisterCoreServices(builder.Services, builder.Configuration);
 
-    // Health checks (per FR-045)
+    // Health checks (per FR-045, FR-033)
     builder.Services.AddHealthChecks()
-        .AddCheck<AgentHealthCheck>("compliance-agent");
+        .AddCheck<AgentHealthCheck>("compliance-agent")
+        .AddCheck<Ato.Copilot.Agents.Observability.NistControlsHealthCheck>("nist-controls");
 
     // Add HTTP-specific services
     builder.Services.AddEndpointsApiExplorer();

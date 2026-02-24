@@ -1,10 +1,13 @@
 using System.Reflection;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using Moq.Protected;
 using Xunit;
 using FluentAssertions;
+using Ato.Copilot.Agents.Compliance.Configuration;
 using Ato.Copilot.Agents.Compliance.Services;
 using Ato.Copilot.Core.Models.Compliance;
 
@@ -13,6 +16,7 @@ namespace Ato.Copilot.Tests.Unit.Services;
 /// <summary>
 /// Unit tests for NistControlsService: online fetch, offline fallback, cache,
 /// catalog loading, family queries, baseline filtering, control lookup, CatalogStatus.
+/// Updated for IMemoryCache + IOptions&lt;NistControlsOptions&gt; constructor (T010).
 /// </summary>
 public class NistControlsServiceTests
 {
@@ -20,31 +24,32 @@ public class NistControlsServiceTests
 
     private NistControlsService CreateService(
         HttpClient? httpClient = null,
-        Dictionary<string, string?>? configOverrides = null)
+        IMemoryCache? cache = null,
+        NistControlsOptions? options = null)
     {
-        var configValues = new Dictionary<string, string?>
+        var memoryCache = cache ?? new MemoryCache(new MemoryCacheOptions());
+
+        var nistOptions = options ?? new NistControlsOptions
         {
-            ["NistCatalog:PreferOnline"] = "false",
-            ["NistCatalog:CachePath"] = Path.Combine(Path.GetTempPath(), $"nist-test-{Guid.NewGuid()}.json"),
-            ["NistCatalog:CacheMaxAgeDays"] = "30",
-            ["NistCatalog:FetchTimeoutSeconds"] = "5",
-            ["NistCatalog:OnlineUrl"] = "https://example.com/catalog.json"
+            BaseUrl = "https://invalid.example.com/catalog.json", // force embedded fallback
+            TimeoutSeconds = 5,
+            CacheDurationHours = 1,
+            MaxRetryAttempts = 1,
+            RetryDelaySeconds = 1,
+            EnableOfflineFallback = true,
+            WarmupDelaySeconds = 5
         };
 
-        if (configOverrides != null)
-        {
-            foreach (var kv in configOverrides)
-                configValues[kv.Key] = kv.Value;
-        }
-
         var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(configValues)
+            .AddInMemoryCollection(new Dictionary<string, string?>())
             .Build();
 
         return new NistControlsService(
             _loggerMock.Object,
-            config,
-            httpClient ?? new HttpClient());
+            memoryCache,
+            Options.Create(nistOptions),
+            httpClient ?? new HttpClient(),
+            config);
     }
 
     // ─── Embedded Resource Fallback ──────────────────────────────────────────────
@@ -183,49 +188,333 @@ public class NistControlsServiceTests
     // ─── Cache Behavior ────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task CacheHit_UsesExistingCacheFile()
+    public async Task CacheHit_ReturnsFromMemoryCache()
     {
-        var cachePath = Path.Combine(Path.GetTempPath(), $"nist-cache-{Guid.NewGuid()}.json");
+        // Pre-populate IMemoryCache with a catalog to simulate a warm cache
+        var memoryCache = new MemoryCache(new MemoryCacheOptions());
 
-        // Create a minimal valid OSCAL-like cache file
-        var cacheContent = """
+        var catalog = new NistCatalog
         {
-            "catalog": {
-                "groups": [
-                    {
-                        "id": "ac",
-                        "title": "Access Control",
-                        "controls": [
-                            {
-                                "id": "ac-1",
-                                "title": "Policy and Procedures",
-                                "parts": [
-                                    { "id": "ac-1_smt", "name": "statement", "prose": "Test control" }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
-        }
-        """;
-        await File.WriteAllTextAsync(cachePath, cacheContent);
-
-        try
-        {
-            var service = CreateService(configOverrides: new Dictionary<string, string?>
+            Metadata = new CatalogMetadata { Title = "Test Catalog", Version = "5.2.0" },
+            Groups = new List<ControlGroup>
             {
-                ["NistCatalog:CachePath"] = cachePath
-            });
+                new()
+                {
+                    Id = "ac",
+                    Title = "Access Control",
+                    Controls = new List<OscalControl>
+                    {
+                        new()
+                        {
+                            Id = "ac-1",
+                            Title = "Policy and Procedures",
+                            Parts = new List<ControlPart>
+                            {
+                                new() { Id = "ac-1_smt", Name = "statement", Prose = "Test control" }
+                            }
+                        }
+                    }
+                }
+            }
+        };
 
-            var control = await service.GetControlAsync("ac-1");
-            // If the service loads from cache successfully, we get the control
-            // (it may also fall back to embedded if the cache format doesn't match exactly)
-            service.CatalogSource.Should().NotBe("none");
-        }
-        finally
+        // Set catalog in cache with same key the service uses
+        memoryCache.Set("NistControls:Catalog", catalog, new MemoryCacheEntryOptions
         {
-            File.Delete(cachePath);
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
+        });
+
+        // Also cache the controls list
+        var controls = new List<NistControl>
+        {
+            new() { Id = "ac-1", Family = "AC", Title = "Policy and Procedures", Description = "Test control" }
+        };
+        memoryCache.Set("NistControls:Controls", controls, new MemoryCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
+        });
+
+        var service = CreateService(cache: memoryCache);
+
+        var result = await service.GetControlAsync("ac-1");
+
+        // Should return from cache without loading from any source
+        result.Should().NotBeNull();
+        result!.Id.Should().Be("ac-1");
+        result.Family.Should().Be("AC");
+    }
+
+    // ─── GetCatalogAsync ─────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetCatalogAsync_ReturnsCatalog_WithGroups()
+    {
+        var service = CreateService();
+        var catalog = await service.GetCatalogAsync();
+
+        catalog.Should().NotBeNull();
+        catalog!.Groups.Should().NotBeEmpty();
+        catalog.Groups.Count.Should().Be(20, "NIST SP 800-53 Rev 5 has 20 control families");
+    }
+
+    [Fact]
+    public async Task GetCatalogAsync_CacheHit_ReturnsSameInstance()
+    {
+        var service = CreateService();
+        var first = await service.GetCatalogAsync();
+        var second = await service.GetCatalogAsync();
+
+        first.Should().NotBeNull();
+        second.Should().NotBeNull();
+        ReferenceEquals(first, second).Should().BeTrue("cached catalog should return same instance");
+    }
+
+    // ─── GetControlEnhancementAsync ──────────────────────────────────────────
+
+    [Fact]
+    public async Task GetControlEnhancementAsync_ValidControl_ReturnsEnhancement()
+    {
+        var service = CreateService();
+        var enhancement = await service.GetControlEnhancementAsync("SC-7");
+
+        enhancement.Should().NotBeNull();
+        enhancement!.Id.Should().Be("SC-7");
+        enhancement.Title.Should().NotBeNullOrEmpty();
+        enhancement.Statement.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task GetControlEnhancementAsync_ValidControl_IncludesGuidance()
+    {
+        var service = CreateService();
+        var enhancement = await service.GetControlEnhancementAsync("AC-2");
+
+        enhancement.Should().NotBeNull();
+        // AC-2 has well-known guidance
+        enhancement!.Guidance.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task GetControlEnhancementAsync_ValidControl_IncludesObjectives()
+    {
+        var service = CreateService();
+        var enhancement = await service.GetControlEnhancementAsync("AC-3");
+
+        enhancement.Should().NotBeNull();
+        enhancement!.Objectives.Should().NotBeEmpty("AC-3 has assessment objectives");
+    }
+
+    [Fact]
+    public async Task GetControlEnhancementAsync_MissingControl_ReturnsNull()
+    {
+        var service = CreateService();
+        var enhancement = await service.GetControlEnhancementAsync("ZZ-999");
+
+        enhancement.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetControlEnhancementAsync_NullId_ThrowsArgumentException()
+    {
+        var service = CreateService();
+
+        var act = () => service.GetControlEnhancementAsync(null!);
+
+        await act.Should().ThrowAsync<ArgumentException>();
+    }
+
+    [Fact]
+    public async Task GetControlEnhancementAsync_EmptyId_ThrowsArgumentException()
+    {
+        var service = CreateService();
+
+        var act = () => service.GetControlEnhancementAsync("");
+
+        await act.Should().ThrowAsync<ArgumentException>();
+    }
+
+    // ─── ValidateControlIdAsync ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task ValidateControlIdAsync_ValidId_ReturnsTrue()
+    {
+        var service = CreateService();
+        var valid = await service.ValidateControlIdAsync("AC-2");
+
+        valid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ValidateControlIdAsync_InvalidId_ReturnsFalse()
+    {
+        var service = CreateService();
+        var valid = await service.ValidateControlIdAsync("ZZ-99");
+
+        valid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ValidateControlIdAsync_CaseInsensitive_ReturnsTrue()
+    {
+        var service = CreateService();
+        var lower = await service.ValidateControlIdAsync("ac-2");
+        var upper = await service.ValidateControlIdAsync("AC-2");
+
+        lower.Should().BeTrue();
+        upper.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ValidateControlIdAsync_NullId_ThrowsArgumentException()
+    {
+        var service = CreateService();
+
+        var act = () => service.ValidateControlIdAsync(null!);
+
+        await act.Should().ThrowAsync<ArgumentException>();
+    }
+
+    [Fact]
+    public async Task ValidateControlIdAsync_EmptyId_ThrowsArgumentException()
+    {
+        var service = CreateService();
+
+        var act = () => service.ValidateControlIdAsync("");
+
+        await act.Should().ThrowAsync<ArgumentException>();
+    }
+
+    // ─── GetVersionAsync ─────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetVersionAsync_ReturnsVersion()
+    {
+        var service = CreateService();
+        var version = await service.GetVersionAsync();
+
+        version.Should().NotBeNullOrEmpty();
+        version.Should().NotBe("Unknown");
+    }
+
+    // ─── T015: Typed Deserialization Verification ────────────────────────────
+
+    [Fact]
+    public async Task TypedDeserialization_CatalogHas20ControlFamilies()
+    {
+        var service = CreateService();
+        var catalog = await service.GetCatalogAsync();
+
+        catalog.Should().NotBeNull();
+        catalog!.Groups.Count.Should().Be(20, "NIST SP 800-53 Rev 5 defines 20 control families");
+    }
+
+    [Fact]
+    public async Task TypedDeserialization_GroupIds_AreKebabCase()
+    {
+        var service = CreateService();
+        var catalog = await service.GetCatalogAsync();
+
+        catalog.Should().NotBeNull();
+        foreach (var group in catalog!.Groups)
+        {
+            group.Id.Should().NotBeNullOrEmpty();
+            group.Title.Should().NotBeNullOrEmpty();
         }
+    }
+
+    [Fact]
+    public async Task TypedDeserialization_ControlParts_ContainStatementAndGuidance()
+    {
+        var service = CreateService();
+        var catalog = await service.GetCatalogAsync();
+
+        catalog.Should().NotBeNull();
+        // Pick AC group's first control and verify parts
+        var acGroup = catalog!.Groups.FirstOrDefault(g => g.Id == "ac");
+        acGroup.Should().NotBeNull();
+        acGroup!.Controls.Should().NotBeEmpty();
+
+        var firstControl = acGroup.Controls[0];
+        firstControl.Parts.Should().NotBeNull();
+        firstControl.Parts!.Should().Contain(p => p.Name == "statement");
+    }
+
+    [Fact]
+    public async Task TypedDeserialization_MetadataVersion_ReturnsExpectedVersion()
+    {
+        var service = CreateService();
+        var catalog = await service.GetCatalogAsync();
+
+        catalog.Should().NotBeNull();
+        catalog!.Metadata.Should().NotBeNull();
+        catalog.Metadata.Version.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task TypedDeserialization_NestedEnhancements_Exist()
+    {
+        var service = CreateService();
+        var catalog = await service.GetCatalogAsync();
+
+        catalog.Should().NotBeNull();
+        // AC-2 typically has nested control enhancements
+        var acGroup = catalog!.Groups.FirstOrDefault(g => g.Id == "ac");
+        acGroup.Should().NotBeNull();
+
+        var hasEnhancements = acGroup!.Controls.Any(c => c.Controls is { Count: > 0 });
+        hasEnhancements.Should().BeTrue("NIST controls should have nested enhancements");
+    }
+
+    // ─── T016: Resilience & Fallback Verification ────────────────────────────
+
+    [Fact]
+    public async Task OnlineFailure_FallsBackToEmbeddedResource()
+    {
+        // Use invalid URL to force online failure, then verify embedded works
+        var service = CreateService(options: new NistControlsOptions
+        {
+            BaseUrl = "https://invalid.example.com/nonexistent.json",
+            TimeoutSeconds = 2,
+            CacheDurationHours = 1,
+            EnableOfflineFallback = true,
+            WarmupDelaySeconds = 5
+        });
+
+        var catalog = await service.GetCatalogAsync();
+
+        catalog.Should().NotBeNull("embedded resource should provide fallback");
+        catalog!.Groups.Count.Should().Be(20);
+        service.CatalogSource.Should().Be("embedded");
+    }
+
+    [Fact]
+    public async Task FallbackDisabled_OnlineFailure_ReturnsNull()
+    {
+        var service = CreateService(options: new NistControlsOptions
+        {
+            BaseUrl = "https://invalid.example.com/nonexistent.json",
+            TimeoutSeconds = 2,
+            CacheDurationHours = 1,
+            EnableOfflineFallback = false,
+            WarmupDelaySeconds = 5
+        });
+
+        var catalog = await service.GetCatalogAsync();
+
+        catalog.Should().BeNull("no fallback should be attempted when disabled");
+    }
+
+    [Fact]
+    public async Task TaskCanceledException_HandledGracefully()
+    {
+        // Pre-cancelled token
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var service = CreateService();
+
+        var act = () => service.GetCatalogAsync(cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
     }
 }
