@@ -61,6 +61,37 @@ public class AtoCopilotContext : DbContext
     /// <summary>Certificate-to-role mappings for automatic role resolution.</summary>
     public DbSet<CertificateRoleMapping> CertificateRoleMappings => Set<CertificateRoleMapping>();
 
+    // ─── Compliance Watch DbSets ─────────────────────────────────────────────
+    /// <summary>Compliance alerts with full lifecycle tracking.</summary>
+    public DbSet<ComplianceAlert> ComplianceAlerts => Set<ComplianceAlert>();
+
+    /// <summary>Date-partitioned counters for alert ID generation.</summary>
+    public DbSet<AlertIdCounter> AlertIdCounters => Set<AlertIdCounter>();
+
+    /// <summary>Notification records for alert delivery audit.</summary>
+    public DbSet<AlertNotification> AlertNotifications => Set<AlertNotification>();
+
+    /// <summary>Per-scope monitoring configurations.</summary>
+    public DbSet<MonitoringConfiguration> MonitoringConfigurations => Set<MonitoringConfiguration>();
+
+    /// <summary>Point-in-time resource compliance baselines for drift detection.</summary>
+    public DbSet<ComplianceBaseline> ComplianceBaselines => Set<ComplianceBaseline>();
+
+    /// <summary>User-defined or default alert rules with severity overrides.</summary>
+    public DbSet<AlertRule> AlertRules => Set<AlertRule>();
+
+    /// <summary>Temporary or permanent alert suppression rules.</summary>
+    public DbSet<SuppressionRule> SuppressionRules => Set<SuppressionRule>();
+
+    /// <summary>Escalation path configurations for SLA violations.</summary>
+    public DbSet<EscalationPath> EscalationPaths => Set<EscalationPath>();
+
+    /// <summary>Point-in-time compliance posture snapshots for trend analysis.</summary>
+    public DbSet<ComplianceSnapshot> ComplianceSnapshots => Set<ComplianceSnapshot>();
+
+    /// <summary>Opt-in auto-remediation rules for trusted, low-risk violations.</summary>
+    public DbSet<AutoRemediationRule> AutoRemediationRules => Set<AutoRemediationRule>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -408,6 +439,183 @@ public class AtoCopilotContext : DbContext
 
             entity.HasIndex(e => e.CertificateThumbprint).IsUnique().HasDatabaseName("IX_CertMapping_Thumbprint");
             entity.HasIndex(e => e.CertificateSubject).IsUnique().HasDatabaseName("IX_CertMapping_Subject");
+        });
+
+        // ─── ComplianceAlert ─────────────────────────────────────────────────
+        modelBuilder.Entity<ComplianceAlert>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.AlertId).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Title).HasMaxLength(500).IsRequired();
+            entity.Property(e => e.SubscriptionId).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.ControlId).HasMaxLength(20);
+            entity.Property(e => e.ControlFamily).HasMaxLength(5);
+            entity.Property(e => e.ActorId).HasMaxLength(200);
+            entity.Property(e => e.AssignedTo).HasMaxLength(200);
+            entity.Property(e => e.DismissedBy).HasMaxLength(200);
+            entity.Property(e => e.AcknowledgedBy).HasMaxLength(200);
+
+            // Value conversion for List<string> AffectedResources
+            entity.Property(e => e.AffectedResources).HasConversion(stringListConverter);
+
+            // Self-referential FK: GroupedAlertId → ComplianceAlert.Id (restricted cascade)
+            entity.HasOne(e => e.GroupedAlert)
+                .WithMany(e => e.ChildAlerts)
+                .HasForeignKey(e => e.GroupedAlertId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .IsRequired(false);
+
+            // Relationship: Alert 1:N AlertNotifications (cascade delete)
+            entity.HasMany(e => e.Notifications)
+                .WithOne(n => n.Alert)
+                .HasForeignKey(n => n.AlertId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Indexes
+            entity.HasIndex(e => e.AlertId).IsUnique().HasDatabaseName("IX_ComplianceAlert_AlertId");
+            entity.HasIndex(e => new { e.Status, e.Severity }).HasDatabaseName("IX_ComplianceAlert_Status_Severity");
+            entity.HasIndex(e => new { e.SubscriptionId, e.CreatedAt }).HasDatabaseName("IX_ComplianceAlert_Sub_Created");
+            entity.HasIndex(e => e.ControlFamily).HasDatabaseName("IX_ComplianceAlert_ControlFamily");
+            entity.HasIndex(e => new { e.AssignedTo, e.Status }).HasDatabaseName("IX_ComplianceAlert_Assignee_Status");
+            entity.HasIndex(e => e.GroupedAlertId).HasDatabaseName("IX_ComplianceAlert_GroupedAlertId");
+            entity.HasIndex(e => new { e.SlaDeadline, e.Status }).HasDatabaseName("IX_ComplianceAlert_Sla_Status");
+        });
+
+        // ─── AlertIdCounter ─────────────────────────────────────────────────
+        modelBuilder.Entity<AlertIdCounter>(entity =>
+        {
+            entity.HasKey(e => e.Date);
+        });
+
+        // ─── AlertNotification ──────────────────────────────────────────────
+        modelBuilder.Entity<AlertNotification>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Recipient).HasMaxLength(500).IsRequired();
+            entity.Property(e => e.Subject).HasMaxLength(500);
+
+            entity.HasIndex(e => new { e.AlertId, e.Channel }).HasDatabaseName("IX_AlertNotification_Alert_Channel");
+            entity.HasIndex(e => e.SentAt).HasDatabaseName("IX_AlertNotification_SentAt");
+        });
+
+        // ─── MonitoringConfiguration ─────────────────────────────────────────
+        modelBuilder.Entity<MonitoringConfiguration>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.SubscriptionId).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.ResourceGroupName).HasMaxLength(200);
+            entity.Property(e => e.CreatedBy).HasMaxLength(200).IsRequired();
+
+            entity.HasIndex(e => new { e.SubscriptionId, e.ResourceGroupName })
+                .IsUnique()
+                .HasDatabaseName("IX_MonitoringConfig_Sub_RG");
+            entity.HasIndex(e => new { e.NextRunAt, e.IsEnabled })
+                .HasDatabaseName("IX_MonitoringConfig_NextRun_Enabled");
+        });
+
+        // ─── ComplianceBaseline ──────────────────────────────────────────────
+        modelBuilder.Entity<ComplianceBaseline>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.SubscriptionId).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.ResourceId).HasMaxLength(1000).IsRequired();
+            entity.Property(e => e.ResourceType).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.ConfigurationHash).HasMaxLength(64).IsRequired();
+
+            entity.HasIndex(e => new { e.ResourceId, e.IsActive })
+                .HasDatabaseName("IX_ComplianceBaseline_Resource_Active");
+            entity.HasIndex(e => new { e.SubscriptionId, e.CapturedAt })
+                .HasDatabaseName("IX_ComplianceBaseline_Sub_Captured");
+        });
+
+        // ─── AlertRule ──────────────────────────────────────────────────────────────
+        modelBuilder.Entity<AlertRule>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Description).HasMaxLength(1000);
+            entity.Property(e => e.SubscriptionId).HasMaxLength(100);
+            entity.Property(e => e.ResourceGroupName).HasMaxLength(200);
+            entity.Property(e => e.ResourceType).HasMaxLength(200);
+            entity.Property(e => e.ResourceId).HasMaxLength(1000);
+            entity.Property(e => e.ControlFamily).HasMaxLength(10);
+            entity.Property(e => e.ControlId).HasMaxLength(20);
+            entity.Property(e => e.TriggerCondition).HasMaxLength(4000);
+            entity.Property(e => e.CreatedBy).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.RecipientOverrides)
+                .HasConversion(stringListConverter)
+                .HasMaxLength(4000);
+
+            entity.HasIndex(e => new { e.SubscriptionId, e.ControlFamily, e.IsEnabled })
+                .HasDatabaseName("IX_AlertRule_Sub_Family_Enabled");
+            entity.HasIndex(e => e.IsDefault)
+                .HasDatabaseName("IX_AlertRule_IsDefault");
+        });
+
+        // ─── SuppressionRule ─────────────────────────────────────────────────────────
+        modelBuilder.Entity<SuppressionRule>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.SubscriptionId).HasMaxLength(100);
+            entity.Property(e => e.ResourceGroupName).HasMaxLength(200);
+            entity.Property(e => e.ResourceId).HasMaxLength(1000);
+            entity.Property(e => e.ControlFamily).HasMaxLength(10);
+            entity.Property(e => e.ControlId).HasMaxLength(20);
+            entity.Property(e => e.Justification).HasMaxLength(2000);
+            entity.Property(e => e.CreatedBy).HasMaxLength(200).IsRequired();
+
+            entity.HasIndex(e => new { e.IsActive, e.ExpiresAt })
+                .HasDatabaseName("IX_SuppressionRule_Active_Expires");
+            entity.HasIndex(e => new { e.SubscriptionId, e.ResourceId })
+                .HasDatabaseName("IX_SuppressionRule_Sub_Resource");
+        });
+
+        // ─── EscalationPath ─────────────────────────────────────────────────────────
+        modelBuilder.Entity<EscalationPath>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.CreatedBy).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.WebhookUrl).HasMaxLength(2000);
+            entity.Property(e => e.Recipients).HasConversion(stringListConverter);
+
+            entity.HasIndex(e => new { e.TriggerSeverity, e.IsEnabled })
+                .HasDatabaseName("IX_EscalationPath_Severity_Enabled");
+        });
+
+        // ─── ComplianceSnapshot ─────────────────────────────────────────────────────
+        modelBuilder.Entity<ComplianceSnapshot>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.SubscriptionId).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.ControlFamilyBreakdown).HasMaxLength(4000);
+
+            entity.HasIndex(e => new { e.SubscriptionId, e.CapturedAt })
+                .HasDatabaseName("IX_ComplianceSnapshot_Sub_CapturedAt");
+
+            entity.HasIndex(e => new { e.IsWeeklySnapshot, e.CapturedAt })
+                .HasDatabaseName("IX_ComplianceSnapshot_Weekly_CapturedAt");
+        });
+
+        // ─── AutoRemediationRule ─────────────────────────────────────────────────────
+        modelBuilder.Entity<AutoRemediationRule>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Description).HasMaxLength(2000);
+            entity.Property(e => e.SubscriptionId).HasMaxLength(200);
+            entity.Property(e => e.ResourceGroupName).HasMaxLength(200);
+            entity.Property(e => e.ControlFamily).HasMaxLength(10);
+            entity.Property(e => e.ControlId).HasMaxLength(20);
+            entity.Property(e => e.Action).HasMaxLength(500).IsRequired();
+            entity.Property(e => e.ApprovalMode).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.CreatedBy).HasMaxLength(200).IsRequired();
+
+            entity.HasIndex(e => new { e.SubscriptionId, e.ControlFamily, e.IsEnabled })
+                .HasDatabaseName("IX_AutoRemediationRule_Sub_Family_Enabled");
+
+            entity.HasIndex(e => e.IsEnabled)
+                .HasDatabaseName("IX_AutoRemediationRule_Enabled");
         });
     }
 

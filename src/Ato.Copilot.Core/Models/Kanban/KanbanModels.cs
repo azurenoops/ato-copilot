@@ -111,6 +111,9 @@ public class RemediationTask : ConcurrentEntity
     /// <summary>FK to ComplianceFinding.Id for traceability.</summary>
     public string? FindingId { get; set; }
 
+    /// <summary>FK to ComplianceAlert.AlertId when task was created from an alert.</summary>
+    public string? LinkedAlertId { get; set; }
+
     /// <summary>User who created the task.</summary>
     public string CreatedBy { get; set; } = "";
 

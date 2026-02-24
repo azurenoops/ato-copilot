@@ -57,11 +57,18 @@ public class DocumentGenerationService : IDocumentGenerationService
                 .ToListAsync(cancellationToken)
             : new List<ComplianceFinding>();
 
+        // Fetch active compliance alerts for monitoring integration (FR-038)
+        var activeAlerts = await db.ComplianceAlerts
+            .Where(a => a.Status != AlertStatus.Resolved && a.Status != AlertStatus.Dismissed)
+            .OrderByDescending(a => a.Severity)
+            .ThenBy(a => a.ControlFamily)
+            .ToListAsync(cancellationToken);
+
         var content = docType switch
         {
             "SSP" => await GenerateSspAsync(resolvedSystemName, resolvedFramework, assessment, findings, cancellationToken),
-            "SAR" => GenerateSar(resolvedSystemName, resolvedFramework, assessment, findings),
-            "POAM" => GeneratePoam(resolvedSystemName, resolvedFramework, findings),
+            "SAR" => GenerateSar(resolvedSystemName, resolvedFramework, assessment, findings, activeAlerts),
+            "POAM" => GeneratePoam(resolvedSystemName, resolvedFramework, findings, activeAlerts),
             _ => throw new ArgumentException($"Unsupported document type: {docType}")
         };
 
@@ -217,7 +224,8 @@ public class DocumentGenerationService : IDocumentGenerationService
         string systemName,
         string framework,
         ComplianceAssessment? assessment,
-        List<ComplianceFinding> findings)
+        List<ComplianceFinding> findings,
+        List<ComplianceAlert> activeAlerts)
     {
         var sb = new StringBuilder();
 
@@ -321,6 +329,28 @@ public class DocumentGenerationService : IDocumentGenerationService
                           "Refer to the POA&M for required actions.");
         }
         sb.AppendLine();
+
+        // Monitoring Coverage (FR-038)
+        sb.AppendLine("## 6. Continuous Monitoring Status");
+        sb.AppendLine();
+        if (activeAlerts.Count > 0)
+        {
+            sb.AppendLine($"The system currently has **{activeAlerts.Count}** active compliance monitoring alerts:");
+            sb.AppendLine();
+            sb.AppendLine($"- **Critical**: {activeAlerts.Count(a => a.Severity == AlertSeverity.Critical)}");
+            sb.AppendLine($"- **High**: {activeAlerts.Count(a => a.Severity == AlertSeverity.High)}");
+            sb.AppendLine($"- **Medium**: {activeAlerts.Count(a => a.Severity == AlertSeverity.Medium)}");
+            sb.AppendLine($"- **Low**: {activeAlerts.Count(a => a.Severity == AlertSeverity.Low)}");
+            sb.AppendLine();
+            sb.AppendLine("These alerts represent active compliance drift or violations detected by the " +
+                          "continuous monitoring system and should be addressed alongside assessment findings.");
+        }
+        else
+        {
+            sb.AppendLine("No active monitoring alerts. Continuous monitoring is operational with no outstanding issues.");
+        }
+        sb.AppendLine();
+
         sb.AppendLine($"*This SAR was auto-generated on {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC by ATO Copilot.*");
 
         return sb.ToString();
@@ -332,7 +362,8 @@ public class DocumentGenerationService : IDocumentGenerationService
     private static string GeneratePoam(
         string systemName,
         string framework,
-        List<ComplianceFinding> findings)
+        List<ComplianceFinding> findings,
+        List<ComplianceAlert> activeAlerts)
     {
         var sb = new StringBuilder();
 
@@ -415,6 +446,30 @@ public class DocumentGenerationService : IDocumentGenerationService
                 sb.AppendLine();
                 idx++;
             }
+        }
+
+        // Monitoring Alerts Section (FR-038)
+        if (activeAlerts.Count > 0)
+        {
+            sb.AppendLine("## Active Monitoring Alerts");
+            sb.AppendLine();
+            sb.AppendLine("| # | Alert ID | Type | Severity | Control | Title | Created |");
+            sb.AppendLine("|---|----------|------|----------|---------|-------|---------|");
+
+            int alertIdx = 1;
+            foreach (var alert in activeAlerts)
+            {
+                var truncatedTitle = alert.Title.Length > 35
+                    ? alert.Title[..32] + "..."
+                    : alert.Title;
+                sb.AppendLine($"| {alertIdx} | {alert.AlertId} | {alert.Type} | {alert.Severity} | {alert.ControlFamily} | {truncatedTitle} | {alert.CreatedAt:yyyy-MM-dd} |");
+                alertIdx++;
+            }
+            sb.AppendLine();
+            sb.AppendLine($"- **Total Active Alerts**: {activeAlerts.Count}");
+            sb.AppendLine($"- **Critical**: {activeAlerts.Count(a => a.Severity == AlertSeverity.Critical)}");
+            sb.AppendLine($"- **High**: {activeAlerts.Count(a => a.Severity == AlertSeverity.High)}");
+            sb.AppendLine();
         }
 
         sb.AppendLine($"*This POA&M was auto-generated on {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC by ATO Copilot.*");

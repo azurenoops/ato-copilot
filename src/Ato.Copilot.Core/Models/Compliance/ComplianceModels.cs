@@ -98,6 +98,114 @@ public enum RiskLevel
     High
 }
 
+// ─────────────────────────────────── Compliance Watch Enums ──────────────────────────────────────
+
+/// <summary>
+/// Status of a compliance alert through its lifecycle.
+/// Valid transitions defined in data-model.md state machine.
+/// </summary>
+public enum AlertStatus
+{
+    /// <summary>Alert just created, unacknowledged.</summary>
+    New,
+    /// <summary>Alert seen and acknowledged by a user.</summary>
+    Acknowledged,
+    /// <summary>Remediation is underway for this alert.</summary>
+    InProgress,
+    /// <summary>Alert has been resolved (auto or manual).</summary>
+    Resolved,
+    /// <summary>Alert dismissed by Compliance Officer (requires justification).</summary>
+    Dismissed,
+    /// <summary>Alert escalated due to SLA expiry.</summary>
+    Escalated
+}
+
+/// <summary>
+/// Type of compliance alert detected by the monitoring engine.
+/// </summary>
+public enum AlertType
+{
+    /// <summary>Resource configuration deviated from baseline.</summary>
+    Drift,
+    /// <summary>New resource found non-compliant.</summary>
+    Violation,
+    /// <summary>Compliance score dropped below threshold.</summary>
+    Degradation,
+    /// <summary>Unusual pattern detected (actor correlation).</summary>
+    Anomaly,
+    /// <summary>SLA expired, escalation triggered.</summary>
+    Escalation,
+    /// <summary>Auto-remediation applied successfully.</summary>
+    Resolution
+}
+
+/// <summary>
+/// Severity of a compliance alert, determining SLA deadlines.
+/// </summary>
+public enum AlertSeverity
+{
+    /// <summary>SLA &lt; 1 hour.</summary>
+    Critical,
+    /// <summary>SLA &lt; 4 hours.</summary>
+    High,
+    /// <summary>SLA &lt; 24 hours.</summary>
+    Medium,
+    /// <summary>SLA &lt; 7 days.</summary>
+    Low
+}
+
+/// <summary>
+/// Monitoring check frequency for scheduled compliance monitoring.
+/// </summary>
+public enum MonitoringFrequency
+{
+    /// <summary>Check every 15 minutes.</summary>
+    FifteenMinutes,
+    /// <summary>Check every hour.</summary>
+    Hourly,
+    /// <summary>Check once per day.</summary>
+    Daily,
+    /// <summary>Check once per week.</summary>
+    Weekly
+}
+
+/// <summary>
+/// Monitoring mode for compliance watch configurations.
+/// </summary>
+public enum MonitoringMode
+{
+    /// <summary>Periodic timer-based checks only.</summary>
+    Scheduled,
+    /// <summary>Triggered by platform events only.</summary>
+    EventDriven,
+    /// <summary>Combined scheduled + event-driven monitoring.</summary>
+    Both
+}
+
+/// <summary>
+/// Channel for delivering alert notifications.
+/// </summary>
+public enum NotificationChannel
+{
+    /// <summary>In-app chat notification (always enabled).</summary>
+    Chat,
+    /// <summary>Email notification (configurable).</summary>
+    Email,
+    /// <summary>Webhook POST notification (configurable).</summary>
+    Webhook
+}
+
+/// <summary>
+/// Type of alert suppression rule.
+/// </summary>
+public enum SuppressionType
+{
+    /// <summary>Auto-expires after configured duration.</summary>
+    Temporary,
+    /// <summary>Permanent suppression — requires justification, visible to auditors.</summary>
+    Permanent
+}
+
 /// <summary>
 /// Category of compliance evidence artifact.
 /// </summary>
@@ -607,6 +715,242 @@ public class ConfigurationSettings
     public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
 }
 
+// ──────────────────────────────── Compliance Watch Entities ──────────────────────────────────────
+
+/// <summary>
+/// A detected compliance issue with full lifecycle tracking.
+/// Auto-generated human-readable AlertId (ALT-YYYYMMDDNNNNN).
+/// Self-referential FK for correlated/grouped alerts.
+/// </summary>
+public class ComplianceAlert
+{
+    /// <summary>Unique internal identifier (GUID).</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>Human-readable alert ID: ALT-YYYYMMDDNNNNN. Must match ^ALT-\d{8}\d{5}$.</summary>
+    public string AlertId { get; set; } = string.Empty;
+
+    /// <summary>Type of compliance issue detected.</summary>
+    public AlertType Type { get; set; }
+
+    /// <summary>Alert severity determining SLA deadline.</summary>
+    public AlertSeverity Severity { get; set; }
+
+    /// <summary>Current lifecycle status.</summary>
+    public AlertStatus Status { get; set; } = AlertStatus.New;
+
+    /// <summary>Brief title (max 500 chars).</summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>Detailed description of the compliance gap.</summary>
+    public string Description { get; set; } = string.Empty;
+
+    /// <summary>Azure subscription ID where the issue was detected.</summary>
+    public string SubscriptionId { get; set; } = string.Empty;
+
+    /// <summary>Azure resource IDs affected by this alert. JSON-serialized List&lt;string&gt;.</summary>
+    public List<string> AffectedResources { get; set; } = new();
+
+    /// <summary>NIST control ID (e.g., "SC-8").</summary>
+    public string? ControlId { get; set; }
+
+    /// <summary>NIST control family (e.g., "SC").</summary>
+    public string? ControlFamily { get; set; }
+
+    /// <summary>JSON change details: { property, oldValue, newValue }.</summary>
+    public string? ChangeDetails { get; set; }
+
+    /// <summary>Identity of the actor who made the detected change.</summary>
+    public string? ActorId { get; set; }
+
+    /// <summary>Human-readable recommended remediation action.</summary>
+    public string? RecommendedAction { get; set; }
+
+    /// <summary>User assigned to resolve this alert.</summary>
+    public string? AssignedTo { get; set; }
+
+    /// <summary>Required justification when alert is dismissed.</summary>
+    public string? DismissalJustification { get; set; }
+
+    /// <summary>Identity of user who dismissed the alert.</summary>
+    public string? DismissedBy { get; set; }
+
+    /// <summary>FK to parent alert if this is part of a correlated group.</summary>
+    public Guid? GroupedAlertId { get; set; }
+
+    /// <summary>True if this alert is a correlation parent.</summary>
+    public bool IsGrouped { get; set; }
+
+    /// <summary>Number of correlated child alerts.</summary>
+    public int ChildAlertCount { get; set; }
+
+    /// <summary>UTC timestamp when the alert was created.</summary>
+    public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>UTC timestamp when the alert was last updated.</summary>
+    public DateTimeOffset UpdatedAt { get; set; }
+
+    /// <summary>UTC timestamp when acknowledged.</summary>
+    public DateTimeOffset? AcknowledgedAt { get; set; }
+
+    /// <summary>Identity of user who acknowledged.</summary>
+    public string? AcknowledgedBy { get; set; }
+
+    /// <summary>UTC timestamp when resolved.</summary>
+    public DateTimeOffset? ResolvedAt { get; set; }
+
+    /// <summary>UTC timestamp when escalated.</summary>
+    public DateTimeOffset? EscalatedAt { get; set; }
+
+    /// <summary>Computed SLA deadline based on severity.</summary>
+    public DateTimeOffset SlaDeadline { get; set; }
+
+    // Navigation properties
+
+    /// <summary>Parent grouped alert (if child).</summary>
+    public ComplianceAlert? GroupedAlert { get; set; }
+
+    /// <summary>Child alerts in this correlation group.</summary>
+    public ICollection<ComplianceAlert> ChildAlerts { get; set; } = new List<ComplianceAlert>();
+
+    /// <summary>Notifications sent for this alert.</summary>
+    public ICollection<AlertNotification> Notifications { get; set; } = new List<AlertNotification>();
+}
+
+/// <summary>
+/// Defines monitoring mode, frequency, and scope for a subscription or resource group.
+/// One configuration per unique (SubscriptionId, ResourceGroupName) scope.
+/// </summary>
+public class MonitoringConfiguration
+{
+    /// <summary>Unique configuration identifier.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>Azure subscription ID to monitor.</summary>
+    public string SubscriptionId { get; set; } = string.Empty;
+
+    /// <summary>Resource group name. Null means entire subscription scope.</summary>
+    public string? ResourceGroupName { get; set; }
+
+    /// <summary>Monitoring mode (Scheduled, EventDriven, Both).</summary>
+    public MonitoringMode Mode { get; set; }
+
+    /// <summary>How often scheduled checks run.</summary>
+    public MonitoringFrequency Frequency { get; set; }
+
+    /// <summary>Whether this monitoring configuration is currently active.</summary>
+    public bool IsEnabled { get; set; }
+
+    /// <summary>Next scheduled run time (for scheduled monitoring).</summary>
+    public DateTimeOffset NextRunAt { get; set; }
+
+    /// <summary>When the last monitoring check ran.</summary>
+    public DateTimeOffset? LastRunAt { get; set; }
+
+    /// <summary>High-water mark for event-driven monitoring (last event timestamp processed).</summary>
+    public DateTimeOffset? LastEventCheckAt { get; set; }
+
+    /// <summary>Identity of user who created this configuration.</summary>
+    public string CreatedBy { get; set; } = string.Empty;
+
+    /// <summary>UTC timestamp when created.</summary>
+    public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>UTC timestamp when last updated.</summary>
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// Point-in-time snapshot of a resource's compliant configuration.
+/// Captured after successful assessment or remediation. Used for drift detection.
+/// </summary>
+public class ComplianceBaseline
+{
+    /// <summary>Unique baseline identifier.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>Azure subscription ID this baseline belongs to.</summary>
+    public string SubscriptionId { get; set; } = string.Empty;
+
+    /// <summary>Full Azure resource ID.</summary>
+    public string ResourceId { get; set; } = string.Empty;
+
+    /// <summary>Azure resource type (e.g., "Microsoft.Storage/storageAccounts").</summary>
+    public string ResourceType { get; set; } = string.Empty;
+
+    /// <summary>SHA-256 hash of the resource configuration (64-char hex).</summary>
+    public string ConfigurationHash { get; set; } = string.Empty;
+
+    /// <summary>JSON snapshot of relevant configuration properties.</summary>
+    public string ConfigurationSnapshot { get; set; } = string.Empty;
+
+    /// <summary>JSON of policy compliance state at baseline capture time.</summary>
+    public string? PolicyComplianceState { get; set; }
+
+    /// <summary>FK to the assessment that established this baseline (optional).</summary>
+    public Guid? AssessmentId { get; set; }
+
+    /// <summary>UTC timestamp when this baseline was captured.</summary>
+    public DateTimeOffset CapturedAt { get; set; }
+
+    /// <summary>Whether this baseline is currently the active one for this resource. Only one active baseline per ResourceId.</summary>
+    public bool IsActive { get; set; } = true;
+}
+
+/// <summary>
+/// Database-backed date-partitioned counter for generating human-readable alert IDs.
+/// One row per calendar date, atomically incremented within serializable transaction.
+/// </summary>
+public class AlertIdCounter
+{
+    /// <summary>Calendar date (PK).</summary>
+    public DateOnly Date { get; set; }
+
+    /// <summary>Last used sequence number for this date. Atomically incremented.</summary>
+    public int LastSequence { get; set; }
+}
+
+/// <summary>
+/// Record of a notification sent through a specific channel for a specific alert.
+/// Append-only audit trail.
+/// </summary>
+public class AlertNotification
+{
+    /// <summary>Unique notification identifier.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>FK to the compliance alert.</summary>
+    public Guid AlertId { get; set; }
+
+    /// <summary>Notification channel used.</summary>
+    public NotificationChannel Channel { get; set; }
+
+    /// <summary>Recipient identifier (email, webhook URL, user ID).</summary>
+    public string Recipient { get; set; } = string.Empty;
+
+    /// <summary>Notification subject line.</summary>
+    public string? Subject { get; set; }
+
+    /// <summary>Notification body content.</summary>
+    public string? Body { get; set; }
+
+    /// <summary>Whether delivery was confirmed.</summary>
+    public bool IsDelivered { get; set; }
+
+    /// <summary>Delivery error message, if any.</summary>
+    public string? DeliveryError { get; set; }
+
+    /// <summary>UTC timestamp when sent.</summary>
+    public DateTimeOffset SentAt { get; set; }
+
+    /// <summary>UTC timestamp when delivery was confirmed.</summary>
+    public DateTimeOffset? DeliveredAt { get; set; }
+
+    // Navigation
+    /// <summary>The alert this notification belongs to.</summary>
+    public ComplianceAlert Alert { get; set; } = null!;
+}
+
 /// <summary>
 /// Audit log entry for compliance-related actions. Persisted in EF Core.
 /// Retention: 730 days per SEC-015.
@@ -648,4 +992,273 @@ public class AuditLogEntry
 
     /// <summary>Duration of the action.</summary>
     public TimeSpan? Duration { get; set; }
+}
+
+/// <summary>
+/// A user-defined or default rule that specifies alert conditions, severity overrides, and recipients.
+/// </summary>
+public class AlertRule
+{
+    /// <summary>Unique rule identifier.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>Human-readable rule name.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Optional description of what the rule does.</summary>
+    public string? Description { get; set; }
+
+    /// <summary>Scope: subscription ID (null = all subscriptions).</summary>
+    public string? SubscriptionId { get; set; }
+
+    /// <summary>Scope: resource group name (null = entire subscription).</summary>
+    public string? ResourceGroupName { get; set; }
+
+    /// <summary>Filter by Azure resource type.</summary>
+    public string? ResourceType { get; set; }
+
+    /// <summary>Scope: specific resource ID.</summary>
+    public string? ResourceId { get; set; }
+
+    /// <summary>NIST control family filter (e.g., "AC").</summary>
+    public string? ControlFamily { get; set; }
+
+    /// <summary>NIST control ID filter (e.g., "AC-2").</summary>
+    public string? ControlId { get; set; }
+
+    /// <summary>JSON expression for custom trigger conditions.</summary>
+    public string? TriggerCondition { get; set; }
+
+    /// <summary>Override default severity when this rule matches.</summary>
+    public AlertSeverity? SeverityOverride { get; set; }
+
+    /// <summary>Override default notification recipients. JSON-serialized List&lt;string&gt;.</summary>
+    public List<string> RecipientOverrides { get; set; } = new();
+
+    /// <summary>True if this is a pre-created default rule.</summary>
+    public bool IsDefault { get; set; }
+
+    /// <summary>Whether the rule is currently active.</summary>
+    public bool IsEnabled { get; set; } = true;
+
+    /// <summary>Identity of the user who created the rule.</summary>
+    public string CreatedBy { get; set; } = string.Empty;
+
+    /// <summary>UTC timestamp when the rule was created.</summary>
+    public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>UTC timestamp when the rule was last updated.</summary>
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// Temporary or permanent rule that mutes alerts for a defined scope.
+/// </summary>
+public class SuppressionRule
+{
+    /// <summary>Unique suppression rule identifier.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>Scope: subscription ID (null = all subscriptions).</summary>
+    public string? SubscriptionId { get; set; }
+
+    /// <summary>Scope: resource group name.</summary>
+    public string? ResourceGroupName { get; set; }
+
+    /// <summary>Scope: specific resource ID.</summary>
+    public string? ResourceId { get; set; }
+
+    /// <summary>NIST control family filter.</summary>
+    public string? ControlFamily { get; set; }
+
+    /// <summary>NIST control ID filter.</summary>
+    public string? ControlId { get; set; }
+
+    /// <summary>Type of suppression: Temporary or Permanent.</summary>
+    public SuppressionType Type { get; set; }
+
+    /// <summary>Required justification for permanent suppressions.</summary>
+    public string? Justification { get; set; }
+
+    /// <summary>Expiration for temporary suppressions (must be in future).</summary>
+    public DateTimeOffset? ExpiresAt { get; set; }
+
+    /// <summary>Whether the suppression is currently active.</summary>
+    public bool IsActive { get; set; } = true;
+
+    /// <summary>Identity of the user who created the suppression.</summary>
+    public string CreatedBy { get; set; } = string.Empty;
+
+    /// <summary>UTC timestamp when the suppression was created.</summary>
+    public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>Start of quiet hours window (e.g., 22:00). Both start and end must be set, or neither.</summary>
+    public TimeOnly? QuietHoursStart { get; set; }
+
+    /// <summary>End of quiet hours window (e.g., 06:00). Both start and end must be set, or neither.</summary>
+    public TimeOnly? QuietHoursEnd { get; set; }
+}
+
+// ─── Escalation & Notification Entities (US4) ───────────────────────────────
+
+/// <summary>
+/// Chain of notification actions triggered when an alert is not acknowledged within SLA.
+/// </summary>
+public class EscalationPath
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Which severity level triggers this escalation path.</summary>
+    public AlertSeverity TriggerSeverity { get; set; }
+
+    /// <summary>Minutes after SLA deadline before escalating.</summary>
+    public int EscalationDelayMinutes { get; set; }
+
+    /// <summary>Recipients to notify (user IDs or roles). JSON-serialized.</summary>
+    public List<string> Recipients { get; set; } = new();
+
+    /// <summary>Preferred notification channel for escalation.</summary>
+    public NotificationChannel Channel { get; set; }
+
+    /// <summary>How often (minutes) to re-notify if still unacknowledged.</summary>
+    public int RepeatIntervalMinutes { get; set; }
+
+    /// <summary>Stop after N escalation attempts.</summary>
+    public int MaxEscalations { get; set; } = 3;
+
+    /// <summary>External webhook URL for integration.</summary>
+    public string? WebhookUrl { get; set; }
+
+    public bool IsEnabled { get; set; } = true;
+    public string CreatedBy { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+// ─── Dashboard & Historical Reporting Entities (US7) ────────────────────────
+
+/// <summary>
+/// Point-in-time compliance posture snapshot for historical trend analysis.
+/// Captured daily (at midnight UTC) and promoted to weekly on Sundays.
+/// </summary>
+public class ComplianceSnapshot
+{
+    /// <summary>Unique snapshot identifier.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>Azure subscription ID this snapshot represents.</summary>
+    public string SubscriptionId { get; set; } = string.Empty;
+
+    /// <summary>Compliance score (0-100) at the time of capture.</summary>
+    public double ComplianceScore { get; set; }
+
+    /// <summary>Total number of controls assessed.</summary>
+    public int TotalControls { get; set; }
+
+    /// <summary>Number of controls passing.</summary>
+    public int PassedControls { get; set; }
+
+    /// <summary>Number of controls failing.</summary>
+    public int FailedControls { get; set; }
+
+    /// <summary>Total number of resources assessed.</summary>
+    public int TotalResources { get; set; }
+
+    /// <summary>Number of compliant resources.</summary>
+    public int CompliantResources { get; set; }
+
+    /// <summary>Number of non-compliant resources.</summary>
+    public int NonCompliantResources { get; set; }
+
+    /// <summary>Number of active (non-resolved/dismissed) alerts at capture time.</summary>
+    public int ActiveAlertCount { get; set; }
+
+    /// <summary>Number of Critical-severity active alerts.</summary>
+    public int CriticalAlertCount { get; set; }
+
+    /// <summary>Number of High-severity active alerts.</summary>
+    public int HighAlertCount { get; set; }
+
+    /// <summary>JSON-serialized breakdown by control family (e.g., {"AC": 5, "SC": 3}).</summary>
+    public string? ControlFamilyBreakdown { get; set; }
+
+    /// <summary>UTC timestamp when the snapshot was captured.</summary>
+    public DateTimeOffset CapturedAt { get; set; }
+
+    /// <summary>True if this is a weekly rollup snapshot (Sundays).</summary>
+    public bool IsWeeklySnapshot { get; set; }
+}
+
+/// <summary>
+/// Opt-in rule that defines automatic remediation for trusted, low-risk violations.
+/// High-risk control families (AC, IA, SC) are blocked and always require human approval.
+/// </summary>
+public class AutoRemediationRule
+{
+    /// <summary>Unique rule identifier.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>Human-readable rule name (max 200 chars).</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Optional description of what this rule does.</summary>
+    public string? Description { get; set; }
+
+    /// <summary>Target subscription scope (null = all subscriptions).</summary>
+    public string? SubscriptionId { get; set; }
+
+    /// <summary>Target resource group scope (null = entire subscription).</summary>
+    public string? ResourceGroupName { get; set; }
+
+    /// <summary>Target control family (AC, IA, SC blocked).</summary>
+    public string? ControlFamily { get; set; }
+
+    /// <summary>Target specific control ID.</summary>
+    public string? ControlId { get; set; }
+
+    /// <summary>Remediation action description/identifier.</summary>
+    public string Action { get; set; } = string.Empty;
+
+    /// <summary>Approval mode: "auto" or "require-approval".</summary>
+    public string ApprovalMode { get; set; } = "require-approval";
+
+    /// <summary>Whether this rule is currently enabled.</summary>
+    public bool IsEnabled { get; set; } = true;
+
+    /// <summary>Total times this rule has been executed.</summary>
+    public int ExecutionCount { get; set; }
+
+    /// <summary>Last time this rule was executed.</summary>
+    public DateTimeOffset? LastExecutedAt { get; set; }
+
+    /// <summary>User who created this rule.</summary>
+    public string CreatedBy { get; set; } = string.Empty;
+
+    /// <summary>When this rule was created.</summary>
+    public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>When this rule was last updated.</summary>
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// Result of an auto-remediation attempt for an alert.
+/// </summary>
+public class AutoRemediationResult
+{
+    /// <summary>Whether the auto-remediation was attempted.</summary>
+    public bool Attempted { get; set; }
+
+    /// <summary>Whether the auto-remediation succeeded.</summary>
+    public bool Success { get; set; }
+
+    /// <summary>The rule that was matched, if any.</summary>
+    public AutoRemediationRule? MatchedRule { get; set; }
+
+    /// <summary>Human-readable outcome message.</summary>
+    public string Message { get; set; } = string.Empty;
+
+    /// <summary>If failed, the reason why.</summary>
+    public string? FailureReason { get; set; }
 }

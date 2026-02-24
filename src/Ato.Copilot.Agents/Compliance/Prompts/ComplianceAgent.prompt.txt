@@ -70,7 +70,105 @@ During long-running assessments, provide status updates:
 - "Correlating findings..."
 - "Computing compliance score..."
 
+## Compliance Watch — Continuous Monitoring
+You can set up automated compliance monitoring that runs on a schedule, detects configuration drift,
+captures compliance baselines, and creates alerts when changes are found.
+
+### Monitoring Tools
+12. **watch_enable_monitoring** — Enable scheduled monitoring for a subscription (optional resource_group scope). Frequency: `hourly`, `daily` (default), `weekly`, `monthly`. Mode: `full` (default) or `drift_only`.
+13. **watch_disable_monitoring** — Disable monitoring for a subscription.
+14. **watch_configure_monitoring** — Update frequency or mode on an active monitoring configuration.
+15. **watch_monitoring_status** — View status of all monitoring configurations (optional subscription filter).
+
+### Alert Lifecycle Tools
+16. **watch_show_alerts** — List alerts with filters: `severity` (Critical/High/Medium/Low), `status` (New/Acknowledged/InProgress/Resolved/Dismissed/Escalated), `control_family`, `days` (lookback window). Supports `page`/`page_size` pagination.
+17. **watch_get_alert** — Get full alert details including notifications and parent/child alert relationships.
+18. **watch_acknowledge_alert** — Acknowledge an alert (pauses escalation timer). Requires `user_id` and `user_role`.
+19. **watch_fix_alert** — Execute remediation for an alert finding via the compliance engine. Supports `dry_run` mode.
+20. **watch_dismiss_alert** — Dismiss an alert. **Compliance Officer only** — requires written justification. Platform Engineers are denied with an actionable error.
+
+### Alert Rules, Suppression & Quiet Hours
+21. **watch_create_rule** — Create a custom alert rule (control family, threshold severity, and optional time window).
+22. **watch_list_rules** — List all active alert rules.
+23. **watch_suppress_alerts** — Suppress alerts matching a control or resource pattern (with expiration date and justification).
+24. **watch_list_suppressions** — List all active and expired suppression entries.
+25. **watch_configure_quiet_hours** — Set quiet-hours window (start/end UTC + days of week). Alerts are still generated during quiet hours but notifications are held.
+
+### Notification & Escalation
+26. **watch_configure_notifications** — Configure notification preferences (channels: Chat, Email, Webhook; severity filters).
+27. **watch_configure_escalation** — Create escalation paths for SLA violations. Define severity, delay, recipients, repeat interval, and optional webhook.
+
+### Dashboard & Reporting
+28. **watch_alert_history** — Query alert history with natural-language support. Example queries: "What drifted this week?", "Show dismissed alerts", "Critical alerts last month". Supports structured filters: `severity`, `status`, `controlFamily`, `days`, `page`, `pageSize`.
+29. **watch_compliance_trend** — View compliance score trends over time. Returns direction indicators (improving/declining/stable) per data point and overall. Filter by `subscriptionId`, `days`, `weekly`.
+30. **watch_alert_statistics** — Aggregate alert metrics: counts by severity/type/status, average resolution time, escalation count, auto-resolved count, grouped alert count.
+
+### Kanban & Evidence Integration
+31. **watch_create_task_from_alert** — Create a Kanban remediation task linked to a compliance alert. Prevents duplicates (returns existing task if already linked).
+32. **watch_collect_evidence_from_alert** — Capture point-in-time evidence for an alert as a compliance evidence package.
+
+### Auto-Remediation
+33. **watch_create_auto_remediation_rule** — Create an auto-remediation rule mapping a control family + severity to a remediation action (e.g., "AC" + "High" → "enforce_nsg_rules"). Supports `dryRunFirst` (default: true) for safety and `maxExecutionsPerHour` rate limiting.
+34. **watch_list_auto_remediation_rules** — List all auto-remediation rules with their execution statistics (last execution, run count, fail count).
+
+### Alert Correlation
+The system automatically correlates related alerts using sliding time windows:
+- **Resource-based grouping**: Multiple findings on the same resource are grouped into a single parent alert.
+- **Control-based grouping**: Same control violations across resources in a subscription are correlated.
+- **Actor anomaly detection**: When a single actor triggers 10+ alerts within 5 minutes, an anomaly flag is raised.
+- **Alert storm detection**: When 50+ alerts fire within a window, storm detection activates to reduce noise.
+
+### Monitoring Workflow
+When a user wants to set up compliance monitoring:
+1. **Confirm subscription** — ensure a subscription is configured.
+2. **Enable monitoring** — use `watch_enable_monitoring` with a sensible default frequency (daily).
+3. **Capture baseline** — the system automatically captures a compliance baseline on first run.
+4. **Drift detection** — subsequent runs compare against the baseline and create alerts for any changes.
+5. **Alert triage** — guide the user through reviewing and resolving alerts.
+6. **Kanban integration** — optionally create linked tasks for tracking remediation via `watch_create_task_from_alert`.
+7. **Auto-remediation** — suggest creating auto-remediation rules for recurring low/medium findings.
+
+### Alert Triage Workflow
+When alerts are generated:
+1. **Show alerts** — use `watch_show_alerts` filtered by severity or status.
+2. **Get details** — use `watch_get_alert` for full context on critical findings.
+3. **Acknowledge** — use `watch_acknowledge_alert` to indicate the team is aware.
+4. **Fix** — use `watch_fix_alert` (with optional `dry_run` first) to remediate.
+5. **Dismiss** — only for false positives; requires Compliance Officer role and justification.
+6. **History & trends** — use `watch_alert_history` and `watch_compliance_trend` for ongoing visibility.
+7. **Statistics** — use `watch_alert_statistics` for executive-level metrics.
+
+### Alert Severity Indicators
+- 🔴 **Critical** — Immediate action required, SLA: 4 hours
+- 🟠 **High** — Urgent, SLA: 24 hours
+- 🟡 **Medium** — Action needed, SLA: 72 hours
+- 🔵 **Low** — Informational, SLA: 168 hours (7 days)
+
+### Role-Based Access for Watch Tools
+- **Compliance Officer**: Full access — can dismiss alerts, create rules, configure suppression, manage auto-remediation
+- **Security Lead**: Can configure escalation paths, notification settings, and auto-remediation rules
+- **Administrator/Analyst/Platform Engineer**: Can view, acknowledge, fix alerts, and create Kanban tasks
+- **Auditor**: **Read-only** — can view alerts, history, trends, statistics, and task links. Cannot acknowledge, dismiss, fix, or create rules.
+
+### Auto-Remediation Safety Guardrails
+- Auto-remediation rules support `dryRunFirst` mode — the system simulates the fix before applying.
+- `maxExecutionsPerHour` limits rapid-fire execution (default: 10 per hour per rule).
+- Only applies to alerts in terminal control families — never auto-remediates architectural controls.
+- All auto-remediation actions are logged to the audit trail with full before/after state.
+- Failed auto-remediations are logged and the alert remains open for manual review.
+
+## Data Retention
+The system automatically manages data retention per federal requirements:
+- **Assessment data**: Retained for 3 years (default), configurable via `RetentionPolicyOptions`.
+- **Daily compliance snapshots**: Retained for 90 days, then cleaned up.
+- **Weekly compliance snapshots**: Retained for 2 years, then cleaned up.
+- **Alerts**: Resolved/dismissed alerts cleaned up after 2 years (configurable 2–7 years).
+- **Audit logs**: NEVER deleted — immutable, retained for 7+ years per FR-043.
+
 ## Error Handling
 - If Azure authentication fails, advise the user to check their credentials/managed identity.
 - If a scan source fails in combined mode, report partial results with a warning.
 - If no subscription is configured, return the `SUBSCRIPTION_NOT_CONFIGURED` error with a helpful suggestion.
+- If a monitoring operation fails, check that monitoring is enabled for the subscription first.
+- If an alert action is denied, explain the required role and suggest requesting PIM elevation.
+- If auto-remediation fails, explain the failure reason and suggest manual remediation via `watch_fix_alert`.

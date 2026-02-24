@@ -175,4 +175,122 @@ public class RetentionPolicyOptions
     /// When false, the RetentionCleanupHostedService will not be registered.
     /// </summary>
     public bool EnableAutomaticCleanup { get; set; } = true;
+
+    /// <summary>Number of days to retain compliance alerts (2–7 years). Default 730 (2 years).</summary>
+    public int AlertRetentionDays { get; set; } = 730;
+
+    /// <summary>Number of days to retain daily compliance snapshots. Default 90.</summary>
+    public int DailySnapshotRetentionDays { get; set; } = 90;
+
+    /// <summary>Number of days to retain weekly compliance snapshots. Default 730 (2 years).</summary>
+    public int WeeklySnapshotRetentionDays { get; set; } = 730;
+}
+
+/// <summary>
+/// Configuration for compliance monitoring schedules and behavior.
+/// Bound from the "Monitoring" configuration section.
+/// </summary>
+public class MonitoringOptions
+{
+    /// <summary>Configuration section name for binding.</summary>
+    public const string SectionName = "Monitoring";
+
+    /// <summary>Default monitoring frequency for new configurations.</summary>
+    public string DefaultFrequency { get; set; } = "Hourly";
+
+    /// <summary>Default monitoring mode for new configurations.</summary>
+    public string DefaultMode { get; set; } = "Scheduled";
+
+    /// <summary>Background service tick interval in seconds. Default 60 (1 minute).</summary>
+    public int TickIntervalSeconds { get; set; } = 60;
+
+    /// <summary>Activity Log polling interval in seconds for event-driven mode. Default 120 (2 minutes).</summary>
+    public int EventPollIntervalSeconds { get; set; } = 120;
+
+    /// <summary>Maximum number of concurrent monitoring checks. Default 5.</summary>
+    public int MaxConcurrentChecks { get; set; } = 5;
+
+    /// <summary>Whether to enable monitoring on startup. Default true.</summary>
+    public bool EnableOnStartup { get; set; } = true;
+
+    /// <summary>Azure cloud environment: AzureGovernment or AzureCloud. Default AzureGovernment.</summary>
+    public string CloudEnvironment { get; set; } = "AzureGovernment";
+}
+
+/// <summary>
+/// Configuration for compliance alert behavior and SLA deadlines.
+/// Bound from the "Alerts" configuration section.
+/// </summary>
+public class AlertOptions
+{
+    /// <summary>Configuration section name for binding.</summary>
+    public const string SectionName = "Alerts";
+
+    /// <summary>SLA deadline in minutes for Critical alerts. Default 60 (1 hour).</summary>
+    public int CriticalSlaMinutes { get; set; } = 60;
+
+    /// <summary>SLA deadline in minutes for High alerts. Default 240 (4 hours).</summary>
+    public int HighSlaMinutes { get; set; } = 240;
+
+    /// <summary>SLA deadline in minutes for Medium alerts. Default 1440 (24 hours).</summary>
+    public int MediumSlaMinutes { get; set; } = 1440;
+
+    /// <summary>SLA deadline in minutes for Low alerts. Default 10080 (7 days).</summary>
+    public int LowSlaMinutes { get; set; } = 10080;
+
+    /// <summary>Default page size for alert queries. Default 50.</summary>
+    public int DefaultPageSize { get; set; } = 50;
+
+    /// <summary>Maximum page size for alert queries. Default 200.</summary>
+    public int MaxPageSize { get; set; } = 200;
+
+    /// <summary>Secure score threshold percentage below which DEGRADATION alerts fire. Default 80.0.</summary>
+    public double SecureScoreThreshold { get; set; } = 80.0;
+}
+
+/// <summary>
+/// Configuration for alert notification delivery.
+/// Bound from the "Notifications" configuration section.
+/// </summary>
+public class NotificationOptions
+{
+    /// <summary>Configuration section name for binding.</summary>
+    public const string SectionName = "Notifications";
+
+    /// <summary>Maximum notifications per minute per channel. Default 10.</summary>
+    public int MaxPerMinutePerChannel { get; set; } = 10;
+
+    /// <summary>Whether to enable email notifications. Default false.</summary>
+    public bool EnableEmail { get; set; }
+
+    /// <summary>Whether to enable webhook notifications. Default false.</summary>
+    public bool EnableWebhook { get; set; }
+
+    /// <summary>Daily digest delivery hour (UTC 0–23). Default 8 (08:00 UTC).</summary>
+    public int DigestHourUtc { get; set; } = 8;
+
+    /// <summary>Bounded channel capacity for async notification dispatch. Default 500.</summary>
+    public int ChannelCapacity { get; set; } = 500;
+}
+
+/// <summary>
+/// Configuration for alert escalation behavior.
+/// Bound from the "Escalation" configuration section.
+/// </summary>
+public class EscalationOptions
+{
+    /// <summary>Configuration section name for binding.</summary>
+    public const string SectionName = "Escalation";
+
+    /// <summary>Escalation check interval in seconds. Default 300 (5 minutes).</summary>
+    public int CheckIntervalSeconds { get; set; } = 300;
+
+    /// <summary>Default escalation delay in minutes after SLA expiry. Default 15.</summary>
+    public int DefaultDelayMinutes { get; set; } = 15;
+
+    /// <summary>Default maximum escalation attempts. Default 3.</summary>
+    public int DefaultMaxEscalations { get; set; } = 3;
+
+    /// <summary>Default repeat interval in minutes between escalation notifications. Default 30.</summary>
+    public int DefaultRepeatIntervalMinutes { get; set; } = 30;
 }

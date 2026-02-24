@@ -365,7 +365,7 @@ public class KanbanCreateTaskTool : KanbanToolBase
             var task = await svc.CreateTaskAsync(
                 boardId, title, controlId, userContext.UserId, description, severity, assigneeId, dueDate,
                 affectedResources.Count > 0 ? affectedResources : null,
-                remediationScript, validationCriteria, cancellationToken);
+                remediationScript, validationCriteria, linkedAlertId: null, cancellationToken);
 
             return Success(new
             {
