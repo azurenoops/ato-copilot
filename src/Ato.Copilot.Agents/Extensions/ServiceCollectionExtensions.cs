@@ -7,7 +7,10 @@ using Microsoft.Extensions.Http.Resilience;
 using Ato.Copilot.Agents.Common;
 using Ato.Copilot.Agents.Compliance.Agents;
 using Ato.Copilot.Agents.Compliance.Configuration;
+using Ato.Copilot.Agents.Compliance.EvidenceCollectors;
+using Ato.Copilot.Agents.Compliance.Scanners;
 using Ato.Copilot.Agents.Compliance.Services;
+using Ato.Copilot.Agents.Compliance.Services.KnowledgeBase;
 using Ato.Copilot.Agents.Compliance.Tools;
 using Ato.Copilot.Agents.Configuration.Agents;
 using Ato.Copilot.Agents.Configuration.Tools;
@@ -52,6 +55,45 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IComplianceHistoryService>(sp => sp.GetRequiredService<ComplianceMonitoringService>());
         services.AddSingleton<IAssessmentAuditService>(sp => sp.GetRequiredService<ComplianceMonitoringService>());
         services.AddSingleton<IComplianceStatusService>(sp => sp.GetRequiredService<ComplianceMonitoringService>());
+
+        // ─── Compliance Engine Infrastructure (Feature 008) ──────────────────
+        services.AddSingleton<IAzureResourceService, AzureResourceService>();
+        services.AddSingleton<IAssessmentPersistenceService, AssessmentPersistenceService>();
+        services.AddSingleton<IScannerRegistry, ScannerRegistry>();
+        services.AddSingleton<IEvidenceCollectorRegistry, EvidenceCollectorRegistry>();
+
+        // ─── Family-Specific Scanners (Feature 008 — US2) ───────────────────
+        services.AddSingleton<IComplianceScanner, AccessControlScanner>();
+        services.AddSingleton<IComplianceScanner, AuditScanner>();
+        services.AddSingleton<IComplianceScanner, SecurityCommunicationsScanner>();
+        services.AddSingleton<IComplianceScanner, SystemIntegrityScanner>();
+        services.AddSingleton<IComplianceScanner, ContingencyPlanningScanner>();
+        services.AddSingleton<IComplianceScanner, IdentificationAuthScanner>();
+        services.AddSingleton<IComplianceScanner, ConfigManagementScanner>();
+        services.AddSingleton<IComplianceScanner, IncidentResponseScanner>();
+        services.AddSingleton<IComplianceScanner, RiskAssessmentScanner>();
+        services.AddSingleton<IComplianceScanner, CertAccreditationScanner>();
+        services.AddSingleton<IComplianceScanner, DefaultComplianceScanner>();
+
+        // ─── Family-Specific Evidence Collectors (Feature 008 — US3) ────────
+        services.AddSingleton<IEvidenceCollector, AccessControlEvidenceCollector>();
+        services.AddSingleton<IEvidenceCollector, AuditEvidenceCollector>();
+        services.AddSingleton<IEvidenceCollector, SecurityCommsEvidenceCollector>();
+        services.AddSingleton<IEvidenceCollector, SystemIntegrityEvidenceCollector>();
+        services.AddSingleton<IEvidenceCollector, ContingencyPlanningEvidenceCollector>();
+        services.AddSingleton<IEvidenceCollector, IdentificationAuthEvidenceCollector>();
+        services.AddSingleton<IEvidenceCollector, ConfigMgmtEvidenceCollector>();
+        services.AddSingleton<IEvidenceCollector, IncidentResponseEvidenceCollector>();
+        services.AddSingleton<IEvidenceCollector, RiskAssessmentEvidenceCollector>();
+        services.AddSingleton<IEvidenceCollector, CertAccreditationEvidenceCollector>();
+        services.AddSingleton<IEvidenceCollector, DefaultEvidenceCollector>();
+
+        // ─── Knowledge Base Stubs (Feature 008) ─────────────────────────────
+        services.AddSingleton<IStigValidationService, StigValidationService>();
+        services.AddSingleton<IRmfKnowledgeService, RmfKnowledgeService>();
+        services.AddSingleton<IStigKnowledgeService, StigKnowledgeService>();
+        services.AddSingleton<IDoDInstructionService, DoDInstructionService>();
+        services.AddSingleton<IDoDWorkflowService, DoDWorkflowService>();
 
         // ─── Compliance Watch Services ───────────────────────────────────────
         services.AddSingleton<AlertCorrelationService>();
