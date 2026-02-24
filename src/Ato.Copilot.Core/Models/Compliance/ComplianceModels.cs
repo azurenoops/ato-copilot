@@ -282,6 +282,128 @@ public enum AuditOutcome
     Denied
 }
 
+// ────────────────────────────── Compliance Engine Enums ──────────────────────────────────────────
+
+/// <summary>
+/// Risk level for risk profiles and assessments. Provides four-tier granularity
+/// (distinct from <see cref="RiskLevel"/> which only has Standard/High).
+/// </summary>
+public enum ComplianceRiskLevel
+{
+    /// <summary>Risk score &lt; 20. Minimal remediation needed.</summary>
+    Low,
+    /// <summary>Risk score ≥ 20 and &lt; 50. Some findings require attention.</summary>
+    Medium,
+    /// <summary>Risk score ≥ 50 and &lt; 100. Significant findings requiring prompt action.</summary>
+    High,
+    /// <summary>Risk score ≥ 100. Immediate remediation required.</summary>
+    Critical
+}
+
+/// <summary>
+/// Status of a per-family scan result within a comprehensive assessment.
+/// </summary>
+public enum FamilyAssessmentStatus
+{
+    /// <summary>Family scan has not started.</summary>
+    Pending,
+    /// <summary>Family scan completed successfully.</summary>
+    Completed,
+    /// <summary>Family scan failed due to an error.</summary>
+    Failed,
+    /// <summary>Family scan was skipped (e.g., cancellation).</summary>
+    Skipped
+}
+
+/// <summary>
+/// Evidence artifact category for evidence collection packages
+/// (distinct from <see cref="EvidenceCategory"/> which covers storage-level categories).
+/// </summary>
+public enum EvidenceType
+{
+    /// <summary>Resource configuration export (e.g., ARM template snapshot).</summary>
+    Configuration,
+    /// <summary>Log evidence (e.g., activity logs, diagnostic logs).</summary>
+    Log,
+    /// <summary>Metric evidence (e.g., Azure Monitor metrics).</summary>
+    Metric,
+    /// <summary>Policy evidence (e.g., Azure Policy compliance state).</summary>
+    Policy,
+    /// <summary>Access control evidence (e.g., RBAC assignments, conditional access).</summary>
+    AccessControl
+}
+
+/// <summary>
+/// Significant event categories detected in compliance timelines.
+/// </summary>
+public enum TimelineEventType
+{
+    /// <summary>Compliance score improved significantly (≥ 10%).</summary>
+    ScoreImprovement,
+    /// <summary>Compliance score degraded significantly (≥ 10%).</summary>
+    ScoreDegradation,
+    /// <summary>Spike in finding count (≥ 5 new findings).</summary>
+    FindingSpike,
+    /// <summary>Significant number of findings resolved.</summary>
+    FindingResolution,
+    /// <summary>Compliance certificate was issued.</summary>
+    CertificateIssued,
+    /// <summary>Compliance certificate expired.</summary>
+    CertificateExpired,
+    /// <summary>Compliance baseline was updated.</summary>
+    BaselineChanged,
+    /// <summary>Remediation plan completed.</summary>
+    RemediationCompleted,
+    /// <summary>Configuration drift detected from baseline.</summary>
+    DriftDetected,
+    /// <summary>Alert escalated due to SLA expiry.</summary>
+    AlertEscalated
+}
+
+/// <summary>
+/// Overall compliance trend direction over a time period.
+/// </summary>
+public enum TrendDirection
+{
+    /// <summary>Compliance score trending upward.</summary>
+    Improving,
+    /// <summary>Compliance score relatively stable.</summary>
+    Stable,
+    /// <summary>Compliance score trending downward.</summary>
+    Degrading
+}
+
+/// <summary>
+/// Compliance certificate lifecycle status.
+/// </summary>
+public enum CertificateStatus
+{
+    /// <summary>Certificate is currently valid.</summary>
+    Active,
+    /// <summary>Certificate has passed its expiration date.</summary>
+    Expired,
+    /// <summary>Certificate was manually revoked.</summary>
+    Revoked
+}
+
+/// <summary>
+/// Finding-level remediation tracking status
+/// (distinct from plan-level <see cref="RemediationStatus"/>).
+/// </summary>
+public enum RemediationTrackingStatus
+{
+    /// <summary>Remediation has not been started.</summary>
+    NotStarted,
+    /// <summary>Remediation is in progress.</summary>
+    InProgress,
+    /// <summary>Remediation completed successfully.</summary>
+    Completed,
+    /// <summary>Finding will not be fixed (documented risk acceptance).</summary>
+    WontFix,
+    /// <summary>Remediation deferred to a future cycle.</summary>
+    Deferred
+}
+
 // ──────────────────────────────────────── Value Types ────────────────────────────────────────────
 
 /// <summary>
@@ -389,6 +511,32 @@ public class ComplianceAssessment
 
     /// <summary>Findings discovered during this assessment.</summary>
     public List<ComplianceFinding> Findings { get; set; } = new();
+
+    // ─── New Properties (Feature 008) ────────────────────────────────────────
+
+    /// <summary>Per-family assessment breakdown. Persisted as JSON column.</summary>
+    public List<ControlFamilyAssessment> ControlFamilyResults { get; set; } = new();
+
+    /// <summary>Markdown executive summary with score, risk, and finding counts.</summary>
+    public string ExecutiveSummary { get; set; } = string.Empty;
+
+    /// <summary>Severity-weighted risk profile. Persisted as JSON column.</summary>
+    public RiskProfile? RiskProfile { get; set; }
+
+    /// <summary>Environment identifier for multi-subscription assessments (e.g., "Production").</summary>
+    public string? EnvironmentName { get; set; }
+
+    /// <summary>All subscription IDs assessed (single or multi). Persisted as JSON column.</summary>
+    public List<string> SubscriptionIds { get; set; } = new();
+
+    /// <summary>Resource group constraint (null = full subscription scope).</summary>
+    public string? ResourceGroupFilter { get; set; }
+
+    /// <summary>Total wall-clock assessment time.</summary>
+    public TimeSpan? AssessmentDuration { get; set; }
+
+    /// <summary>Per-pillar success/failure (ARM, Policy, Defender). Persisted as JSON column.</summary>
+    public Dictionary<string, bool> ScanPillarResults { get; set; } = new();
 }
 
 /// <summary>
@@ -459,6 +607,29 @@ public class ComplianceFinding
 
     /// <summary>Foreign key to parent ComplianceAssessment.</summary>
     public string AssessmentId { get; set; } = string.Empty;
+
+    // ─── New Properties (Feature 008) ────────────────────────────────────────
+
+    /// <summary>Human-readable control title from NIST catalog.</summary>
+    public string ControlTitle { get; set; } = string.Empty;
+
+    /// <summary>Full control description from NIST catalog.</summary>
+    public string ControlDescription { get; set; } = string.Empty;
+
+    /// <summary>Whether this finding came from STIG validation.</summary>
+    public bool StigFinding { get; set; }
+
+    /// <summary>STIG rule ID (populated only when <see cref="StigFinding"/> is true).</summary>
+    public string? StigId { get; set; }
+
+    /// <summary>Lifecycle tracking for finding-level remediation.</summary>
+    public RemediationTrackingStatus RemediationTrackingStatus { get; set; } = RemediationTrackingStatus.NotStarted;
+
+    /// <summary>UTC timestamp when remediation was completed.</summary>
+    public DateTime? RemediatedAt { get; set; }
+
+    /// <summary>Identity of the user or service that performed the remediation.</summary>
+    public string? RemediatedBy { get; set; }
 }
 
 /// <summary>
@@ -713,6 +884,426 @@ public class ConfigurationSettings
 
     /// <summary>UTC timestamp when settings were last changed.</summary>
     public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
+}
+
+// ────────────────────────────── Compliance Engine Models ─────────────────────────────────────────
+
+/// <summary>
+/// Per-family scan result aggregation. Returned by each <see cref="IComplianceScanner"/>.
+/// Contains control counts, compliance score, findings, and scanner diagnostics.
+/// </summary>
+public class ControlFamilyAssessment
+{
+    /// <summary>Two-letter NIST family code (e.g., "AC").</summary>
+    public string FamilyCode { get; set; } = string.Empty;
+
+    /// <summary>Human-readable family name (from ControlFamilies.FamilyNames).</summary>
+    public string FamilyName { get; set; } = string.Empty;
+
+    /// <summary>Number of controls in this family.</summary>
+    public int TotalControls { get; set; }
+
+    /// <summary>Controls that passed assessment.</summary>
+    public int PassedControls { get; set; }
+
+    /// <summary>Controls with findings.</summary>
+    public int FailedControls { get; set; }
+
+    /// <summary>Per-family score: <c>passed / total * 100</c>.</summary>
+    public double ComplianceScore { get; set; }
+
+    /// <summary>Findings discovered in this family.</summary>
+    public List<ComplianceFinding> Findings { get; set; } = new();
+
+    /// <summary>Time spent scanning this family.</summary>
+    public TimeSpan AssessmentDuration { get; set; } = TimeSpan.Zero;
+
+    /// <summary>Scanner class name that handled this family.</summary>
+    public string ScannerName { get; set; } = string.Empty;
+
+    /// <summary>Family assessment lifecycle status.</summary>
+    public FamilyAssessmentStatus Status { get; set; } = FamilyAssessmentStatus.Pending;
+
+    /// <summary>Error message if <see cref="Status"/> is <see cref="FamilyAssessmentStatus.Failed"/>.</summary>
+    public string? ErrorMessage { get; set; }
+
+    /// <summary>
+    /// Creates a failed family assessment result for error isolation.
+    /// </summary>
+    /// <param name="familyCode">The two-letter family code.</param>
+    /// <param name="error">The error message describing the failure.</param>
+    /// <returns>A <see cref="ControlFamilyAssessment"/> with Failed status.</returns>
+    public static ControlFamilyAssessment Failed(string familyCode, string error) => new()
+    {
+        FamilyCode = familyCode,
+        Status = FamilyAssessmentStatus.Failed,
+        ErrorMessage = error
+    };
+}
+
+/// <summary>
+/// Progress reporting during long-running assessments.
+/// Used with <see cref="IProgress{AssessmentProgress}"/>.
+/// </summary>
+public class AssessmentProgress
+{
+    /// <summary>Total families to scan (typically 20).</summary>
+    public int TotalFamilies { get; set; } = 20;
+
+    /// <summary>Families completed so far.</summary>
+    public int CompletedFamilies { get; set; }
+
+    /// <summary>Family currently being scanned (null if between scans).</summary>
+    public string? CurrentFamily { get; set; }
+
+    /// <summary>Completion percentage: <c>completed / total * 100</c>.</summary>
+    public double PercentComplete { get; set; }
+
+    /// <summary>Estimated time remaining based on average family scan time.</summary>
+    public TimeSpan? EstimatedTimeRemaining { get; set; }
+
+    /// <summary>Completed family codes.</summary>
+    public List<string> FamilyResults { get; set; } = new();
+}
+
+/// <summary>
+/// Severity-weighted risk summary attached to an assessment.
+/// Calculated from finding counts using severity weights:
+/// Critical = 10.0, High = 7.5, Medium = 5.0, Low = 2.5.
+/// </summary>
+public class RiskProfile
+{
+    /// <summary>Weighted risk score: <c>Σ(severity_weight × count)</c>.</summary>
+    public double RiskScore { get; set; }
+
+    /// <summary>Risk level derived from score thresholds (≥100 Critical, ≥50 High, ≥20 Medium, &lt;20 Low).</summary>
+    public ComplianceRiskLevel RiskLevel { get; set; } = ComplianceRiskLevel.Low;
+
+    /// <summary>Count of critical-severity findings.</summary>
+    public int CriticalCount { get; set; }
+
+    /// <summary>Count of high-severity findings.</summary>
+    public int HighCount { get; set; }
+
+    /// <summary>Count of medium-severity findings.</summary>
+    public int MediumCount { get; set; }
+
+    /// <summary>Count of low-severity findings.</summary>
+    public int LowCount { get; set; }
+
+    /// <summary>Up to 5 families with compliance score &lt; 70%, ordered ascending.</summary>
+    public List<FamilyRisk> TopRisks { get; set; } = new();
+}
+
+/// <summary>
+/// Entry in <see cref="RiskProfile.TopRisks"/> identifying a family at risk.
+/// </summary>
+public class FamilyRisk
+{
+    /// <summary>Two-letter family code.</summary>
+    public string FamilyCode { get; set; } = string.Empty;
+
+    /// <summary>Human-readable family name.</summary>
+    public string FamilyName { get; set; } = string.Empty;
+
+    /// <summary>Family compliance score (0.0 to 100.0).</summary>
+    public double ComplianceScore { get; set; }
+
+    /// <summary>Number of findings in this family.</summary>
+    public int FindingCount { get; set; }
+}
+
+/// <summary>
+/// Full 8-category risk analysis for a subscription.
+/// Categories: Data Protection, Access Control, Network Security, Incident Response,
+/// Business Continuity, Compliance, Third-Party Risk, Configuration Management.
+/// </summary>
+public class RiskAssessment
+{
+    /// <summary>Subscription assessed.</summary>
+    public string SubscriptionId { get; set; } = string.Empty;
+
+    /// <summary>Assessment timestamp.</summary>
+    public DateTime AssessedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>8 risk category results.</summary>
+    public List<RiskCategory> Categories { get; set; } = new();
+
+    /// <summary>Average across category scores.</summary>
+    public double OverallScore { get; set; }
+
+    /// <summary>Risk level derived from overall score (≥8 Low, ≥5 Medium, ≥3 High, &lt;3 Critical).</summary>
+    public ComplianceRiskLevel OverallRiskLevel { get; set; } = ComplianceRiskLevel.Low;
+
+    /// <summary>Mitigation recommendations for categories scoring below 5.</summary>
+    public List<string> Recommendations { get; set; } = new();
+}
+
+/// <summary>
+/// One of 8 risk assessment categories scored on a 1-10 scale.
+/// </summary>
+public class RiskCategory
+{
+    /// <summary>Category name (e.g., "Data Protection", "Access Control").</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Score on 1-10 scale: <c>1 + (avgFamilyCompliance / 100 × 9)</c>, clamped to [1, 10].</summary>
+    public double Score { get; set; }
+
+    /// <summary>Risk level derived from category score.</summary>
+    public ComplianceRiskLevel RiskLevel { get; set; } = ComplianceRiskLevel.Low;
+
+    /// <summary>Related finding count across contributing families.</summary>
+    public int Findings { get; set; }
+
+    /// <summary>Recommended mitigations for this category.</summary>
+    public List<string> Mitigations { get; set; } = new();
+}
+
+/// <summary>
+/// Aggregated evidence collection result for a control family.
+/// Scored for completeness based on distinct evidence types collected.
+/// </summary>
+public class EvidencePackage
+{
+    /// <summary>Control family code.</summary>
+    public string FamilyCode { get; set; } = string.Empty;
+
+    /// <summary>Azure subscription assessed.</summary>
+    public string SubscriptionId { get; set; } = string.Empty;
+
+    /// <summary>Individual evidence artifacts.</summary>
+    public List<EvidenceItem> EvidenceItems { get; set; } = new();
+
+    /// <summary>Completeness percentage: <c>distinct_types / expected_types * 100</c>.</summary>
+    public double CompletenessScore { get; set; }
+
+    /// <summary>Expected evidence types for this family (typically 5).</summary>
+    public int ExpectedEvidenceTypes { get; set; } = 5;
+
+    /// <summary>Distinct evidence types collected.</summary>
+    public int CollectedEvidenceTypes { get; set; }
+
+    /// <summary>Human-readable evidence summary.</summary>
+    public string Summary { get; set; } = string.Empty;
+
+    /// <summary>Formal attestation text.</summary>
+    public string AttestationStatement { get; set; } = string.Empty;
+
+    /// <summary>Collection timestamp.</summary>
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Individual evidence artifact within an <see cref="EvidencePackage"/>.
+/// </summary>
+public class EvidenceItem
+{
+    /// <summary>Evidence category.</summary>
+    public EvidenceType Type { get; set; } = EvidenceType.Configuration;
+
+    /// <summary>Evidence title.</summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>Evidence description.</summary>
+    public string Description { get; set; } = string.Empty;
+
+    /// <summary>Evidence content (JSON or text).</summary>
+    public string Content { get; set; } = string.Empty;
+
+    /// <summary>Azure resource ID (if resource-specific).</summary>
+    public string? ResourceId { get; set; }
+
+    /// <summary>Collection timestamp.</summary>
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>SHA-256 hash of <see cref="Content"/> for integrity verification.</summary>
+    public string ContentHash { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// ATO compliance certificate with 6-month validity, per-family attestations,
+/// and SHA-256 verification hash. Issued only when compliance score ≥ 80%.
+/// </summary>
+public class ComplianceCertificate
+{
+    /// <summary>Unique certificate identifier.</summary>
+    public string CertificateId { get; set; } = Guid.NewGuid().ToString();
+
+    /// <summary>Subscription certified.</summary>
+    public string SubscriptionId { get; set; } = string.Empty;
+
+    /// <summary>Compliance framework (e.g., "NIST80053").</summary>
+    public string Framework { get; set; } = "NIST80053";
+
+    /// <summary>Score at time of certification (must be ≥ 80.0).</summary>
+    public double ComplianceScore { get; set; }
+
+    /// <summary>Certificate issue date.</summary>
+    public DateTime IssuedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Certificate expiration date (6-month validity).</summary>
+    public DateTime ExpiresAt { get; set; } = DateTime.UtcNow.AddDays(180);
+
+    /// <summary>Issuer identity.</summary>
+    public string IssuedBy { get; set; } = string.Empty;
+
+    /// <summary>Per-family attestation entries.</summary>
+    public List<FamilyAttestation> FamilyAttestations { get; set; } = new();
+
+    /// <summary>Families covered by this certificate.</summary>
+    public List<string> CoverageFamilies { get; set; } = new();
+
+    /// <summary>SHA-256 hash of certificate content for integrity verification.</summary>
+    public string VerificationHash { get; set; } = string.Empty;
+
+    /// <summary>Certificate lifecycle status.</summary>
+    public CertificateStatus Status { get; set; } = CertificateStatus.Active;
+}
+
+/// <summary>
+/// Per-family attestation entry within a <see cref="ComplianceCertificate"/>.
+/// </summary>
+public class FamilyAttestation
+{
+    /// <summary>Two-letter family code.</summary>
+    public string FamilyCode { get; set; } = string.Empty;
+
+    /// <summary>Human-readable family name.</summary>
+    public string FamilyName { get; set; } = string.Empty;
+
+    /// <summary>Compliance score at certification time.</summary>
+    public double ComplianceScore { get; set; }
+
+    /// <summary>Number of controls evaluated.</summary>
+    public int ControlsAssessed { get; set; }
+
+    /// <summary>Number of controls that passed.</summary>
+    public int ControlsPassed { get; set; }
+
+    /// <summary>Formal attestation statement for this family.</summary>
+    public string AttestationText { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Historical compliance trend data with daily data points and significant events.
+/// </summary>
+public class ComplianceTimeline
+{
+    /// <summary>Subscription ID.</summary>
+    public string SubscriptionId { get; set; } = string.Empty;
+
+    /// <summary>Timeline start date.</summary>
+    public DateTime StartDate { get; set; }
+
+    /// <summary>Timeline end date.</summary>
+    public DateTime EndDate { get; set; }
+
+    /// <summary>Daily compliance data points.</summary>
+    public List<TimelineDataPoint> DataPoints { get; set; } = new();
+
+    /// <summary>Detected significant events during the period.</summary>
+    public List<SignificantEvent> SignificantEvents { get; set; } = new();
+
+    /// <summary>Overall trend direction.</summary>
+    public TrendDirection Trend { get; set; } = TrendDirection.Stable;
+
+    /// <summary>Auto-generated insights (trajectory, volatility, remediation effectiveness).</summary>
+    public List<string> Insights { get; set; } = new();
+}
+
+/// <summary>
+/// Daily compliance snapshot within a <see cref="ComplianceTimeline"/>.
+/// </summary>
+public class TimelineDataPoint
+{
+    /// <summary>Day of the data point.</summary>
+    public DateTime Date { get; set; }
+
+    /// <summary>Compliance score on this day.</summary>
+    public double ComplianceScore { get; set; }
+
+    /// <summary>Total findings on this day.</summary>
+    public int FindingCount { get; set; }
+
+    /// <summary>Critical findings on this day.</summary>
+    public int CriticalCount { get; set; }
+
+    /// <summary>High findings on this day.</summary>
+    public int HighCount { get; set; }
+}
+
+/// <summary>
+/// Notable compliance event in a <see cref="ComplianceTimeline"/>.
+/// </summary>
+public class SignificantEvent
+{
+    /// <summary>Event date.</summary>
+    public DateTime Date { get; set; }
+
+    /// <summary>Event category.</summary>
+    public TimelineEventType EventType { get; set; }
+
+    /// <summary>Human-readable description.</summary>
+    public string Description { get; set; } = string.Empty;
+
+    /// <summary>Score delta (signed). Absolute value ≥ 10.0 triggers score events.</summary>
+    public double ScoreChange { get; set; }
+
+    /// <summary>Finding count delta (signed). Value ≥ 5 triggers FindingSpike.</summary>
+    public int FindingChange { get; set; }
+}
+
+/// <summary>
+/// Real-time compliance posture aggregated from Compliance Watch.
+/// Combines monitoring status, drift detection, alerts, and per-control status.
+/// </summary>
+public class ContinuousComplianceStatus
+{
+    /// <summary>Subscription ID.</summary>
+    public string SubscriptionId { get; set; } = string.Empty;
+
+    /// <summary>Latest compliance score.</summary>
+    public double OverallScore { get; set; }
+
+    /// <summary>Whether Compliance Watch monitoring is enabled.</summary>
+    public bool MonitoringEnabled { get; set; }
+
+    /// <summary>Whether drift has been detected from baseline.</summary>
+    public bool DriftDetected { get; set; }
+
+    /// <summary>Count of active (non-resolved/dismissed) alerts.</summary>
+    public int ActiveAlerts { get; set; }
+
+    /// <summary>Most recent assessment date.</summary>
+    public DateTime? LastAssessedAt { get; set; }
+
+    /// <summary>Most recent drift check timestamp.</summary>
+    public DateTime? LastDriftCheckAt { get; set; }
+
+    /// <summary>Per-control compliance status entries.</summary>
+    public List<ControlComplianceStatus> ControlStatuses { get; set; } = new();
+
+    /// <summary>Whether auto-remediation rules exist.</summary>
+    public bool AutoRemediationEnabled { get; set; }
+}
+
+/// <summary>
+/// Per-control monitoring entry within <see cref="ContinuousComplianceStatus"/>.
+/// </summary>
+public class ControlComplianceStatus
+{
+    /// <summary>NIST control ID.</summary>
+    public string ControlId { get; set; } = string.Empty;
+
+    /// <summary>Current finding status for this control.</summary>
+    public FindingStatus Status { get; set; }
+
+    /// <summary>Whether drift has been detected for this control.</summary>
+    public bool DriftDetected { get; set; }
+
+    /// <summary>Last check timestamp for this control.</summary>
+    public DateTime LastCheckedAt { get; set; }
 }
 
 // ──────────────────────────────── Compliance Watch Entities ──────────────────────────────────────

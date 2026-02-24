@@ -65,8 +65,8 @@ public class ComplianceAssessmentTool : BaseTool
 
         Logger.LogInformation("Running compliance assessment | Sub: {Sub} | Type: {Type}", subscriptionId, scanType);
 
-        var result = await _complianceEngine.RunAssessmentAsync(
-            subscriptionId, framework, controlFamilies, resourceTypes, scanType, includePassed, cancellationToken);
+        var result = await _complianceEngine.RunComprehensiveAssessmentAsync(
+            subscriptionId, resourceGroup: null, progress: null, cancellationToken);
 
         var output = $"## Compliance Assessment Results\n\n" +
                $"**Subscription**: {result.SubscriptionId}\n" +
@@ -133,6 +133,12 @@ public class ComplianceAssessmentTool : BaseTool
                     output += "\n";
                 }
             }
+        }
+
+        // Append executive summary if available
+        if (!string.IsNullOrEmpty(result.ExecutiveSummary))
+        {
+            output += "\n---\n\n" + result.ExecutiveSummary + "\n";
         }
 
         // ── Post-assessment flow: suggest Kanban board creation / update ──

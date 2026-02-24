@@ -3,10 +3,19 @@ using Ato.Copilot.Core.Models.Compliance;
 namespace Ato.Copilot.Core.Interfaces.Compliance;
 
 /// <summary>
-/// Core compliance scanning engine for NIST 800-53 assessments
+/// Core compliance scanning engine for NIST 800-53 assessments.
+/// Orchestrates multi-scope assessments, family-specific scanning, evidence collection,
+/// risk analysis, certificate generation, continuous monitoring, and data access.
 /// </summary>
 public interface IAtoComplianceEngine
 {
+    // ─── Legacy Assessment Method (backward compatible) ─────────────
+
+    /// <summary>
+    /// Run a compliance assessment with flexible parameters.
+    /// Retained for backward compatibility with existing tools and services.
+    /// New code should prefer <see cref="RunComprehensiveAssessmentAsync"/>.
+    /// </summary>
     Task<ComplianceAssessment> RunAssessmentAsync(
         string subscriptionId,
         string? framework = null,
@@ -16,18 +25,190 @@ public interface IAtoComplianceEngine
         bool includePassed = false,
         CancellationToken cancellationToken = default);
 
+    // ─── Core Assessment Methods (US1) ──────────────────────────────
+
+    /// <summary>
+    /// Run a comprehensive compliance assessment for a single subscription.
+    /// Orchestrates all 3 scan pillars across all 20 NIST families.
+    /// </summary>
+    /// <param name="subscriptionId">Azure subscription ID (valid GUID format).</param>
+    /// <param name="resourceGroup">Optional resource group constraint.</param>
+    /// <param name="progress">Optional progress reporter for per-family updates.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Completed assessment with findings, scores, and executive summary.</returns>
+    Task<ComplianceAssessment> RunComprehensiveAssessmentAsync(
+        string subscriptionId,
+        string? resourceGroup = null,
+        IProgress<AssessmentProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Run a multi-subscription environment assessment.
+    /// Pre-warms caches for all subscriptions, aggregates results.
+    /// </summary>
+    /// <param name="subscriptionIds">Subscription IDs to assess.</param>
+    /// <param name="environmentName">Environment identifier (e.g., "Production").</param>
+    /// <param name="progress">Optional progress reporter.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Aggregated assessment across all subscriptions.</returns>
+    Task<ComplianceAssessment> RunEnvironmentAssessmentAsync(
+        IEnumerable<string> subscriptionIds,
+        string environmentName,
+        IProgress<AssessmentProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Assess a single control family within a subscription.
+    /// Dispatches to the appropriate scanner via IScannerRegistry.
+    /// </summary>
+    /// <param name="familyCode">Two-letter NIST family code (must pass ControlFamilies.IsValidFamily).</param>
+    /// <param name="subscriptionId">Azure subscription ID.</param>
+    /// <param name="resourceGroup">Optional resource group constraint.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Per-family assessment result.</returns>
+    Task<ControlFamilyAssessment> AssessControlFamilyAsync(
+        string familyCode,
+        string subscriptionId,
+        string? resourceGroup = null,
+        CancellationToken cancellationToken = default);
+
+    // ─── Evidence Collection (US3) ──────────────────────────────────
+
+    /// <summary>
+    /// Collect compliance evidence for a control family or all families.
+    /// </summary>
+    /// <param name="familyCode">Family code or "All" for all families.</param>
+    /// <param name="subscriptionId">Azure subscription ID.</param>
+    /// <param name="resourceGroup">Optional resource group constraint.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Evidence package with completeness score and attestation.</returns>
+    Task<EvidencePackage> CollectEvidenceAsync(
+        string familyCode,
+        string subscriptionId,
+        string? resourceGroup = null,
+        CancellationToken cancellationToken = default);
+
+    // ─── Risk Assessment (US4) ──────────────────────────────────────
+
+    /// <summary>
+    /// Calculate risk profile from assessment findings.
+    /// Uses severity weights: Critical=10, High=7.5, Medium=5, Low=2.5.
+    /// </summary>
+    /// <param name="assessment">Assessment to analyze.</param>
+    /// <returns>Severity-weighted risk profile.</returns>
+    RiskProfile CalculateRiskProfile(ComplianceAssessment assessment);
+
+    /// <summary>
+    /// Perform full 8-category risk assessment.
+    /// </summary>
+    /// <param name="subscriptionId">Azure subscription ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Risk assessment with 8 categories scored 1-10.</returns>
+    Task<RiskAssessment> PerformRiskAssessmentAsync(
+        string subscriptionId,
+        CancellationToken cancellationToken = default);
+
+    // ─── Certificate Generation (US5) ───────────────────────────────
+
+    /// <summary>
+    /// Generate compliance certificate if score ≥ 80%.
+    /// Certificate has 6-month validity and SHA-256 verification hash.
+    /// </summary>
+    /// <param name="subscriptionId">Azure subscription ID.</param>
+    /// <param name="issuedBy">Issuer identity.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Compliance certificate with per-family attestations.</returns>
+    Task<ComplianceCertificate> GenerateCertificateAsync(
+        string subscriptionId,
+        string issuedBy,
+        CancellationToken cancellationToken = default);
+
+    // ─── Continuous Monitoring (US6) ────────────────────────────────
+
+    /// <summary>
+    /// Get continuous compliance status by delegating to Compliance Watch.
+    /// Aggregates monitoring status, drift detection, and alert counts.
+    /// </summary>
+    /// <param name="subscriptionId">Azure subscription ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Real-time compliance posture.</returns>
+    Task<ContinuousComplianceStatus> GetContinuousComplianceStatusAsync(
+        string subscriptionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Generate compliance timeline from historical data and Compliance Watch alerts.
+    /// </summary>
+    /// <param name="subscriptionId">Azure subscription ID.</param>
+    /// <param name="startDate">Timeline start date.</param>
+    /// <param name="endDate">Timeline end date.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Timeline with data points, events, trend, and insights.</returns>
+    Task<ComplianceTimeline> GetComplianceTimelineAsync(
+        string subscriptionId,
+        DateTime startDate,
+        DateTime endDate,
+        CancellationToken cancellationToken = default);
+
+    // ─── Data Access (US7) ──────────────────────────────────────────
+
+    /// <summary>Get assessment history for a subscription.</summary>
+    /// <param name="subscriptionId">Azure subscription ID.</param>
+    /// <param name="days">Number of days to look back (default 30).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of assessments ordered by date descending.</returns>
     Task<List<ComplianceAssessment>> GetAssessmentHistoryAsync(
         string subscriptionId,
         int days = 30,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Get a single finding by ID.</summary>
+    /// <param name="findingId">Finding identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The finding, or null if not found.</returns>
     Task<ComplianceFinding?> GetFindingAsync(
         string findingId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Update finding status (Open → InProgress → Remediated, etc.).</summary>
+    /// <param name="findingId">Finding identifier.</param>
+    /// <param name="newStatus">New finding status.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if finding was found and updated.</returns>
+    Task<bool> UpdateFindingStatusAsync(
+        string findingId,
+        FindingStatus newStatus,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Save or update an assessment (upsert semantics).</summary>
+    /// <param name="assessment">Assessment to save.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     Task SaveAssessmentAsync(
         ComplianceAssessment assessment,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Get the most recent assessment for a subscription (cached 24h).</summary>
+    /// <param name="subscriptionId">Azure subscription ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Latest assessment, or null if none exist.</returns>
+    Task<ComplianceAssessment?> GetLatestAssessmentAsync(
+        string subscriptionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Get assessment audit log entries.</summary>
+    /// <param name="subscriptionId">Optional subscription filter.</param>
+    /// <param name="days">Number of days to look back (default 7).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Formatted audit log string.</returns>
+    Task<string> GetAuditLogAsync(
+        string? subscriptionId = null,
+        int days = 7,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Generate executive summary markdown from assessment data.</summary>
+    /// <param name="assessment">Assessment to summarize.</param>
+    /// <returns>Markdown executive summary.</returns>
+    string GenerateExecutiveSummary(ComplianceAssessment assessment);
 }
 
 /// <summary>
@@ -258,6 +439,293 @@ public interface IComplianceStatusService
     Task<string> GetStatusAsync(
         string? subscriptionId = null,
         string? framework = null,
+        CancellationToken cancellationToken = default);
+}
+
+// ──────────────────────────── Compliance Engine Interfaces ───────────────────────────────────────
+
+/// <summary>
+/// Scanner strategy interface for family-specific compliance checks.
+/// Each scanner inspects Azure resources for its family's NIST controls.
+/// </summary>
+public interface IComplianceScanner
+{
+    /// <summary>Two-letter NIST family code this scanner handles (e.g., "AC").</summary>
+    string FamilyCode { get; }
+
+    /// <summary>
+    /// Execute a family-specific compliance scan.
+    /// </summary>
+    /// <param name="subscriptionId">Azure subscription ID.</param>
+    /// <param name="resourceGroup">Optional resource group constraint.</param>
+    /// <param name="controls">NIST controls for this family.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Per-family assessment result with findings.</returns>
+    Task<ControlFamilyAssessment> ScanAsync(
+        string subscriptionId,
+        string? resourceGroup,
+        IEnumerable<NistControl> controls,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Scanner dispatch registry. Returns the specialized scanner for a family,
+/// falling back to <c>DefaultComplianceScanner</c> for unregistered families.
+/// </summary>
+public interface IScannerRegistry
+{
+    /// <summary>
+    /// Get the scanner for a specific control family.
+    /// </summary>
+    /// <param name="familyCode">Two-letter NIST family code.</param>
+    /// <returns>Specialized scanner if registered; default scanner otherwise.</returns>
+    IComplianceScanner GetScanner(string familyCode);
+}
+
+/// <summary>
+/// Evidence collection strategy interface for gathering compliance artifacts.
+/// Each collector gathers 5 evidence types for its family.
+/// </summary>
+public interface IEvidenceCollector
+{
+    /// <summary>Two-letter NIST family code this collector handles (e.g., "AC").</summary>
+    string FamilyCode { get; }
+
+    /// <summary>
+    /// Collect evidence artifacts for this family.
+    /// </summary>
+    /// <param name="subscriptionId">Azure subscription ID.</param>
+    /// <param name="resourceGroup">Optional resource group constraint.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Evidence package with items and completeness score.</returns>
+    Task<EvidencePackage> CollectAsync(
+        string subscriptionId,
+        string? resourceGroup,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Evidence collector dispatch registry. Returns the specialized collector for a family,
+/// falling back to <c>DefaultEvidenceCollector</c> for unregistered families.
+/// </summary>
+public interface IEvidenceCollectorRegistry
+{
+    /// <summary>
+    /// Get the evidence collector for a specific control family.
+    /// </summary>
+    /// <param name="familyCode">Two-letter NIST family code.</param>
+    /// <returns>Specialized collector if registered; default collector otherwise.</returns>
+    IEvidenceCollector GetCollector(string familyCode);
+}
+
+/// <summary>
+/// ARM SDK wrapper for Azure resource queries with per-subscription+type caching
+/// (5-minute TTL), pre-warming, and safety limits.
+/// </summary>
+public interface IAzureResourceService
+{
+    /// <summary>
+    /// Enumerate Azure resources with optional filters.
+    /// </summary>
+    /// <param name="subscriptionId">Azure subscription ID.</param>
+    /// <param name="resourceGroup">Optional resource group constraint.</param>
+    /// <param name="resourceType">Optional resource type filter (e.g., "Microsoft.Storage/storageAccounts").</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Read-only list of generic ARM resources.</returns>
+    Task<IReadOnlyList<Azure.ResourceManager.Resources.GenericResource>> GetResourcesAsync(
+        string subscriptionId,
+        string? resourceGroup = null,
+        string? resourceType = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get RBAC role assignments for a subscription.
+    /// </summary>
+    /// <param name="subscriptionId">Azure subscription ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Read-only list of role assignment resources.</returns>
+    Task<IReadOnlyList<Azure.ResourceManager.Authorization.RoleAssignmentResource>> GetRoleAssignmentsAsync(
+        string subscriptionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Pre-warm resource cache for a subscription (common resource types).
+    /// </summary>
+    /// <param name="subscriptionId">Azure subscription ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task PreWarmCacheAsync(
+        string subscriptionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get diagnostic settings for a resource.
+    /// </summary>
+    /// <param name="resourceId">Full Azure resource ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Read-only list of diagnostic settings.</returns>
+    Task<IReadOnlyList<Azure.ResourceManager.Monitor.DiagnosticSettingResource>> GetDiagnosticSettingsAsync(
+        string resourceId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get resource locks for a subscription or resource group.
+    /// </summary>
+    /// <param name="subscriptionId">Azure subscription ID.</param>
+    /// <param name="resourceGroup">Optional resource group constraint.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Read-only list of management lock resources.</returns>
+    Task<IReadOnlyList<Azure.ResourceManager.Resources.ManagementLockResource>> GetResourceLocksAsync(
+        string subscriptionId,
+        string? resourceGroup = null,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Database persistence abstraction for assessments and findings.
+/// Separates EF Core concerns from the engine.
+/// </summary>
+public interface IAssessmentPersistenceService
+{
+    /// <summary>Save or update an assessment (upsert semantics).</summary>
+    /// <param name="assessment">Assessment to persist.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task SaveAssessmentAsync(
+        ComplianceAssessment assessment,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Get a single assessment by ID.</summary>
+    /// <param name="assessmentId">Assessment identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Assessment if found; null otherwise.</returns>
+    Task<ComplianceAssessment?> GetAssessmentAsync(
+        string assessmentId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Get the most recent assessment for a subscription.</summary>
+    /// <param name="subscriptionId">Azure subscription ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Latest assessment if found; null otherwise.</returns>
+    Task<ComplianceAssessment?> GetLatestAssessmentAsync(
+        string subscriptionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Get assessment history for a subscription.</summary>
+    /// <param name="subscriptionId">Azure subscription ID.</param>
+    /// <param name="days">Number of days to look back.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Assessments ordered by date descending.</returns>
+    Task<List<ComplianceAssessment>> GetAssessmentHistoryAsync(
+        string subscriptionId,
+        int days,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Get a single finding by ID.</summary>
+    /// <param name="findingId">Finding identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Finding if found; null otherwise.</returns>
+    Task<ComplianceFinding?> GetFindingAsync(
+        string findingId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Update finding status.</summary>
+    /// <param name="findingId">Finding identifier.</param>
+    /// <param name="status">New finding status.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if finding was found and updated.</returns>
+    Task<bool> UpdateFindingStatusAsync(
+        string findingId,
+        FindingStatus status,
+        CancellationToken cancellationToken = default);
+}
+
+// ─── Knowledge Base Interfaces (Stubs) ──────────────────────────────────────
+
+/// <summary>
+/// STIG validation service. Validates family controls against STIG rules
+/// and produces additional findings. Stub implementation returns empty results.
+/// </summary>
+public interface IStigValidationService
+{
+    /// <summary>
+    /// Validate controls against STIG rules for a family and subscription.
+    /// </summary>
+    /// <param name="familyCode">Two-letter NIST family code.</param>
+    /// <param name="controls">NIST controls to validate.</param>
+    /// <param name="subscriptionId">Azure subscription ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>STIG-based findings (empty for stub).</returns>
+    Task<List<ComplianceFinding>> ValidateAsync(
+        string familyCode,
+        IEnumerable<NistControl> controls,
+        string subscriptionId,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// RMF (Risk Management Framework) knowledge service.
+/// Provides RMF guidance for NIST controls. Stub returns generic guidance.
+/// </summary>
+public interface IRmfKnowledgeService
+{
+    /// <summary>
+    /// Get RMF guidance for a specific control.
+    /// </summary>
+    /// <param name="controlId">NIST control ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>RMF guidance text.</returns>
+    Task<string> GetGuidanceAsync(
+        string controlId,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// STIG knowledge service. Maps NIST controls to STIG rules.
+/// Stub returns empty mappings.
+/// </summary>
+public interface IStigKnowledgeService
+{
+    /// <summary>
+    /// Get STIG rule mapping for a NIST control.
+    /// </summary>
+    /// <param name="controlId">NIST control ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>STIG mapping string (empty for stub).</returns>
+    Task<string> GetStigMappingAsync(
+        string controlId,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// DoD instruction service. Provides DoD-specific instructions for NIST controls.
+/// Stub returns generic instructions.
+/// </summary>
+public interface IDoDInstructionService
+{
+    /// <summary>
+    /// Get DoD instruction for a specific control.
+    /// </summary>
+    /// <param name="controlId">NIST control ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>DoD instruction text.</returns>
+    Task<string> GetInstructionAsync(
+        string controlId,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// DoD workflow service. Provides DoD assessment workflow steps.
+/// Stub returns standard workflow.
+/// </summary>
+public interface IDoDWorkflowService
+{
+    /// <summary>
+    /// Get workflow steps for an assessment type.
+    /// </summary>
+    /// <param name="assessmentType">Assessment type identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Ordered workflow step descriptions.</returns>
+    Task<List<string>> GetWorkflowAsync(
+        string assessmentType,
         CancellationToken cancellationToken = default);
 }
 

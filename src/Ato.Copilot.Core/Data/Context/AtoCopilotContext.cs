@@ -101,6 +101,21 @@ public class AtoCopilotContext : DbContext
             v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null) ?? new List<string>()
         );
 
+        var controlFamilyResultsConverter = new ValueConverter<List<ControlFamilyAssessment>, string>(
+            v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+            v => JsonSerializer.Deserialize<List<ControlFamilyAssessment>>(v, (JsonSerializerOptions?)null) ?? new List<ControlFamilyAssessment>()
+        );
+
+        var riskProfileConverter = new ValueConverter<RiskProfile?, string>(
+            v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+            v => v == null ? null : JsonSerializer.Deserialize<RiskProfile>(v, (JsonSerializerOptions?)null)
+        );
+
+        var scanPillarResultsConverter = new ValueConverter<Dictionary<string, bool>, string>(
+            v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+            v => JsonSerializer.Deserialize<Dictionary<string, bool>>(v, (JsonSerializerOptions?)null) ?? new Dictionary<string, bool>()
+        );
+
         // ─── ComplianceAssessment ────────────────────────────────────────────────
         modelBuilder.Entity<ComplianceAssessment>(entity =>
         {
@@ -136,6 +151,14 @@ public class AtoCopilotContext : DbContext
                 .HasForeignKey(f => f.AssessmentId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // JSON column conversions for new properties (Feature 008)
+            entity.Property(e => e.ControlFamilyResults).HasConversion(controlFamilyResultsConverter);
+            entity.Property(e => e.RiskProfile).HasConversion(riskProfileConverter);
+            entity.Property(e => e.ScanPillarResults).HasConversion(scanPillarResultsConverter);
+            entity.Property(e => e.SubscriptionIds).HasConversion(stringListConverter);
+            entity.Property(e => e.ResourceGroupFilter).HasMaxLength(200);
+            entity.Property(e => e.EnvironmentName).HasMaxLength(200);
+
             // Indexes
             entity.HasIndex(e => e.SubscriptionId);
             entity.HasIndex(e => e.AssessedAt);
@@ -153,6 +176,10 @@ public class AtoCopilotContext : DbContext
             entity.Property(e => e.PolicyDefinitionId).HasMaxLength(500);
             entity.Property(e => e.PolicyAssignmentId).HasMaxLength(500);
             entity.Property(e => e.DefenderRecommendationId).HasMaxLength(200);
+
+            // New properties (Feature 008)
+            entity.Property(e => e.StigId).HasMaxLength(50);
+            entity.Property(e => e.RemediatedBy).HasMaxLength(200);
 
             // Indexes
             entity.HasIndex(e => e.ControlId);
