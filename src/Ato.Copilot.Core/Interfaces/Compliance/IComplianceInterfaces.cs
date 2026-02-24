@@ -212,33 +212,285 @@ public interface IAtoComplianceEngine
 }
 
 /// <summary>
-/// Remediation engine for compliance findings
+/// Remediation engine for compliance findings.
+/// Provides 18 unique method names (21 total signatures including overloads)
+/// across three tiers: existing backward-compatible methods, enhanced core operations,
+/// and workflow/tracking/AI-enhanced capabilities.
 /// </summary>
 public interface IRemediationEngine
 {
+    // ═══════════════════════════════════════════════════════
+    // TIER 1: EXISTING METHODS (backward compatible)
+    // ═══════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Generates a remediation plan for a subscription based on latest assessment.
+    /// </summary>
+    /// <param name="subscriptionId">Azure subscription ID</param>
+    /// <param name="resourceGroupName">Optional resource group filter</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>A RemediationPlan with steps and timeline</returns>
     Task<RemediationPlan> GeneratePlanAsync(
         string subscriptionId,
         string? resourceGroupName = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Executes remediation for a single finding (existing signature).
+    /// Returns JSON string result for backward compatibility.
+    /// </summary>
+    /// <param name="findingId">Finding to remediate</param>
+    /// <param name="applyRemediation">Whether to apply (true) or dry-run (false)</param>
+    /// <param name="dryRun">Explicit dry-run flag</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>JSON string with execution result</returns>
     Task<string> ExecuteRemediationAsync(
         string findingId,
         bool applyRemediation = false,
         bool dryRun = true,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Validates a remediation execution (existing signature).
+    /// Returns JSON string result for backward compatibility.
+    /// </summary>
+    /// <param name="findingId">Finding to validate</param>
+    /// <param name="executionId">Optional execution ID</param>
+    /// <param name="subscriptionId">Optional subscription scope</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>JSON string with validation result</returns>
     Task<string> ValidateRemediationAsync(
         string findingId,
         string? executionId = null,
         string? subscriptionId = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Batch remediates findings by filter criteria (existing signature).
+    /// Returns JSON string result for backward compatibility.
+    /// </summary>
+    /// <param name="subscriptionId">Optional subscription filter</param>
+    /// <param name="severity">Optional severity filter</param>
+    /// <param name="family">Optional control family filter</param>
+    /// <param name="dryRun">Dry-run flag</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>JSON string with batch result</returns>
     Task<string> BatchRemediateAsync(
         string? subscriptionId = null,
         string? severity = null,
         string? family = null,
         bool dryRun = true,
         CancellationToken cancellationToken = default);
+
+    // ═══════════════════════════════════════════════════════
+    // TIER 2: ENHANCED CORE OPERATIONS (new methods)
+    // ═══════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Generates an enhanced remediation plan from a collection of findings
+    /// with filtering, prioritization, timeline, and risk scoring.
+    /// </summary>
+    /// <param name="findings">Findings to plan for</param>
+    /// <param name="options">Plan generation options (filters)</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Enhanced RemediationPlan with items, timeline, and risk metrics</returns>
+    Task<RemediationPlan> GenerateRemediationPlanAsync(
+        IEnumerable<ComplianceFinding> findings,
+        RemediationPlanOptions? options = null,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Generates a remediation plan for a single finding using 3-tier fallback.
+    /// </summary>
+    /// <param name="finding">Single finding to plan for</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>RemediationPlan for the single finding</returns>
+    Task<RemediationPlan> GenerateRemediationPlanAsync(
+        ComplianceFinding finding,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Generates a remediation plan for a subscription with enhanced options.
+    /// </summary>
+    /// <param name="subscriptionId">Azure subscription ID</param>
+    /// <param name="options">Plan generation options (filters)</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Enhanced RemediationPlan</returns>
+    Task<RemediationPlan> GenerateRemediationPlanAsync(
+        string subscriptionId,
+        RemediationPlanOptions? options = null,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Executes remediation for a single finding with typed options and result.
+    /// </summary>
+    /// <param name="findingId">Finding to remediate</param>
+    /// <param name="options">Execution options</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Typed execution result</returns>
+    Task<RemediationExecution> ExecuteRemediationAsync(
+        string findingId,
+        RemediationExecutionOptions options,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Validates a remediation execution with typed result.
+    /// Checks execution status, steps completed, and changes applied.
+    /// </summary>
+    /// <param name="executionId">Execution to validate</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Typed validation result with per-check details</returns>
+    Task<RemediationValidationResult> ValidateRemediationAsync(
+        string executionId,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Executes batch remediation with concurrency control and typed results.
+    /// </summary>
+    /// <param name="findingIds">Findings to remediate</param>
+    /// <param name="options">Batch options</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Typed batch result</returns>
+    Task<BatchRemediationResult> ExecuteBatchRemediationAsync(
+        IEnumerable<string> findingIds,
+        BatchRemediationOptions? options = null,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Rolls back a previously executed remediation using the before-snapshot.
+    /// </summary>
+    /// <param name="executionId">Execution to roll back</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Rollback result</returns>
+    Task<RemediationRollbackResult> RollbackRemediationAsync(
+        string executionId,
+        CancellationToken ct = default);
+
+    // ═══════════════════════════════════════════════════════
+    // TIER 3: WORKFLOW, TRACKING & AI-ENHANCED
+    // ═══════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Gets progress snapshot for a subscription (last 30 days).
+    /// </summary>
+    /// <param name="subscriptionId">Optional subscription filter</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Progress snapshot with counts and rates</returns>
+    Task<RemediationProgress> GetRemediationProgressAsync(
+        string? subscriptionId = null,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets execution history for a date range with optional pagination.
+    /// </summary>
+    /// <param name="startDate">Range start</param>
+    /// <param name="endDate">Range end</param>
+    /// <param name="subscriptionId">Optional subscription filter</param>
+    /// <param name="skip">Pagination offset (default 0)</param>
+    /// <param name="take">Pagination page size (default 50)</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Execution history with aggregate metrics</returns>
+    Task<RemediationHistory> GetRemediationHistoryAsync(
+        DateTime startDate,
+        DateTime endDate,
+        string? subscriptionId = null,
+        int skip = 0,
+        int take = 50,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Analyzes remediation impact before execution.
+    /// </summary>
+    /// <param name="findings">Findings to analyze</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Impact analysis with risk scores and per-resource details</returns>
+    Task<RemediationImpactAnalysis> AnalyzeRemediationImpactAsync(
+        IEnumerable<ComplianceFinding> findings,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Generates a manual remediation guide for a non-automatable finding.
+    /// </summary>
+    /// <param name="finding">Finding to generate guide for</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Comprehensive manual guide</returns>
+    Task<ManualRemediationGuide> GenerateManualRemediationGuideAsync(
+        ComplianceFinding finding,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets all active remediation workflows (pending, in-progress, recent).
+    /// </summary>
+    /// <param name="subscriptionId">Optional subscription filter</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Workflow status snapshot</returns>
+    Task<RemediationWorkflowStatus> GetActiveRemediationWorkflowsAsync(
+        string? subscriptionId = null,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Processes an approval or rejection for a pending remediation.
+    /// </summary>
+    /// <param name="executionId">Execution to approve/reject</param>
+    /// <param name="approve">Whether to approve (true) or reject (false)</param>
+    /// <param name="approverName">Identity of the approver</param>
+    /// <param name="comments">Optional comments</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Approval result</returns>
+    Task<RemediationApprovalResult> ProcessRemediationApprovalAsync(
+        string executionId,
+        bool approve,
+        string approverName,
+        string? comments = null,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Schedules a remediation for future execution.
+    /// </summary>
+    /// <param name="findingIds">Findings to schedule</param>
+    /// <param name="scheduledTime">When to execute</param>
+    /// <param name="options">Batch options to use at execution time</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Schedule result</returns>
+    Task<RemediationScheduleResult> ScheduleRemediationAsync(
+        IEnumerable<string> findingIds,
+        DateTime scheduledTime,
+        BatchRemediationOptions? options = null,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Generates a remediation script using AI or deterministic fallback.
+    /// </summary>
+    /// <param name="finding">Finding to generate script for</param>
+    /// <param name="scriptType">Target script language</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Generated remediation script</returns>
+    Task<RemediationScript> GenerateRemediationScriptAsync(
+        ComplianceFinding finding,
+        ScriptType scriptType = ScriptType.AzureCli,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets AI-enhanced remediation guidance for a finding.
+    /// </summary>
+    /// <param name="finding">Finding to get guidance for</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>AI-enhanced guidance with confidence score</returns>
+    Task<RemediationGuidance> GetRemediationGuidanceAsync(
+        ComplianceFinding finding,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Prioritizes findings using AI with business context.
+    /// </summary>
+    /// <param name="findings">Findings to prioritize</param>
+    /// <param name="businessContext">Optional business context string</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Prioritized findings with justifications</returns>
+    Task<List<PrioritizedFinding>> PrioritizeFindingsWithAiAsync(
+        IEnumerable<ComplianceFinding> findings,
+        string? businessContext = null,
+        CancellationToken ct = default);
 }
 
 /// <summary>

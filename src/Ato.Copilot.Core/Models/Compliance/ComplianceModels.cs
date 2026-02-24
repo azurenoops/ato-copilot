@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace Ato.Copilot.Core.Models.Compliance;
 
 // ───────────────────────────────────────────── Enums ─────────────────────────────────────────────
@@ -404,6 +406,126 @@ public enum RemediationTrackingStatus
     Deferred
 }
 
+/// <summary>
+/// Priority level for remediation items, mapped from finding severity.
+/// P0 = fix immediately, P4 = best effort.
+/// </summary>
+public enum RemediationPriority
+{
+    /// <summary>Critical findings — fix immediately.</summary>
+    P0,
+    /// <summary>High findings — fix within 24 hours.</summary>
+    P1,
+    /// <summary>Medium findings — fix within 7 days.</summary>
+    P2,
+    /// <summary>Low findings — fix within 30 days.</summary>
+    P3,
+    /// <summary>Other findings — best effort.</summary>
+    P4
+}
+
+/// <summary>
+/// Lifecycle status of a remediation execution operation.
+/// </summary>
+public enum RemediationExecutionStatus
+{
+    /// <summary>Awaiting approval before execution.</summary>
+    Pending,
+    /// <summary>Approved, awaiting execution.</summary>
+    Approved,
+    /// <summary>Currently executing remediation.</summary>
+    InProgress,
+    /// <summary>Remediation completed successfully.</summary>
+    Completed,
+    /// <summary>Remediation execution failed.</summary>
+    Failed,
+    /// <summary>Remediation was rolled back after failure.</summary>
+    RolledBack,
+    /// <summary>Approval was rejected.</summary>
+    Rejected,
+    /// <summary>Cancelled during batch (FailFast mode).</summary>
+    Cancelled,
+    /// <summary>Scheduled for future execution.</summary>
+    Scheduled
+}
+
+/// <summary>
+/// Type of remediation script language.
+/// </summary>
+public enum ScriptType
+{
+    /// <summary>Azure CLI script.</summary>
+    AzureCli,
+    /// <summary>PowerShell script.</summary>
+    PowerShell,
+    /// <summary>Bicep infrastructure-as-code configuration.</summary>
+    Bicep,
+    /// <summary>Terraform infrastructure-as-code configuration.</summary>
+    Terraform
+}
+
+// ──────────────────────── Remediation Options ────────────────────────
+
+/// <summary>
+/// Runtime options for a single remediation execution.
+/// </summary>
+public class RemediationExecutionOptions
+{
+    /// <summary>Preview only, no changes applied to Azure resources.</summary>
+    public bool DryRun { get; set; }
+
+    /// <summary>Enter Pending state before executing, requiring explicit approval.</summary>
+    public bool RequireApproval { get; set; }
+
+    /// <summary>Validate remediation success after execution.</summary>
+    public bool AutoValidate { get; set; } = true;
+
+    /// <summary>Automatically rollback if post-execution validation fails.</summary>
+    public bool AutoRollbackOnFailure { get; set; }
+
+    /// <summary>Attempt AI script generation (Tier 1) before deterministic fallback.</summary>
+    public bool UseAiScript { get; set; } = true;
+}
+
+/// <summary>
+/// Options for batch remediation operations with concurrency control.
+/// </summary>
+public class BatchRemediationOptions
+{
+    /// <summary>Maximum number of concurrent remediations (SemaphoreSlim limit).</summary>
+    public int MaxConcurrentRemediations { get; set; } = 3;
+
+    /// <summary>Cancel remaining remediations on first failure.</summary>
+    public bool FailFast { get; set; }
+
+    /// <summary>Continue batch processing when individual remediations fail.</summary>
+    public bool ContinueOnError { get; set; } = true;
+
+    /// <summary>Preview only for entire batch, no changes applied.</summary>
+    public bool DryRun { get; set; }
+}
+
+/// <summary>
+/// Filters for remediation plan generation.
+/// </summary>
+public class RemediationPlanOptions
+{
+    /// <summary>Minimum severity to include in the plan (e.g., "Critical", "High").</summary>
+    public string? MinSeverity { get; set; }
+
+    /// <summary>Only include findings from these control families (e.g., AC, AU, SC).</summary>
+    public List<string>? IncludeFamilies { get; set; }
+
+    /// <summary>Exclude findings from these control families.</summary>
+    public List<string>? ExcludeFamilies { get; set; }
+
+    /// <summary>Only include findings that can be automatically remediated.</summary>
+    public bool AutomatableOnly { get; set; }
+
+    /// <summary>Group remediation items by Azure resource.</summary>
+    public bool GroupByResource { get; set; }
+}
+
 // ──────────────────────────────────────── Value Types ────────────────────────────────────────────
 
 /// <summary>
@@ -605,6 +727,9 @@ public class ComplianceFinding
     /// <summary>Risk level based on control family (AC, IA, SC = High).</summary>
     public RiskLevel RiskLevel { get; set; } = RiskLevel.Standard;
 
+    /// <summary>Azure subscription ID that owns the affected resource.</summary>
+    public string? SubscriptionId { get; set; }
+
     /// <summary>Foreign key to parent ComplianceAssessment.</summary>
     public string AssessmentId { get; set; } = string.Empty;
 
@@ -722,6 +847,32 @@ public class RemediationPlan
 
     /// <summary>Reason for failure, if Status is Failed.</summary>
     public string? FailureReason { get; set; }
+
+    // ─── Enhanced properties (Feature 009) ───
+
+    /// <summary>Prioritized remediation items (enhanced plan generation).</summary>
+    [NotMapped]
+    public List<RemediationItem>? Items { get; set; }
+
+    /// <summary>5-phase implementation timeline.</summary>
+    [NotMapped]
+    public ImplementationTimeline? Timeline { get; set; }
+
+    /// <summary>Plan-level executive summary with counts and risk projection.</summary>
+    [NotMapped]
+    public RemediationExecutiveSummary? ExecutiveSummary { get; set; }
+
+    /// <summary>Current/projected risk scores and reduction percentage.</summary>
+    [NotMapped]
+    public RiskMetrics? RiskMetrics { get; set; }
+
+    /// <summary>Whether items are grouped by Azure resource.</summary>
+    [NotMapped]
+    public bool GroupByResource { get; set; }
+
+    /// <summary>Filters applied when generating this plan.</summary>
+    [NotMapped]
+    public RemediationPlanOptions? Filters { get; set; }
 }
 
 /// <summary>
@@ -1852,4 +2003,633 @@ public class AutoRemediationResult
 
     /// <summary>If failed, the reason why.</summary>
     public string? FailureReason { get; set; }
+}
+
+// ────────────────────── Remediation Engine Models (Feature 009) ──────────────────────
+
+/// <summary>
+/// Tracks a single remediation operation through its lifecycle.
+/// </summary>
+public class RemediationExecution
+{
+    /// <summary>Unique execution ID (GUID).</summary>
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+
+    /// <summary>ID of the finding being remediated.</summary>
+    public string FindingId { get; set; } = string.Empty;
+
+    /// <summary>Target Azure subscription.</summary>
+    public string? SubscriptionId { get; set; }
+
+    /// <summary>Current execution status.</summary>
+    public RemediationExecutionStatus Status { get; set; } = RemediationExecutionStatus.Pending;
+
+    /// <summary>JSON snapshot of resource before remediation.</summary>
+    public string? BeforeSnapshot { get; set; }
+
+    /// <summary>JSON snapshot of resource after remediation.</summary>
+    public string? AfterSnapshot { get; set; }
+
+    /// <summary>Reference to snapshot for rollback.</summary>
+    public string? BackupId { get; set; }
+
+    /// <summary>When execution started.</summary>
+    public DateTime? StartedAt { get; set; }
+
+    /// <summary>When execution completed.</summary>
+    public DateTime? CompletedAt { get; set; }
+
+    /// <summary>Total execution duration.</summary>
+    public TimeSpan? Duration { get; set; }
+
+    /// <summary>Number of steps completed.</summary>
+    public int StepsExecuted { get; set; }
+
+    /// <summary>Description of changes made.</summary>
+    public List<string> ChangesApplied { get; set; } = new();
+
+    /// <summary>Which pipeline tier executed (1=AI, 2=Service, 3=ARM).</summary>
+    public int TierUsed { get; set; }
+
+    /// <summary>Error message if failed.</summary>
+    public string? Error { get; set; }
+
+    /// <summary>Approver identity if approval workflow used.</summary>
+    public string? ApprovedBy { get; set; }
+
+    /// <summary>When approved.</summary>
+    public DateTime? ApprovedAt { get; set; }
+
+    /// <summary>Rejector identity if rejected.</summary>
+    public string? RejectedBy { get; set; }
+
+    /// <summary>When rejected.</summary>
+    public DateTime? RejectedAt { get; set; }
+
+    /// <summary>Reason for rejection.</summary>
+    public string? RejectionReason { get; set; }
+
+    /// <summary>Whether this was a dry-run execution.</summary>
+    public bool DryRun { get; set; }
+
+    /// <summary>Execution options used.</summary>
+    public RemediationExecutionOptions? Options { get; set; }
+}
+
+/// <summary>
+/// A single activity entry for tracking/audit purposes.
+/// </summary>
+public class RemediationActivity
+{
+    /// <summary>Activity ID.</summary>
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+
+    /// <summary>Related execution ID.</summary>
+    public string ExecutionId { get; set; } = string.Empty;
+
+    /// <summary>What happened (e.g., "SnapshotCaptured", "TierFallback").</summary>
+    public string Action { get; set; } = string.Empty;
+
+    /// <summary>Additional details.</summary>
+    public string? Details { get; set; }
+
+    /// <summary>When it occurred.</summary>
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Risk scoring for a plan or analysis.
+/// </summary>
+public class RiskMetrics
+{
+    /// <summary>Severity-weighted current risk score.</summary>
+    public double CurrentRiskScore { get; set; }
+
+    /// <summary>Risk score after remediation (non-remediable findings only).</summary>
+    public double ProjectedRiskScore { get; set; }
+
+    /// <summary>Risk reduction percentage.</summary>
+    public double RiskReductionPercentage { get; set; }
+}
+
+/// <summary>
+/// A single finding paired with remediation metadata —
+/// priority, steps, timeline, and dependencies.
+/// </summary>
+public class RemediationItem
+{
+    /// <summary>Unique item identifier (GUID).</summary>
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+
+    /// <summary>The compliance finding to remediate.</summary>
+    public ComplianceFinding Finding { get; set; } = null!;
+
+    /// <summary>P0–P4 priority level.</summary>
+    public RemediationPriority Priority { get; set; }
+
+    /// <summary>Human-readable priority label (e.g., "P0 - Immediate").</summary>
+    public string PriorityLabel { get; set; } = string.Empty;
+
+    /// <summary>Estimated time to remediate.</summary>
+    public TimeSpan EstimatedDuration { get; set; }
+
+    /// <summary>Detailed remediation steps.</summary>
+    public List<RemediationStep> Steps { get; set; } = new();
+
+    /// <summary>Steps to verify remediation success.</summary>
+    public List<string> ValidationSteps { get; set; } = new();
+
+    /// <summary>Description of how to undo this remediation.</summary>
+    public string RollbackPlan { get; set; } = string.Empty;
+
+    /// <summary>IDs of other items this depends on.</summary>
+    public List<string> Dependencies { get; set; } = new();
+
+    /// <summary>Whether this can be auto-remediated.</summary>
+    public bool IsAutoRemediable { get; set; }
+
+    /// <summary>Type of remediation action.</summary>
+    public RemediationType RemediationType { get; set; }
+
+    /// <summary>Azure resource ID if applicable.</summary>
+    public string? AffectedResourceId { get; set; }
+}
+
+/// <summary>
+/// 5-phase implementation timeline for a remediation plan.
+/// </summary>
+public class ImplementationTimeline
+{
+    /// <summary>Ordered timeline phases.</summary>
+    public List<TimelinePhase> Phases { get; set; } = new();
+
+    /// <summary>Sum of all phase durations.</summary>
+    public TimeSpan TotalEstimatedDuration { get; set; }
+
+    /// <summary>Timeline start date.</summary>
+    public DateTime StartDate { get; set; }
+
+    /// <summary>Timeline end date.</summary>
+    public DateTime EndDate { get; set; }
+}
+
+/// <summary>
+/// A single phase within the implementation timeline.
+/// </summary>
+public class TimelinePhase
+{
+    /// <summary>Phase name (Immediate, 24 Hours, Week 1, Month 1, Backlog).</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>P0–P4 priority for this phase.</summary>
+    public RemediationPriority Priority { get; set; }
+
+    /// <summary>Items in this phase.</summary>
+    public List<RemediationItem> Items { get; set; } = new();
+
+    /// <summary>Phase start date.</summary>
+    public DateTime StartDate { get; set; }
+
+    /// <summary>Phase end date.</summary>
+    public DateTime EndDate { get; set; }
+
+    /// <summary>Total effort for this phase.</summary>
+    public TimeSpan EstimatedDuration { get; set; }
+}
+
+/// <summary>
+/// Plan-level executive summary with counts and risk projection.
+/// </summary>
+public class RemediationExecutiveSummary
+{
+    /// <summary>Total findings in plan.</summary>
+    public int TotalFindings { get; set; }
+
+    /// <summary>Critical severity count.</summary>
+    public int CriticalCount { get; set; }
+
+    /// <summary>High severity count.</summary>
+    public int HighCount { get; set; }
+
+    /// <summary>Medium severity count.</summary>
+    public int MediumCount { get; set; }
+
+    /// <summary>Low severity count.</summary>
+    public int LowCount { get; set; }
+
+    /// <summary>Auto-remediable findings count.</summary>
+    public int AutoRemediableCount { get; set; }
+
+    /// <summary>Manual-only findings count.</summary>
+    public int ManualCount { get; set; }
+
+    /// <summary>Sum of all item durations.</summary>
+    public TimeSpan TotalEstimatedEffort { get; set; }
+
+    /// <summary>Projected risk reduction percentage.</summary>
+    public double ProjectedRiskReduction { get; set; }
+}
+
+/// <summary>
+/// Aggregate outcome of a batch remediation operation.
+/// </summary>
+public class BatchRemediationResult
+{
+    /// <summary>Unique batch ID (GUID).</summary>
+    public string BatchId { get; set; } = Guid.NewGuid().ToString();
+
+    /// <summary>Individual execution results.</summary>
+    public List<RemediationExecution> Executions { get; set; } = new();
+
+    /// <summary>Number of successful remediations.</summary>
+    public int SuccessCount { get; set; }
+
+    /// <summary>Number of failed remediations.</summary>
+    public int FailureCount { get; set; }
+
+    /// <summary>Number cancelled (FailFast mode).</summary>
+    public int CancelledCount { get; set; }
+
+    /// <summary>Number skipped (not auto-remediable).</summary>
+    public int SkippedCount { get; set; }
+
+    /// <summary>Aggregate statistics.</summary>
+    public BatchRemediationSummary Summary { get; set; } = new();
+
+    /// <summary>Batch start time.</summary>
+    public DateTime StartedAt { get; set; }
+
+    /// <summary>Batch completion time.</summary>
+    public DateTime? CompletedAt { get; set; }
+
+    /// <summary>Total batch duration.</summary>
+    public TimeSpan? Duration { get; set; }
+
+    /// <summary>Options used for batch.</summary>
+    public BatchRemediationOptions? Options { get; set; }
+}
+
+/// <summary>
+/// Aggregate statistics for a batch remediation.
+/// </summary>
+public class BatchRemediationSummary
+{
+    /// <summary>Percentage of successful remediations.</summary>
+    public double SuccessRate { get; set; }
+
+    /// <summary>Count of Critical findings fixed.</summary>
+    public int CriticalFindingsRemediated { get; set; }
+
+    /// <summary>Count of High findings fixed.</summary>
+    public int HighFindingsRemediated { get; set; }
+
+    /// <summary>Count of Medium findings fixed.</summary>
+    public int MediumFindingsRemediated { get; set; }
+
+    /// <summary>Count of Low findings fixed.</summary>
+    public int LowFindingsRemediated { get; set; }
+
+    /// <summary>Projected risk reduction percentage.</summary>
+    public double EstimatedRiskReduction { get; set; }
+
+    /// <summary>Unique control families touched.</summary>
+    public List<string> ControlFamiliesAffected { get; set; } = new();
+
+    /// <summary>Sum of all execution durations.</summary>
+    public TimeSpan TotalDuration { get; set; }
+}
+
+/// <summary>
+/// Post-execution validation outcome.
+/// </summary>
+public class RemediationValidationResult
+{
+    /// <summary>ID of the execution validated.</summary>
+    public string ExecutionId { get; set; } = string.Empty;
+
+    /// <summary>Overall validation result.</summary>
+    public bool IsValid { get; set; }
+
+    /// <summary>Individual check results.</summary>
+    public List<ValidationCheck> Checks { get; set; } = new();
+
+    /// <summary>Overall failure reason if not valid.</summary>
+    public string? FailureReason { get; set; }
+
+    /// <summary>When validation was performed.</summary>
+    public DateTime ValidatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// A single validation check within a validation result.
+/// </summary>
+public class ValidationCheck
+{
+    /// <summary>Check name (e.g., "ExecutionStatus", "StepsCompleted").</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Whether this check passed.</summary>
+    public bool Passed { get; set; }
+
+    /// <summary>What was expected.</summary>
+    public string? ExpectedValue { get; set; }
+
+    /// <summary>What was found.</summary>
+    public string? ActualValue { get; set; }
+
+    /// <summary>Additional details.</summary>
+    public string? Details { get; set; }
+}
+
+/// <summary>
+/// Outcome of a rollback operation.
+/// </summary>
+public class RemediationRollbackResult
+{
+    /// <summary>ID of the original execution.</summary>
+    public string ExecutionId { get; set; } = string.Empty;
+
+    /// <summary>Whether rollback succeeded.</summary>
+    public bool Success { get; set; }
+
+    /// <summary>Steps executed during rollback.</summary>
+    public List<string> RollbackSteps { get; set; } = new();
+
+    /// <summary>JSON of restored resource state.</summary>
+    public string? RestoredSnapshot { get; set; }
+
+    /// <summary>Error message if rollback failed.</summary>
+    public string? Error { get; set; }
+
+    /// <summary>When rollback was performed.</summary>
+    public DateTime RolledBackAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Planned rollback approach for a remediation item.
+/// </summary>
+public class RemediationRollbackPlan
+{
+    /// <summary>What the rollback will do.</summary>
+    public string Description { get; set; } = string.Empty;
+
+    /// <summary>Ordered rollback steps.</summary>
+    public List<string> Steps { get; set; } = new();
+
+    /// <summary>Whether a before-snapshot is needed.</summary>
+    public bool RequiresSnapshot { get; set; }
+
+    /// <summary>Estimated rollback time.</summary>
+    public TimeSpan EstimatedDuration { get; set; }
+}
+
+/// <summary>
+/// Active workflow state for a subscription.
+/// </summary>
+public class RemediationWorkflowStatus
+{
+    /// <summary>Target subscription.</summary>
+    public string? SubscriptionId { get; set; }
+
+    /// <summary>Executions awaiting approval.</summary>
+    public List<RemediationExecution> PendingApprovals { get; set; } = new();
+
+    /// <summary>Currently executing.</summary>
+    public List<RemediationExecution> InProgressExecutions { get; set; } = new();
+
+    /// <summary>Completed in last 24 hours.</summary>
+    public List<RemediationExecution> RecentlyCompleted { get; set; } = new();
+
+    /// <summary>When this snapshot was taken.</summary>
+    public DateTime RetrievedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Result of an approval or rejection decision.
+/// </summary>
+public class RemediationApprovalResult
+{
+    /// <summary>Execution that was approved/rejected.</summary>
+    public string ExecutionId { get; set; } = string.Empty;
+
+    /// <summary>Whether approved (true) or rejected (false).</summary>
+    public bool Approved { get; set; }
+
+    /// <summary>Identity of the approver.</summary>
+    public string ApproverName { get; set; } = string.Empty;
+
+    /// <summary>Approver comments.</summary>
+    public string? Comments { get; set; }
+
+    /// <summary>When the decision was made.</summary>
+    public DateTime ProcessedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Whether execution was auto-triggered post-approval.</summary>
+    public bool ExecutionTriggered { get; set; }
+}
+
+/// <summary>
+/// Result of scheduling a remediation for future execution.
+/// The engine creates the schedule record but does not execute automatically.
+/// The calling layer (e.g., ComplianceWatchService) polls due schedules.
+/// </summary>
+public class RemediationScheduleResult
+{
+    /// <summary>Unique schedule ID (GUID).</summary>
+    public string ScheduleId { get; set; } = Guid.NewGuid().ToString();
+
+    /// <summary>When remediation will execute.</summary>
+    public DateTime ScheduledTime { get; set; }
+
+    /// <summary>Findings included.</summary>
+    public List<string> FindingIds { get; set; } = new();
+
+    /// <summary>Number of findings.</summary>
+    public int FindingCount { get; set; }
+
+    /// <summary>Schedule status (Scheduled, Executed, Cancelled).</summary>
+    public string Status { get; set; } = "Scheduled";
+
+    /// <summary>Options to use at execution time.</summary>
+    public BatchRemediationOptions? Options { get; set; }
+
+    /// <summary>When schedule was created.</summary>
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Subscription-level progress snapshot.
+/// </summary>
+public class RemediationProgress
+{
+    /// <summary>Target subscription.</summary>
+    public string? SubscriptionId { get; set; }
+
+    /// <summary>Successful remediations.</summary>
+    public int CompletedCount { get; set; }
+
+    /// <summary>Currently executing.</summary>
+    public int InProgressCount { get; set; }
+
+    /// <summary>Failed remediations.</summary>
+    public int FailedCount { get; set; }
+
+    /// <summary>Awaiting approval.</summary>
+    public int PendingCount { get; set; }
+
+    /// <summary>Total remediations.</summary>
+    public int TotalCount { get; set; }
+
+    /// <summary>Percentage complete.</summary>
+    public double CompletionRate { get; set; }
+
+    /// <summary>Average execution duration.</summary>
+    public TimeSpan AverageRemediationTime { get; set; }
+
+    /// <summary>Time period covered (e.g., "Last 30 days").</summary>
+    public string Period { get; set; } = "Last 30 days";
+
+    /// <summary>When snapshot was calculated.</summary>
+    public DateTime AsOf { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Date-range execution history with aggregate metrics.
+/// </summary>
+public class RemediationHistory
+{
+    /// <summary>Target subscription.</summary>
+    public string? SubscriptionId { get; set; }
+
+    /// <summary>Range start.</summary>
+    public DateTime StartDate { get; set; }
+
+    /// <summary>Range end.</summary>
+    public DateTime EndDate { get; set; }
+
+    /// <summary>Executions in range.</summary>
+    public List<RemediationExecution> Executions { get; set; } = new();
+
+    /// <summary>Aggregate metrics.</summary>
+    public RemediationMetric Metrics { get; set; } = new();
+
+    /// <summary>Pagination offset (default 0).</summary>
+    public int Skip { get; set; }
+
+    /// <summary>Pagination page size (default 50).</summary>
+    public int Take { get; set; } = 50;
+
+    /// <summary>Total matching executions before pagination.</summary>
+    public int TotalCount { get; set; }
+}
+
+/// <summary>
+/// Aggregate metrics for remediation history.
+/// </summary>
+public class RemediationMetric
+{
+    /// <summary>Total execution count.</summary>
+    public int TotalExecutions { get; set; }
+
+    /// <summary>Completed successfully.</summary>
+    public int SuccessfulExecutions { get; set; }
+
+    /// <summary>Failed.</summary>
+    public int FailedExecutions { get; set; }
+
+    /// <summary>Rolled back.</summary>
+    public int RolledBackExecutions { get; set; }
+
+    /// <summary>Average duration.</summary>
+    public TimeSpan AverageExecutionTime { get; set; }
+
+    /// <summary>Most frequently remediated control family.</summary>
+    public string? MostRemediatedFamily { get; set; }
+}
+
+/// <summary>
+/// Pre-execution risk analysis with current/projected risk scores.
+/// </summary>
+public class RemediationImpactAnalysis
+{
+    /// <summary>Current/projected risk scores and reduction percentage.</summary>
+    public RiskMetrics RiskMetrics { get; set; } = new();
+
+    /// <summary>Total findings considered.</summary>
+    public int TotalFindingsAnalyzed { get; set; }
+
+    /// <summary>Auto-remediable findings.</summary>
+    public int AutoRemediableCount { get; set; }
+
+    /// <summary>Manual-only findings.</summary>
+    public int ManualCount { get; set; }
+
+    /// <summary>Per-resource impact details.</summary>
+    public List<ResourceImpact> ResourceImpacts { get; set; } = new();
+
+    /// <summary>Actionable recommendations.</summary>
+    public List<string> Recommendations { get; set; } = new();
+
+    /// <summary>When analysis was performed.</summary>
+    public DateTime AnalyzedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Per-resource impact detail within an impact analysis.
+/// </summary>
+public class ResourceImpact
+{
+    /// <summary>Azure resource ID.</summary>
+    public string ResourceId { get; set; } = string.Empty;
+
+    /// <summary>Resource type.</summary>
+    public string? ResourceType { get; set; }
+
+    /// <summary>Number of findings for this resource.</summary>
+    public int FindingsCount { get; set; }
+
+    /// <summary>What would change.</summary>
+    public List<string> ProposedChanges { get; set; } = new();
+
+    /// <summary>Impact risk level.</summary>
+    public RiskLevel RiskLevel { get; set; }
+}
+
+/// <summary>
+/// Comprehensive guide for non-automatable findings.
+/// </summary>
+public class ManualRemediationGuide
+{
+    /// <summary>Finding this guide is for.</summary>
+    public string FindingId { get; set; } = string.Empty;
+
+    /// <summary>NIST control ID.</summary>
+    public string? ControlId { get; set; }
+
+    /// <summary>Guide title.</summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>Step-by-step instructions.</summary>
+    public List<string> Steps { get; set; } = new();
+
+    /// <summary>What must be in place before starting.</summary>
+    public List<string> Prerequisites { get; set; } = new();
+
+    /// <summary>Required skill level (Beginner, Intermediate, Advanced).</summary>
+    public string SkillLevel { get; set; } = "Intermediate";
+
+    /// <summary>Azure permissions needed.</summary>
+    public List<string> RequiredPermissions { get; set; } = new();
+
+    /// <summary>How to verify the fix worked.</summary>
+    public List<string> ValidationSteps { get; set; } = new();
+
+    /// <summary>How to undo if something goes wrong.</summary>
+    public string RollbackPlan { get; set; } = string.Empty;
+
+    /// <summary>How long it should take.</summary>
+    public TimeSpan EstimatedDuration { get; set; }
+
+    /// <summary>Microsoft Docs or NIST reference links.</summary>
+    public List<string> References { get; set; } = new();
 }

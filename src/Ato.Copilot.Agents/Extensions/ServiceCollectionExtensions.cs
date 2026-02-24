@@ -14,6 +14,7 @@ using Ato.Copilot.Agents.Compliance.Services.KnowledgeBase;
 using Ato.Copilot.Agents.Compliance.Tools;
 using Ato.Copilot.Agents.Configuration.Agents;
 using Ato.Copilot.Agents.Configuration.Tools;
+using Ato.Copilot.Agents.Compliance.Services.Engines.Remediation;
 using Ato.Copilot.Core.Configuration;
 using Ato.Copilot.Core.Data.Context;
 using Ato.Copilot.Core.Interfaces.Auth;
@@ -47,7 +48,15 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAzurePolicyComplianceService, AzurePolicyComplianceService>();
         services.AddSingleton<IDefenderForCloudService, DefenderForCloudService>();
         services.AddSingleton<IAtoComplianceEngine, AtoComplianceEngine>();
-        services.AddSingleton<IRemediationEngine, RemediationEngine>();
+        // ─── Remediation Engine v2 (Feature 009 — AtoRemediationEngine) ─────
+        services.AddSingleton<IAiRemediationPlanGenerator, AiRemediationPlanGenerator>();
+        services.AddSingleton<IRemediationScriptExecutor, RemediationScriptExecutor>();
+        services.AddSingleton<INistRemediationStepsService, NistRemediationStepsService>();
+        services.AddSingleton<IAzureArmRemediationService, AzureArmRemediationService>();
+        services.AddSingleton<IComplianceRemediationService, ComplianceRemediationService>();
+        services.AddSingleton<IScriptSanitizationService, ScriptSanitizationService>();
+        services.AddSingleton<AtoRemediationEngine>();
+        services.AddSingleton<IRemediationEngine>(sp => sp.GetRequiredService<AtoRemediationEngine>());
         services.AddSingleton<IEvidenceStorageService, EvidenceStorageService>();
         services.AddSingleton<IDocumentGenerationService, DocumentGenerationService>();
         services.AddSingleton<ComplianceMonitoringService>();
