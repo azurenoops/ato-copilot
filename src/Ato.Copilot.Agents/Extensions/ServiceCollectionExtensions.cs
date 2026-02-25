@@ -14,6 +14,10 @@ using Ato.Copilot.Agents.Compliance.Services.KnowledgeBase;
 using Ato.Copilot.Agents.Compliance.Tools;
 using Ato.Copilot.Agents.Configuration.Agents;
 using Ato.Copilot.Agents.Configuration.Tools;
+using Ato.Copilot.Agents.KnowledgeBase.Agents;
+using Ato.Copilot.Agents.KnowledgeBase.Configuration;
+using Ato.Copilot.Agents.KnowledgeBase.Services;
+using Ato.Copilot.Agents.KnowledgeBase.Tools;
 using Ato.Copilot.Agents.Compliance.Services.Engines.Remediation;
 using Ato.Copilot.Core.Configuration;
 using Ato.Copilot.Core.Data.Context;
@@ -103,6 +107,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IStigKnowledgeService, StigKnowledgeService>();
         services.AddSingleton<IDoDInstructionService, DoDInstructionService>();
         services.AddSingleton<IDoDWorkflowService, DoDWorkflowService>();
+        services.AddSingleton<IImpactLevelService, ImpactLevelService>();
+        services.AddSingleton<IFedRampTemplateService, FedRampTemplateService>();
 
         // ─── Compliance Watch Services ───────────────────────────────────────
         services.AddSingleton<AlertCorrelationService>();
@@ -355,6 +361,40 @@ public static class ServiceCollectionExtensions
         // Register the agent
         services.AddSingleton<ConfigurationAgent>();
         services.AddSingleton<BaseAgent>(sp => sp.GetRequiredService<ConfigurationAgent>());
+
+        return services;
+    }
+
+    /// <summary>
+    /// Register the KnowledgeBase agent, its options, and service implementations.
+    /// </summary>
+    public static IServiceCollection AddKnowledgeBaseAgent(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        // Bind options
+        services.Configure<KnowledgeBaseAgentOptions>(
+            configuration.GetSection("Agents:KnowledgeBaseAgent"));
+
+        // Register KB tools
+        services.AddSingleton<ExplainNistControlTool>();
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ExplainNistControlTool>());
+        services.AddSingleton<SearchNistControlsTool>();
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<SearchNistControlsTool>());
+        services.AddSingleton<ExplainStigTool>();
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ExplainStigTool>());
+        services.AddSingleton<SearchStigsTool>();
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<SearchStigsTool>());
+        services.AddSingleton<ExplainRmfTool>();
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ExplainRmfTool>());
+        services.AddSingleton<ExplainImpactLevelTool>();
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ExplainImpactLevelTool>());
+        services.AddSingleton<GetFedRampTemplateGuidanceTool>();
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<GetFedRampTemplateGuidanceTool>());
+
+        // Register the agent
+        services.AddSingleton<KnowledgeBaseAgent>();
+        services.AddSingleton<BaseAgent>(sp => sp.GetRequiredService<KnowledgeBaseAgent>());
 
         return services;
     }

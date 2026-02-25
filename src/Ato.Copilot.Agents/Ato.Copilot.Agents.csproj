@@ -32,6 +32,13 @@
     <EmbeddedResource Include="Compliance\Prompts\PimAgent.prompt.txt" />
     <EmbeddedResource Include="Compliance\Resources\NIST_SP-800-53_rev5_catalog.json" />
     <EmbeddedResource Include="Configuration\Prompts\ConfigurationAgent.prompt.txt" />
+    <EmbeddedResource Include="KnowledgeBase\Prompts\KnowledgeBaseAgent.prompt.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="KnowledgeBase\Data\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

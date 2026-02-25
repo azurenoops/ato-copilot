@@ -271,6 +271,9 @@ void RegisterCoreServices(IServiceCollection services, IConfiguration configurat
     // Configuration agent + tools
     services.AddConfigurationAgent();
 
+    // KnowledgeBase agent + services
+    services.AddKnowledgeBaseAgent(configuration);
+
     // MCP server
     services.AddMcpServer(configuration);
 }

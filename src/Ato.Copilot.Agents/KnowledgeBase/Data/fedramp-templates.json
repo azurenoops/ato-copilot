@@ -1,0 +1,299 @@
+{
+  "version": "1.0.0",
+  "templates": [
+    {
+      "templateType": "SSP",
+      "title": "System Security Plan (SSP)",
+      "description": "Core authorization document describing the system, its security controls, and implementation details. Required for all FedRAMP authorizations.",
+      "sections": [
+        {
+          "name": "System Information",
+          "description": "System name, description, categorization, and boundary definition.",
+          "requiredElements": [
+            "System Name and Identifier",
+            "System Description and Purpose",
+            "FIPS 199 Categorization",
+            "System Boundary Diagram",
+            "Authorization Boundary Description",
+            "Data Flow Diagrams",
+            "System Environment and Architecture"
+          ]
+        },
+        {
+          "name": "System Environment",
+          "description": "Hardware, software, network, and cloud infrastructure details.",
+          "requiredElements": [
+            "Cloud Service Model (IaaS/PaaS/SaaS)",
+            "Deployment Model",
+            "Hardware Inventory",
+            "Software Inventory",
+            "Network Architecture Diagram",
+            "Ports, Protocols, and Services",
+            "External Connections"
+          ]
+        },
+        {
+          "name": "Security Controls Implementation",
+          "description": "Detailed implementation statements for all applicable NIST 800-53 controls.",
+          "requiredElements": [
+            "Control Family Narratives",
+            "Control Implementation Details",
+            "Responsible Role Assignments",
+            "Implementation Status (Implemented/Partially/Planned/Alternative)",
+            "Control Origination (CSP/Customer/Shared/Inherited)"
+          ]
+        },
+        {
+          "name": "Roles and Responsibilities",
+          "description": "Security roles, responsibilities, and personnel requirements.",
+          "requiredElements": [
+            "Information System Security Officer (ISSO)",
+            "Information System Security Manager (ISSM)",
+            "System Administrator",
+            "Authorizing Official (AO)",
+            "Security Control Assessor (SCA)"
+          ]
+        },
+        {
+          "name": "Continuous Monitoring",
+          "description": "Ongoing monitoring strategy and procedures.",
+          "requiredElements": [
+            "Monitoring Strategy",
+            "Vulnerability Scanning Schedule",
+            "POA&M Management Process",
+            "Annual Assessment Plans",
+            "Incident Response Integration"
+          ]
+        }
+      ],
+      "requiredFields": [
+        {
+          "name": "System Name",
+          "description": "Official name of the information system",
+          "example": "ATO Copilot Platform",
+          "azureSource": "Azure Resource Manager — resource group names and tags"
+        },
+        {
+          "name": "FIPS 199 Category",
+          "description": "Security categorization based on FIPS 199",
+          "example": "Moderate (Confidentiality: Moderate, Integrity: Moderate, Availability: Moderate)",
+          "azureSource": "Azure Policy — compliance state per resource"
+        },
+        {
+          "name": "System Boundary",
+          "description": "Components within the authorization boundary",
+          "example": "All Azure resources within subscription X and VNet Y",
+          "azureSource": "Azure Resource Graph — subscription and VNet inventory"
+        },
+        {
+          "name": "Control Implementation",
+          "description": "Narrative describing how each control is implemented",
+          "example": "AC-2: Account management is implemented via Azure AD with conditional access policies",
+          "azureSource": "Azure Policy compliance results, Microsoft Defender for Cloud recommendations"
+        },
+        {
+          "name": "Network Diagram",
+          "description": "Visual representation of network architecture",
+          "example": "VNet topology with subnet segmentation and NSG rules",
+          "azureSource": "Azure Network Watcher — topology view and NSG flow logs"
+        }
+      ],
+      "azureMappings": {
+        "System Inventory": "Azure Resource Graph queries",
+        "Network Topology": "Azure Network Watcher topology",
+        "Access Controls": "Azure AD conditional access policies",
+        "Encryption Status": "Azure Key Vault and disk encryption status",
+        "Vulnerability Scanning": "Microsoft Defender for Cloud vulnerability assessments",
+        "Logging and Monitoring": "Azure Monitor and Log Analytics workspace",
+        "Incident Response": "Microsoft Sentinel incident management",
+        "Configuration Management": "Azure Policy and Azure Automation DSC"
+      },
+      "authorizationChecklist": [
+        { "item": "SSP Document", "description": "Complete System Security Plan with all required sections", "required": true },
+        { "item": "Control Implementation", "description": "All applicable controls documented with implementation narratives", "required": true },
+        { "item": "System Boundary Diagram", "description": "Network and boundary diagrams with data flows", "required": true },
+        { "item": "Roles and Responsibilities", "description": "All security roles documented with named individuals", "required": true },
+        { "item": "Continuous Monitoring Plan", "description": "ConMon strategy aligned with FedRAMP requirements", "required": true }
+      ]
+    },
+    {
+      "templateType": "POAM",
+      "title": "Plan of Action and Milestones (POA&M)",
+      "description": "Tracks identified vulnerabilities, planned remediation actions, milestones, and completion dates. Required for managing security weaknesses throughout the authorization lifecycle.",
+      "sections": [
+        {
+          "name": "Weakness Identification",
+          "description": "Identification and documentation of security weaknesses.",
+          "requiredElements": [
+            "POA&M Item Number",
+            "Weakness Description",
+            "Point of Contact",
+            "Associated Control(s)",
+            "Source of Discovery (Assessment/Scan/Incident)"
+          ]
+        },
+        {
+          "name": "Remediation Planning",
+          "description": "Planned corrective actions and implementation timeline.",
+          "requiredElements": [
+            "Remediation Description",
+            "Scheduled Completion Date",
+            "Milestone Descriptions",
+            "Milestone Due Dates",
+            "Resources Required",
+            "Risk Level (High/Moderate/Low)"
+          ]
+        },
+        {
+          "name": "Status Tracking",
+          "description": "Current status and progress of remediation efforts.",
+          "requiredElements": [
+            "Status (Open/Closed/Delayed/Risk Accepted)",
+            "Actual Completion Date",
+            "Changes to Original Plan",
+            "Vendor Dependencies",
+            "Evidence of Completion"
+          ]
+        }
+      ],
+      "requiredFields": [
+        {
+          "name": "POA&M ID",
+          "description": "Unique identifier for each weakness",
+          "example": "POAM-2024-001",
+          "azureSource": "Microsoft Defender for Cloud — finding ID"
+        },
+        {
+          "name": "Weakness Description",
+          "description": "Detailed description of the security weakness",
+          "example": "TLS 1.0/1.1 enabled on Azure App Service endpoint",
+          "azureSource": "Microsoft Defender for Cloud — recommendation details"
+        },
+        {
+          "name": "Risk Level",
+          "description": "Severity categorization of the weakness",
+          "example": "High — exploitable vulnerability with public exposure",
+          "azureSource": "Microsoft Defender for Cloud — severity classification"
+        },
+        {
+          "name": "Remediation Action",
+          "description": "Planned corrective action to address the weakness",
+          "example": "Enforce TLS 1.2 minimum via Azure Policy and App Service configuration",
+          "azureSource": "Azure Advisor — remediation steps"
+        },
+        {
+          "name": "Scheduled Completion",
+          "description": "Target date for remediation completion",
+          "example": "2024-06-30",
+          "azureSource": "N/A — manually assigned based on risk and resources"
+        }
+      ],
+      "azureMappings": {
+        "Vulnerability Discovery": "Microsoft Defender for Cloud recommendations",
+        "Risk Scoring": "Microsoft Defender for Cloud secure score",
+        "Remediation Tracking": "Azure DevOps work items or ServiceNow integration",
+        "Evidence Collection": "Azure Policy compliance snapshots",
+        "Scan Results": "Qualys/Defender vulnerability scanner results"
+      },
+      "authorizationChecklist": [
+        { "item": "POA&M Spreadsheet", "description": "Complete POA&M with all open findings documented", "required": true },
+        { "item": "Risk Levels Assigned", "description": "Each item categorized as High/Moderate/Low risk", "required": true },
+        { "item": "Milestones Defined", "description": "Each item has specific milestones with due dates", "required": true },
+        { "item": "Monthly Updates", "description": "POA&M updated monthly with current status", "required": true },
+        { "item": "Closure Evidence", "description": "Closed items have supporting evidence attached", "required": false }
+      ]
+    },
+    {
+      "templateType": "CRM",
+      "title": "Continuous Monitoring (ConMon) / Customer Responsibility Matrix",
+      "description": "Defines responsibilities for ongoing security monitoring between CSP and customer. Includes vulnerability scanning schedules, reporting cadence, and incident response procedures.",
+      "sections": [
+        {
+          "name": "Monitoring Strategy",
+          "description": "Overall approach to continuous security monitoring.",
+          "requiredElements": [
+            "Monitoring Objectives",
+            "Scope of Monitoring Activities",
+            "Roles and Responsibilities (CSP vs Customer)",
+            "Reporting Frequency",
+            "Escalation Procedures"
+          ]
+        },
+        {
+          "name": "Vulnerability Management",
+          "description": "Scanning, patching, and remediation procedures.",
+          "requiredElements": [
+            "Scanning Tools and Schedule",
+            "Patch Management Process",
+            "Remediation Timeframes by Severity",
+            "False Positive Management",
+            "Deviation Request Process"
+          ]
+        },
+        {
+          "name": "Assessment Procedures",
+          "description": "Periodic assessment activities and reporting.",
+          "requiredElements": [
+            "Annual Assessment Plan",
+            "Control Assessment Schedule",
+            "Assessor Qualifications",
+            "Assessment Reporting Format",
+            "Significant Change Assessment Triggers"
+          ]
+        },
+        {
+          "name": "Incident Response",
+          "description": "Incident detection, response, and reporting integration.",
+          "requiredElements": [
+            "Incident Detection Methods",
+            "Incident Categorization",
+            "Response Time Requirements",
+            "FedRAMP PMO Notification Requirements",
+            "Post-Incident Reporting"
+          ]
+        }
+      ],
+      "requiredFields": [
+        {
+          "name": "Scanning Schedule",
+          "description": "Vulnerability scanning frequency and scope",
+          "example": "Weekly OS/infrastructure scans, monthly web application scans",
+          "azureSource": "Microsoft Defender for Cloud — auto-provisioning and scan scheduling"
+        },
+        {
+          "name": "Remediation Timeframes",
+          "description": "Maximum remediation windows by severity",
+          "example": "Critical: 30 days, High: 90 days, Moderate: 180 days",
+          "azureSource": "Azure Policy — remediation task deadlines"
+        },
+        {
+          "name": "Reporting Cadence",
+          "description": "Monthly and annual reporting requirements",
+          "example": "Monthly POA&M updates, monthly scan reports, annual assessment",
+          "azureSource": "Azure Monitor — scheduled query rules and workbook exports"
+        },
+        {
+          "name": "Incident Notification",
+          "description": "Incident reporting requirements and timeframes",
+          "example": "US-CERT notification within 1 hour for significant incidents",
+          "azureSource": "Microsoft Sentinel — automated incident playbooks"
+        }
+      ],
+      "azureMappings": {
+        "Continuous Scanning": "Microsoft Defender for Cloud continuous assessment",
+        "Patch Compliance": "Azure Update Manager patch compliance",
+        "Configuration Monitoring": "Azure Policy compliance state changes",
+        "Log Collection": "Azure Monitor Log Analytics",
+        "Alerting": "Azure Monitor alert rules and action groups",
+        "Incident Management": "Microsoft Sentinel incident workflow"
+      },
+      "authorizationChecklist": [
+        { "item": "ConMon Plan", "description": "Continuous monitoring strategy document", "required": true },
+        { "item": "Scanning Configuration", "description": "Vulnerability scanners configured and operational", "required": true },
+        { "item": "Reporting Templates", "description": "Monthly and annual report templates prepared", "required": true },
+        { "item": "Incident Response Plan", "description": "IR plan with FedRAMP-specific procedures", "required": true },
+        { "item": "Responsibility Matrix", "description": "CSP vs customer responsibility assignments documented", "required": false }
+      ]
+    }
+  ]
+}

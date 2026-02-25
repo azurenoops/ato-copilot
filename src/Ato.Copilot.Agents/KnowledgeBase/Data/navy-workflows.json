@@ -1,0 +1,114 @@
+{
+  "version": "1.0.0",
+  "workflows": [
+    {
+      "workflowId": "NAVY-ATO-MODERATE",
+      "name": "Navy ATO Process — Moderate Impact",
+      "organization": "Navy",
+      "impactLevel": "Moderate",
+      "description": "Standard Navy authorization workflow for Moderate impact systems following SECNAVINST 5239.3C and DoDI 8510.01.",
+      "steps": [
+        { "order": 1, "name": "System Registration", "description": "Register system in eMASS with Navy-specific metadata, assign ISSM/ISSO, and define authorization boundary.", "durationDays": 14, "responsible": "System Owner" },
+        { "order": 2, "name": "Categorization & Selection", "description": "Complete FIPS 199 categorization, select NIST SP 800-53 Moderate baseline controls, apply Navy tailoring.", "durationDays": 21, "responsible": "ISSM" },
+        { "order": 3, "name": "STIG Implementation", "description": "Implement applicable DISA STIGs for all system components. Run SCAP scans and remediate findings.", "durationDays": 45, "responsible": "System Administrator" },
+        { "order": 4, "name": "SSP Development", "description": "Document all control implementations in the System Security Plan. Include network diagrams and data flow.", "durationDays": 30, "responsible": "ISSO" },
+        { "order": 5, "name": "Security Assessment", "description": "Conduct independent security assessment per NIST SP 800-53A. Document findings in SAR.", "durationDays": 30, "responsible": "SCA" },
+        { "order": 6, "name": "POA&M Development", "description": "Create Plan of Action & Milestones for all unmitigated findings. Prioritize by risk.", "durationDays": 14, "responsible": "ISSM" },
+        { "order": 7, "name": "Package Submission", "description": "Submit authorization package (SSP, SAR, POA&M) to Navy AO via eMASS.", "durationDays": 7, "responsible": "System Owner" },
+        { "order": 8, "name": "AO Review & Decision", "description": "Authorizing Official reviews package and makes authorization decision (ATO, DATO, IATO).", "durationDays": 30, "responsible": "AO" }
+      ],
+      "requiredDocuments": [
+        "System Security Plan (SSP)",
+        "Security Assessment Report (SAR)",
+        "Plan of Action & Milestones (POA&M)",
+        "Privacy Impact Assessment (PIA)",
+        "Network Diagram",
+        "Data Flow Diagram",
+        "Hardware/Software List",
+        "STIG Compliance Reports"
+      ],
+      "approvalAuthorities": ["NAVCYBERFOR AO", "SPAWAR ISSM", "Fleet Cyber Command"]
+    },
+    {
+      "workflowId": "NAVY-ATO-HIGH",
+      "name": "Navy ATO Process — High Impact",
+      "organization": "Navy",
+      "impactLevel": "High",
+      "description": "Navy authorization workflow for High impact systems requiring additional oversight and SAP/SCI considerations.",
+      "steps": [
+        { "order": 1, "name": "System Registration & Classification", "description": "Register system in eMASS with High impact classification. Identify SAP/SCI considerations.", "durationDays": 21, "responsible": "System Owner" },
+        { "order": 2, "name": "Enhanced Categorization", "description": "Complete CNSSI 1253 categorization for NSS or FIPS 199 High categorization. Apply overlays.", "durationDays": 30, "responsible": "ISSM" },
+        { "order": 3, "name": "Control Selection & Augmentation", "description": "Select High baseline controls with Navy-specific augmentations. Add privacy and CUI overlays.", "durationDays": 21, "responsible": "ISSM" },
+        { "order": 4, "name": "STIG & Hardening", "description": "Implement all applicable STIGs at High level. Apply CIS benchmarks and DoD hardening guides.", "durationDays": 60, "responsible": "System Administrator" },
+        { "order": 5, "name": "SSP & Documentation", "description": "Develop comprehensive SSP with all High-level control implementations documented.", "durationDays": 45, "responsible": "ISSO" },
+        { "order": 6, "name": "Independent Assessment", "description": "Independent SCA conducts thorough assessment including penetration testing.", "durationDays": 45, "responsible": "SCA" },
+        { "order": 7, "name": "Risk Remediation", "description": "Remediate critical and high findings. Develop POA&M with executive risk acceptance for remaining.", "durationDays": 30, "responsible": "ISSM" },
+        { "order": 8, "name": "Package & Submission", "description": "Compile and submit full authorization package via eMASS.", "durationDays": 14, "responsible": "System Owner" },
+        { "order": 9, "name": "Senior AO Review", "description": "Senior Authorizing Official reviews and makes authorization decision with terms.", "durationDays": 45, "responsible": "Senior AO" }
+      ],
+      "requiredDocuments": [
+        "System Security Plan (SSP)",
+        "Security Assessment Report (SAR)",
+        "Plan of Action & Milestones (POA&M)",
+        "Privacy Impact Assessment (PIA)",
+        "Penetration Test Report",
+        "Network & Data Flow Diagrams",
+        "Hardware/Software Inventory",
+        "STIG Compliance Reports",
+        "Risk Assessment Report",
+        "Interconnection Security Agreements (ISA)"
+      ],
+      "approvalAuthorities": ["Navy Senior AO", "NAVCYBERFOR", "OPNAV N2N6"]
+    },
+    {
+      "workflowId": "ARMY-ATO-MODERATE",
+      "name": "Army ATO Process — Moderate Impact",
+      "organization": "Army",
+      "impactLevel": "Moderate",
+      "description": "Army authorization workflow for Moderate impact systems per AR 25-2 and DoDI 8510.01.",
+      "steps": [
+        { "order": 1, "name": "System Registration", "description": "Register system in eMASS with Army POC chain and authorization boundary.", "durationDays": 14, "responsible": "System Owner" },
+        { "order": 2, "name": "Categorization", "description": "Complete FIPS 199 categorization and register with ARCYBER.", "durationDays": 14, "responsible": "ISSM" },
+        { "order": 3, "name": "Control Selection", "description": "Select Moderate baseline and apply Army-specific tailoring per ARCYBER directives.", "durationDays": 14, "responsible": "ISSM" },
+        { "order": 4, "name": "Implementation & STIGs", "description": "Implement controls and STIGs. Run ACAS and SCAP scans.", "durationDays": 45, "responsible": "System Administrator" },
+        { "order": 5, "name": "Documentation", "description": "Complete SSP and supporting documentation in eMASS.", "durationDays": 30, "responsible": "ISSO" },
+        { "order": 6, "name": "Assessment", "description": "Independent SCA assessment per NIST SP 800-53A.", "durationDays": 30, "responsible": "SCA" },
+        { "order": 7, "name": "Package Submission", "description": "Submit authorization package to Army AO.", "durationDays": 7, "responsible": "System Owner" },
+        { "order": 8, "name": "AO Decision", "description": "Army AO reviews and issues authorization decision.", "durationDays": 30, "responsible": "AO" }
+      ],
+      "requiredDocuments": [
+        "System Security Plan (SSP)",
+        "Security Assessment Report (SAR)",
+        "Plan of Action & Milestones (POA&M)",
+        "Privacy Impact Assessment (PIA)",
+        "Network Diagram",
+        "STIG Compliance Reports"
+      ],
+      "approvalAuthorities": ["ARCYBER AO", "NETCOM ISSM"]
+    },
+    {
+      "workflowId": "AF-ATO-MODERATE",
+      "name": "Air Force ATO Process — Moderate Impact",
+      "organization": "Air Force",
+      "impactLevel": "Moderate",
+      "description": "Air Force authorization workflow for Moderate impact systems per AFI 17-130 and DoDI 8510.01.",
+      "steps": [
+        { "order": 1, "name": "System Registration", "description": "Register system in eMASS with AF-specific attributes and authorization boundary.", "durationDays": 14, "responsible": "System Owner" },
+        { "order": 2, "name": "Categorization & Selection", "description": "Complete categorization and select Moderate baseline with AF tailoring.", "durationDays": 21, "responsible": "ISSM" },
+        { "order": 3, "name": "Implementation", "description": "Implement controls, apply STIGs, run compliance scans.", "durationDays": 45, "responsible": "System Administrator" },
+        { "order": 4, "name": "Documentation", "description": "Complete SSP and all supporting documentation.", "durationDays": 30, "responsible": "ISSO" },
+        { "order": 5, "name": "Assessment", "description": "SCA conducts independent security assessment.", "durationDays": 30, "responsible": "SCA" },
+        { "order": 6, "name": "POA&M & Remediation", "description": "Address findings and develop POA&M for residual risks.", "durationDays": 14, "responsible": "ISSM" },
+        { "order": 7, "name": "Submission & Decision", "description": "Submit package and receive AO authorization decision.", "durationDays": 30, "responsible": "AO" }
+      ],
+      "requiredDocuments": [
+        "System Security Plan (SSP)",
+        "Security Assessment Report (SAR)",
+        "Plan of Action & Milestones (POA&M)",
+        "Network Diagram",
+        "STIG Compliance Reports"
+      ],
+      "approvalAuthorities": ["16th Air Force AO", "688th Cyberspace Wing"]
+    }
+  ]
+}

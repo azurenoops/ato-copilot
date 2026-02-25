@@ -376,6 +376,59 @@ public class ComplianceAgent : BaseAgent
     /// <inheritdoc />
     public override string Description => "Handles NIST 800-53, FedRAMP, and ATO compliance assessments, remediation, and documentation";
 
+    /// <summary>
+    /// Evaluates confidence that this agent can handle the given message.
+    /// Action-intent keywords (scan, assess, check, validate, run, monitor, remediate) score high (0.7-0.9).
+    /// Compliance domain terms alone score moderate (0.4-0.6).
+    /// Default baseline is 0.2 for unrecognized queries.
+    /// </summary>
+    public override double CanHandle(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return 0.0;
+
+        var lower = message.ToLowerInvariant();
+        var score = 0.0;
+
+        // Action-intent keywords — strong indicators for compliance agent
+        string[] actionKeywords = ["scan", "assess", "check my", "validate", "run ", "monitor",
+            "remediate", "fix ", "deploy", "evaluate", "audit", "generate report",
+            "create assessment", "start assessment", "check compliance"];
+        foreach (var keyword in actionKeywords)
+        {
+            if (lower.Contains(keyword))
+            {
+                score = Math.Max(score, 0.8);
+                break;
+            }
+        }
+
+        // Compliance-specific action verbs
+        if (lower.Contains("scan my") || lower.Contains("assess my") || lower.Contains("check my subscription"))
+            score = Math.Max(score, 0.9);
+
+        // Domain terms without action intent — moderate score
+        string[] domainTerms = ["compliance", "assessment", "finding", "poam", "ssp",
+            "authorization", "ato", "remediation", "control family", "baseline"];
+        foreach (var term in domainTerms)
+        {
+            if (lower.Contains(term) && score < 0.5)
+            {
+                score = Math.Max(score, 0.5);
+            }
+        }
+
+        // Framework mentions — moderate
+        if ((lower.Contains("nist") || lower.Contains("fedramp") || lower.Contains("dod")) && score < 0.4)
+            score = Math.Max(score, 0.4);
+
+        // Default baseline for unrecognized messages
+        if (score == 0.0)
+            score = 0.2;
+
+        return score;
+    }
+
     /// <inheritdoc />
     public override string GetSystemPrompt()
     {

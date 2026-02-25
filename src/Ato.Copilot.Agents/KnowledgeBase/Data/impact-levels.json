@@ -1,0 +1,140 @@
+{
+  "version": "1.0.0",
+  "impactLevels": [
+    {
+      "level": "IL2",
+      "name": "DoD Impact Level 2",
+      "dataClassification": "Non-CUI (Controlled Unclassified Information) unclassified data that has been cleared for public release, or low-sensitivity DoD data not designated as CUI.",
+      "securityRequirements": {
+        "encryption": "TLS 1.2+ for data in transit. AES-256 for data at rest recommended but not mandatory.",
+        "network": "Internet-facing permitted. Standard firewall and IDS/IPS protections required.",
+        "personnel": "No specific clearance requirements. Standard background checks for administrators.",
+        "physicalSecurity": "Standard commercial data center security controls. SOC 2 Type II compliance."
+      },
+      "azureImplementation": {
+        "region": "Azure Commercial (any US region) or Azure Government",
+        "network": "Virtual networks with NSGs. Azure Firewall recommended. No dedicated connectivity required.",
+        "identity": "Azure AD with MFA. Conditional Access policies. RBAC at subscription level.",
+        "encryption": "Azure Storage Service Encryption (SSE) with Microsoft-managed keys. Azure Key Vault optional.",
+        "services": ["Azure Virtual Machines", "Azure App Service", "Azure SQL Database", "Azure Storage", "Azure Monitor", "Microsoft Defender for Cloud"]
+      },
+      "additionalControls": ["AC-2", "AU-2", "CM-6", "IA-2", "SC-7"]
+    },
+    {
+      "level": "IL4",
+      "name": "DoD Impact Level 4",
+      "dataClassification": "Controlled Unclassified Information (CUI). Includes FOUO, Privacy Act, HIPAA, export-controlled, and other sensitive but unclassified data.",
+      "securityRequirements": {
+        "encryption": "FIPS 140-2 validated cryptographic modules required. TLS 1.2+ mandatory. AES-256 for data at rest.",
+        "network": "Logical separation from commercial tenants. Dedicated ExpressRoute or VPN connections recommended. CAP not required.",
+        "personnel": "US persons only for data handling and administration. Favorable background investigation.",
+        "physicalSecurity": "FedRAMP High equivalent physical security controls. US-based data centers only."
+      },
+      "azureImplementation": {
+        "region": "Azure Government (US Gov Virginia, US Gov Arizona, US Gov Texas)",
+        "network": "Azure Government ExpressRoute. Virtual networks with NSGs and Azure Firewall. Network isolation from commercial Azure.",
+        "identity": "Azure AD for Government with CAC/PIV authentication. Conditional Access with device compliance. Azure AD PIM for privileged access.",
+        "encryption": "Azure Key Vault with FIPS 140-2 Level 2 HSMs. Customer-managed keys (CMK) for data at rest. TLS 1.2 enforced.",
+        "services": ["Azure Government VMs", "Azure Government App Service", "Azure SQL (Gov)", "Azure Storage (Gov)", "Azure Sentinel", "Microsoft Defender for Cloud"]
+      },
+      "additionalControls": ["AC-2(1)", "AU-2(3)", "CM-6(1)", "IA-2(1)", "SC-7(4)", "SC-28", "SC-28(1)"]
+    },
+    {
+      "level": "IL5",
+      "name": "DoD Impact Level 5",
+      "dataClassification": "Higher-sensitivity CUI and National Security Systems (NSS) data. Includes mission-critical CUI, controlled defense information (CDI), and data requiring enhanced protections beyond IL4.",
+      "securityRequirements": {
+        "encryption": "FIPS 140-2 Level 1 minimum. FIPS 140-2 Level 3 HSMs recommended. Double encryption for data at rest.",
+        "network": "Dedicated connections required. Cross-domain solutions for any commercial connectivity. CAP (Cloud Access Point) required.",
+        "personnel": "US citizens only. Secret clearance required for administrators. Background investigation for all personnel.",
+        "physicalSecurity": "Dedicated physical infrastructure. US government-contracted facilities. 24/7 physical security monitoring."
+      },
+      "azureImplementation": {
+        "region": "Azure Government (dedicated IL5 regions: US Gov Virginia, US Gov Arizona with IL5 PA)",
+        "network": "Azure Government ExpressRoute with dedicated circuits. Azure Firewall Premium. SCCA compliance. CAP connectivity.",
+        "identity": "Azure AD for Government with CAC/PIV. Azure AD PIM mandatory. Privileged Access Workstations (PAW) required.",
+        "encryption": "Azure Key Vault Managed HSM (FIPS 140-2 Level 3). Customer-managed keys mandatory. Double encryption at rest.",
+        "services": ["Azure Government IL5 VMs", "Azure SQL Managed Instance (IL5)", "Azure Kubernetes Service (IL5)", "Azure Storage (IL5 enclaves)", "Azure Sentinel", "Azure Arc"]
+      },
+      "additionalControls": ["AC-2(2)", "AU-3(1)", "CM-3(2)", "IA-2(12)", "SC-7(18)", "SC-28(1)", "SI-4(5)", "PE-3(1)"]
+    },
+    {
+      "level": "IL6",
+      "name": "DoD Impact Level 6",
+      "dataClassification": "Classified information up to SECRET level. Includes National Security Information (NSI) classified at the SECRET level and mission-critical classified data.",
+      "securityRequirements": {
+        "encryption": "FIPS 140-2 Level 3 required. NSA-approved (Suite B) cryptographic algorithms. Hardware-based encryption mandatory.",
+        "network": "Air-gapped or SIPRNet connectivity only. No commercial internet access. Cross-domain solutions require NSA approval.",
+        "personnel": "US citizens with active SECRET clearance minimum. TS/SCI for administrators recommended. Continuous evaluation program.",
+        "physicalSecurity": "SCIF-equivalent facilities. Dedicated government data centers. Armed guards. Intrusion detection systems."
+      },
+      "azureImplementation": {
+        "region": "Azure Government Secret (dedicated classified regions)",
+        "network": "Air-gapped Azure Government Secret regions. SIPRNet connectivity. No internet connectivity. Dedicated HAIPE encryptors.",
+        "identity": "PKI-based authentication (SIPRNet tokens). Dedicated identity infrastructure. No federation with commercial Azure AD.",
+        "encryption": "NSA-approved Suite B cryptography. Dedicated HSMs. Hardware-based encryption for all data. Key management per CNSS policies.",
+        "services": ["Azure Government Secret VMs", "Azure Government Secret Storage", "Azure Government Secret SQL", "Dedicated HSM"]
+      },
+      "additionalControls": ["AC-2(4)", "AU-3(2)", "CM-3(4)", "IA-2(8)", "SC-7(21)", "SC-28(2)", "SI-4(12)", "PE-3(6)", "SA-4(10)"]
+    }
+  ],
+  "fedRampBaselines": [
+    {
+      "level": "FedRAMP-Low",
+      "name": "FedRAMP Low Baseline",
+      "dataClassification": "Low-impact federal information systems. Data loss would have limited adverse effect on organizational operations, assets, or individuals.",
+      "securityRequirements": {
+        "encryption": "TLS 1.2+ for data in transit. Encryption at rest recommended.",
+        "network": "Standard perimeter protections. Firewalls and basic IDS.",
+        "personnel": "Background checks for personnel with system access.",
+        "physicalSecurity": "Standard commercial data center controls."
+      },
+      "azureImplementation": {
+        "region": "Azure Commercial or Azure Government",
+        "network": "Standard VNets with NSGs.",
+        "identity": "Azure AD with MFA.",
+        "encryption": "Platform-managed encryption keys.",
+        "services": ["Azure App Service", "Azure SQL", "Azure Storage"]
+      },
+      "additionalControls": ["AC-1", "AU-1", "CA-1"]
+    },
+    {
+      "level": "FedRAMP-Moderate",
+      "name": "FedRAMP Moderate Baseline",
+      "dataClassification": "Moderate-impact federal information systems. Includes most CUI. Data loss would have serious adverse effect on operations.",
+      "securityRequirements": {
+        "encryption": "FIPS 140-2 validated modules for data in transit and at rest.",
+        "network": "Network segmentation. IDS/IPS. Web Application Firewall (WAF).",
+        "personnel": "Favorable background investigation. Annual security training.",
+        "physicalSecurity": "FedRAMP Moderate physical security. SOC 2 Type II."
+      },
+      "azureImplementation": {
+        "region": "Azure Government recommended. Azure Commercial with FedRAMP Moderate ATO acceptable.",
+        "network": "Azure Firewall. NSGs. Application Gateway with WAF. ExpressRoute recommended.",
+        "identity": "Azure AD with MFA and Conditional Access. PIM for privileged roles.",
+        "encryption": "Azure Key Vault with FIPS 140-2 Level 2. Customer-managed keys recommended.",
+        "services": ["Azure Government VMs", "Azure SQL (Gov)", "Azure Storage (Gov)", "Azure Key Vault", "Azure Sentinel"]
+      },
+      "additionalControls": ["AC-2(1)", "AU-2(3)", "CM-6(1)", "IA-2(1)", "SC-7(4)"]
+    },
+    {
+      "level": "FedRAMP-High",
+      "name": "FedRAMP High Baseline",
+      "dataClassification": "High-impact federal information systems. Data loss would have severe or catastrophic adverse effect. Required for law enforcement, healthcare, financial, and other high-sensitivity federal data.",
+      "securityRequirements": {
+        "encryption": "FIPS 140-2 Level 2+ validated modules. Customer-managed keys mandatory. HSM recommended.",
+        "network": "Dedicated connections. Azure Firewall Premium. Full packet inspection. DDoS protection.",
+        "personnel": "Enhanced background investigation. Separation of duties. Least privilege enforced.",
+        "physicalSecurity": "FedRAMP High physical security. Dedicated infrastructure. Enhanced monitoring."
+      },
+      "azureImplementation": {
+        "region": "Azure Government (US Gov Virginia, US Gov Arizona, US Gov Texas)",
+        "network": "Azure ExpressRoute. Azure Firewall Premium. DDoS Protection Standard. Web Application Firewall v2.",
+        "identity": "Azure AD for Government. CAC/PIV MFA. PIM mandatory. Conditional Access with compliant devices.",
+        "encryption": "Azure Key Vault Premium (FIPS 140-2 Level 2 HSM). Customer-managed keys for all services. TLS 1.2 minimum.",
+        "services": ["Azure Government VMs", "Azure Government AKS", "Azure SQL Managed Instance", "Azure Key Vault Premium", "Azure Sentinel", "Microsoft Defender for Cloud"]
+      },
+      "additionalControls": ["AC-2(2)", "AU-3(1)", "CM-3(2)", "IA-2(12)", "SC-7(18)", "SC-28(1)", "SI-4(5)"]
+    }
+  ]
+}

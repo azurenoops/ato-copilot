@@ -890,11 +890,11 @@ public interface IAssessmentPersistenceService
         CancellationToken cancellationToken = default);
 }
 
-// ─── Knowledge Base Interfaces (Stubs) ──────────────────────────────────────
+// ─── Knowledge Base Interfaces (Feature 010 — expanded) ─────────────────────
 
 /// <summary>
 /// STIG validation service. Validates family controls against STIG rules
-/// and produces additional findings. Stub implementation returns empty results.
+/// and produces additional findings.
 /// </summary>
 public interface IStigValidationService
 {
@@ -905,7 +905,7 @@ public interface IStigValidationService
     /// <param name="controls">NIST controls to validate.</param>
     /// <param name="subscriptionId">Azure subscription ID.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>STIG-based findings (empty for stub).</returns>
+    /// <returns>STIG-based findings.</returns>
     Task<List<ComplianceFinding>> ValidateAsync(
         string familyCode,
         IEnumerable<NistControl> controls,
@@ -915,70 +915,188 @@ public interface IStigValidationService
 
 /// <summary>
 /// RMF (Risk Management Framework) knowledge service.
-/// Provides RMF guidance for NIST controls. Stub returns generic guidance.
+/// Provides RMF process data, step details, and service-specific guidance.
 /// </summary>
 public interface IRmfKnowledgeService
 {
     /// <summary>
-    /// Get RMF guidance for a specific control.
+    /// Get RMF guidance for a specific control (backward-compatible).
     /// </summary>
-    /// <param name="controlId">NIST control ID.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>RMF guidance text.</returns>
     Task<string> GetGuidanceAsync(
         string controlId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get the full RMF process data including all 6 steps, service guidance, and deliverables.
+    /// </summary>
+    Task<RmfProcessData?> GetRmfProcessAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get details for a specific RMF step (1-6).
+    /// </summary>
+    /// <param name="step">Step number (1-6).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The RMF step, or null if step is invalid.</returns>
+    Task<RmfStep?> GetRmfStepAsync(int step, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get service/branch-specific guidance by topic (e.g., "navy", "army").
+    /// </summary>
+    /// <param name="topic">Topic or organization name.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Service guidance, or null if not found.</returns>
+    Task<ServiceGuidance?> GetServiceGuidanceAsync(string topic, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-/// STIG knowledge service. Maps NIST controls to STIG rules.
-/// Stub returns empty mappings.
+/// STIG knowledge service. Provides STIG control lookups, searches, and cross-references.
 /// </summary>
 public interface IStigKnowledgeService
 {
     /// <summary>
-    /// Get STIG rule mapping for a NIST control.
+    /// Get STIG rule mapping for a NIST control (backward-compatible).
     /// </summary>
-    /// <param name="controlId">NIST control ID.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>STIG mapping string (empty for stub).</returns>
     Task<string> GetStigMappingAsync(
         string controlId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get a specific STIG control by its STIG ID.
+    /// </summary>
+    /// <param name="stigId">STIG identifier (e.g., "V-12345").</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The STIG control, or null if not found.</returns>
+    Task<StigControl?> GetStigControlAsync(string stigId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Search STIG controls by keyword and optional severity filter.
+    /// </summary>
+    /// <param name="query">Search query text.</param>
+    /// <param name="severity">Optional severity filter.</param>
+    /// <param name="maxResults">Maximum results to return (default: 10).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Matching STIG controls.</returns>
+    Task<List<StigControl>> SearchStigsAsync(
+        string query,
+        StigSeverity? severity = null,
+        int maxResults = 10,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get cross-reference data for a STIG, including related NIST controls and DoD instructions.
+    /// </summary>
+    /// <param name="stigId">STIG identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Cross-reference data, or null if STIG not found.</returns>
+    Task<StigCrossReference?> GetStigCrossReferenceAsync(string stigId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-/// DoD instruction service. Provides DoD-specific instructions for NIST controls.
-/// Stub returns generic instructions.
+/// DoD instruction service. Provides DoD-specific instruction lookups and control mappings.
 /// </summary>
 public interface IDoDInstructionService
 {
     /// <summary>
-    /// Get DoD instruction for a specific control.
+    /// Get DoD instruction for a specific control (backward-compatible).
     /// </summary>
-    /// <param name="controlId">NIST control ID.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>DoD instruction text.</returns>
     Task<string> GetInstructionAsync(
         string controlId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get detailed DoD instruction by instruction ID.
+    /// </summary>
+    /// <param name="instructionId">Instruction ID (e.g., "DoDI 8510.01").</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The instruction, or null if not found.</returns>
+    Task<DoDInstruction?> ExplainInstructionAsync(string instructionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get all DoD instructions related to a specific NIST control.
+    /// </summary>
+    /// <param name="controlId">NIST control ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Matching DoD instructions.</returns>
+    Task<List<DoDInstruction>> GetInstructionsByControlAsync(string controlId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-/// DoD workflow service. Provides DoD assessment workflow steps.
-/// Stub returns standard workflow.
+/// DoD workflow service. Provides DoD authorization workflow data.
 /// </summary>
 public interface IDoDWorkflowService
 {
     /// <summary>
-    /// Get workflow steps for an assessment type.
+    /// Get workflow steps for an assessment type (backward-compatible).
     /// </summary>
-    /// <param name="assessmentType">Assessment type identifier.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>Ordered workflow step descriptions.</returns>
     Task<List<string>> GetWorkflowAsync(
         string assessmentType,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get detailed workflow by workflow ID.
+    /// </summary>
+    /// <param name="workflowId">Workflow identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The workflow, or null if not found.</returns>
+    Task<DoDWorkflow?> GetWorkflowDetailAsync(string workflowId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get all workflows for a specific organization.
+    /// </summary>
+    /// <param name="organization">Organization name (e.g., "Navy").</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Matching workflows.</returns>
+    Task<List<DoDWorkflow>> GetWorkflowsByOrganizationAsync(string organization, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Impact level service. Provides DoD Impact Level (IL2-IL6) and FedRAMP baseline information.
+/// </summary>
+public interface IImpactLevelService
+{
+    /// <summary>
+    /// Get a specific impact level by normalized ID.
+    /// </summary>
+    /// <param name="level">Impact level (e.g., "IL5", "FedRAMP-High").</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The impact level, or null if not found.</returns>
+    Task<ImpactLevel?> GetImpactLevelAsync(string level, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get all available impact levels (IL2-IL6).
+    /// </summary>
+    Task<List<ImpactLevel>> GetAllImpactLevelsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get a specific FedRAMP baseline by normalized name.
+    /// </summary>
+    /// <param name="baseline">Baseline name (e.g., "Low", "Moderate", "High").</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The FedRAMP baseline as ImpactLevel, or null if not found.</returns>
+    Task<ImpactLevel?> GetFedRampBaselineAsync(string baseline, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// FedRAMP template service. Provides authorization package template guidance.
+/// </summary>
+public interface IFedRampTemplateService
+{
+    /// <summary>
+    /// Get template guidance for a specific template type.
+    /// </summary>
+    /// <param name="templateType">Template type (e.g., "SSP", "POAM", "CRM").</param>
+    /// <param name="baseline">FedRAMP baseline filter (default: "High").</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Template guidance, or null if not found.</returns>
+    Task<FedRampTemplate?> GetTemplateGuidanceAsync(
+        string templateType,
+        string baseline = "High",
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get all available FedRAMP templates.
+    /// </summary>
+    Task<List<FedRampTemplate>> GetAllTemplatesAsync(CancellationToken cancellationToken = default);
 }
 
 // ──────────────────────────────── Compliance Watch Interfaces ────────────────────────────────────
