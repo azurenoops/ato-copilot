@@ -89,7 +89,7 @@ public class ChatHubTests
 
         // Setup scoped ChatService
         var chatServiceMock = new Mock<IChatService>();
-        chatServiceMock.Setup(s => s.SendMessageAsync(It.IsAny<SendMessageRequest>()))
+        chatServiceMock.Setup(s => s.SendMessageAsync(It.IsAny<SendMessageRequest>(), It.IsAny<IProgress<string>?>()))
             .ReturnsAsync(new ChatResponse
             {
                 MessageId = "msg-789",
@@ -221,7 +221,7 @@ public class ChatHubTests
         var conversationId = "conv-boundary";
 
         var chatServiceMock = new Mock<IChatService>();
-        chatServiceMock.Setup(s => s.SendMessageAsync(It.IsAny<SendMessageRequest>()))
+        chatServiceMock.Setup(s => s.SendMessageAsync(It.IsAny<SendMessageRequest>(), It.IsAny<IProgress<string>?>()))
             .ReturnsAsync(new ChatResponse
             {
                 MessageId = "msg-boundary",
@@ -271,7 +271,7 @@ public class ChatHubTests
         var conversationId = "conv-error";
 
         var chatServiceMock = new Mock<IChatService>();
-        chatServiceMock.Setup(s => s.SendMessageAsync(It.IsAny<SendMessageRequest>()))
+        chatServiceMock.Setup(s => s.SendMessageAsync(It.IsAny<SendMessageRequest>(), It.IsAny<IProgress<string>?>()))
             .ThrowsAsync(new Exception("Unexpected error"));
 
         var scopeMock = new Mock<IServiceScope>();

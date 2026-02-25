@@ -241,10 +241,25 @@ async Task MigrateDatabaseAsync(IServiceProvider services)
 
     try
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        logger.LogInformation("Applying database migrations...");
-        await db.Database.MigrateAsync(cts.Token);
-        logger.LogInformation("Database migrations applied successfully");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        var provider = scope.ServiceProvider.GetRequiredService<IConfiguration>()
+            .GetValue<string>("Database:Provider") ?? "SQLite";
+
+        if (provider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase))
+        {
+            // SQL Server: Use EnsureCreated to build schema from model directly.
+            // EF migrations were authored for SQLite and may have incompatible
+            // index sizes for SQL Server's 900-byte key limit.
+            logger.LogInformation("SQL Server detected — ensuring database is created from model...");
+            await db.Database.EnsureCreatedAsync(cts.Token);
+            logger.LogInformation("SQL Server database ready");
+        }
+        else
+        {
+            logger.LogInformation("Applying database migrations...");
+            await db.Database.MigrateAsync(cts.Token);
+            logger.LogInformation("Database migrations applied successfully");
+        }
     }
     catch (Exception ex)
     {

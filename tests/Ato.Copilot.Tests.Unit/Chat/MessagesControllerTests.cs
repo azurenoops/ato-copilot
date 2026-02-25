@@ -45,7 +45,7 @@ public class MessagesControllerTests
         };
 
         _chatServiceMock
-            .Setup(s => s.SendMessageAsync(It.IsAny<SendMessageRequest>()))
+            .Setup(s => s.SendMessageAsync(It.IsAny<SendMessageRequest>(), It.IsAny<IProgress<string>?>()))
             .ReturnsAsync(expectedResponse);
 
         // Act
@@ -192,7 +192,7 @@ public class MessagesControllerTests
         };
 
         _chatServiceMock
-            .Setup(s => s.SendMessageAsync(It.IsAny<SendMessageRequest>()))
+            .Setup(s => s.SendMessageAsync(It.IsAny<SendMessageRequest>(), It.IsAny<IProgress<string>?>()))
             .ReturnsAsync(new ChatResponse
             {
                 MessageId = Guid.NewGuid().ToString(),

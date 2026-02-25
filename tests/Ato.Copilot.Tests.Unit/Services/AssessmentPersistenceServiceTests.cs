@@ -37,6 +37,16 @@ public class AssessmentPersistenceServiceTests : IDisposable
         _dbFactory = factory.Object;
         _cache = new MemoryCache(new MemoryCacheOptions());
 
+        // Seed NistControls so ControlId normalization doesn't null them out
+        using (var seedContext = new AtoCopilotContext(options))
+        {
+            seedContext.NistControls.AddRange(
+                new NistControl { Id = "ac-1", Family = "AC", Title = "Access Control Policy" },
+                new NistControl { Id = "ia-1", Family = "IA", Title = "Identification and Authentication Policy" },
+                new NistControl { Id = "sc-1", Family = "SC", Title = "System and Communications Protection Policy" });
+            seedContext.SaveChanges();
+        }
+
         _service = new AssessmentPersistenceService(
             _dbFactory,
             _cache,
@@ -101,7 +111,7 @@ public class AssessmentPersistenceServiceTests : IDisposable
 
         var result = await _service.GetAssessmentAsync(assessment.Id);
         result!.Findings.Should().HaveCount(1);
-        result.Findings[0].ControlId.Should().Be("AC-1");
+        result.Findings[0].ControlId.Should().Be("ac-1");
     }
 
     [Fact]
@@ -163,7 +173,7 @@ public class AssessmentPersistenceServiceTests : IDisposable
 
         var result = await _service.GetAssessmentAsync(assessment.Id);
         result!.Findings.Should().HaveCount(2);
-        result.Findings.Select(f => f.ControlId).Should().Contain("IA-1");
+        result.Findings.Select(f => f.ControlId).Should().Contain("ia-1");
     }
 
     // ─── GetAssessmentAsync ─────────────────────────────────────────────
@@ -323,7 +333,7 @@ Severity = FindingSeverity.Low,
 
         var result = await _service.GetFindingAsync($"{assessment.Id}-finding-1");
         result.Should().NotBeNull();
-        result!.ControlId.Should().Be("AC-1");
+        result!.ControlId.Should().Be("ac-1");
     }
 
     // ─── UpdateFindingStatusAsync ───────────────────────────────────────

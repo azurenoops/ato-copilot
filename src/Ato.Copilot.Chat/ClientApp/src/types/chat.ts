@@ -142,6 +142,7 @@ export interface ChatState {
   messages: ChatMessage[];
   isLoading: boolean;
   isProcessing: boolean;
+  progressMessage: string | null;
   error: string | null;
   connectionStatus: ConnectionStatus;
   typingUsers: string[];
@@ -164,6 +165,7 @@ export type ChatAction =
   | { type: 'UPDATE_MESSAGE_STATUS'; payload: { id: string; status: MessageStatus; error?: string } }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_PROCESSING'; payload: boolean }
+  | { type: 'SET_PROGRESS'; payload: string | null }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_CONNECTION_STATUS'; payload: ConnectionStatus }
   | { type: 'SET_TYPING_USER'; payload: { userId: string; isTyping: boolean } }

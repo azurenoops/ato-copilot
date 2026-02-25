@@ -15,6 +15,7 @@
 - [Agent Framework](#agent-framework)
   - [BaseAgent](#baseagent)
   - [BaseTool](#basetool)
+  - [AI Processing Path (Optional)](#ai-processing-path-optional)
   - [ComplianceAgent](#complianceagent)
   - [ConfigurationAgent](#configurationagent)
   - [Intent Routing](#intent-routing)
@@ -284,6 +285,45 @@ public abstract class BaseTool
 - `ToolMetrics.RecordStart()` / `RecordSuccess()` / `RecordError()`
 - Exception handling with structured error responses
 
+### AI Processing Path (Optional)
+
+When Azure OpenAI is configured and `AgentAIEnabled` is `true`, BaseAgent supports an LLM-powered processing path via `TryProcessWithAiAsync()`:
+
+```
+User Message
+    │
+    ▼
+TryProcessWithAiAsync()
+    │
+    ├─ IChatClient null or AgentAIEnabled=false?
+    │   └─ return null → deterministic fallback
+    │
+    ├─ BuildChatContext()
+    │   └─ System prompt + conversation history + user message
+    │
+    ├─ BuildToolDefinitions()
+    │   └─ Registered BaseTool list → AITool via AIFunctionFactory.Create
+    │
+    └─ LLM Tool-Calling Loop (max MaxToolCallRounds)
+        ├─ IChatClient.GetResponseAsync() with ChatOptions { Tools, Temperature }
+        ├─ If FunctionCallContent → execute named BaseTool → FunctionResultContent
+        ├─ Loop until text response or max rounds
+        └─ Return natural language response (or null on error → fallback)
+```
+
+**Key design decisions:**
+- **Manual tool-calling loop** — not `FunctionInvokingChatClient`, for full control over tool execution, error handling, and audit logging
+- **Graceful degradation** — any LLM error (timeout, rate limit, API failure) returns `null`, triggering the deterministic fallback path for that request only
+- **Zero overhead when disabled** — `TryProcessWithAiAsync()` returns `null` immediately when `_chatClient` is null or `AgentAIEnabled` is false
+- **Feature flag**: `Gateway:AzureOpenAI:AgentAIEnabled` (default `false`) — must be explicitly enabled
+
+**Integration points per agent:**
+| Agent | AI call location | Fallback behavior |
+|---|---|---|
+| `ComplianceAgent` | After auth gate, before `ClassifyIntent` | Keyword routing → `RouteToToolAsync` |
+| `ConfigurationAgent` | Before `ClassifyIntent` | Intent classification → tool execution |
+| `KnowledgeBaseAgent` | Before `AnalyzeQueryType` | Query type analysis → tool execution |
+
 ### ComplianceAgent
 
 The primary agent (1300+ lines). Registers **65+ tools** across 7 domains via constructor injection.
@@ -323,8 +363,12 @@ Loaded from embedded resources at runtime via `Assembly.GetManifestResourceStrea
 | Prompt File | Purpose |
 |---|---|
 | `ComplianceAgent.prompt.txt` | Main agent persona — ISSO/ISSM assistant, all tool descriptions, workflows |
+| `ConfigurationAgent.prompt.txt` | Configuration management persona, setting validation |
+| `KnowledgeBaseAgent.prompt.txt` | NIST/STIG/RMF/FedRAMP knowledge assistant |
 | `KanbanAgent.prompt.txt` | Kanban operations, column flow, transition rules, RBAC |
 | `PimAgent.prompt.txt` | PIM activation flow, duration estimation, justification format |
+
+All prompt files include "Response Guidelines" and "Tool Selection" sections that guide LLM behavior when AI processing is enabled — formatting standards, severity badges, tool routing patterns.
 
 ---
 

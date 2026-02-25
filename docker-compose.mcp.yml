@@ -1,30 +1,82 @@
 # ──────────────────────────────────────────────────────────────
-#  ATO Copilot — Docker Compose (MCP Server)
+#  ATO Copilot — Full Stack Docker Compose
+#  Services: SQL Server + MCP Server + Chat App
+#  Usage:  docker compose -f docker-compose.mcp.yml up --build -d
+#  Env:    All secrets in .env (gitignored)
 # ──────────────────────────────────────────────────────────────
-version: '3.8'
 
 services:
+  # ─── SQL Server ───────────────────────────────────────────
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    container_name: ato-copilot-sql
+    restart: unless-stopped
+    ports:
+      - "${SQL_PORT:-1433}:1433"
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${SQL_SA_PASSWORD}
+      - MSSQL_PID=Developer
+    volumes:
+      - sql-data:/var/opt/mssql
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${MSSQL_SA_PASSWORD}" -Q "SELECT 1" -C -N || exit 1
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - ato-network
+
+  # ─── MCP Server (Agents + Tools) ─────────────────────────
   ato-copilot:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: ato-copilot-mcp
     restart: unless-stopped
+    depends_on:
+      sqlserver:
+        condition: service_healthy
     ports:
       - "${ATO_SERVER_PORT:-3001}:3001"
     environment:
+      # ── Runtime ────────────────────────────────────────────
       - ATO_RUN_MODE=http
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
-      - ATO_AZURE_AD__TENANT_ID=${ATO_AZURE_AD__TENANT_ID}
-      - ATO_AZURE_AD__CLIENT_ID=${ATO_AZURE_AD__CLIENT_ID}
-      - ATO_AZURE_AD__CLIENT_SECRET=${ATO_AZURE_AD__CLIENT_SECRET}
-      - ATO_AZURE_AD__CLOUD_ENVIRONMENT=${ATO_AZURE_AD__CLOUD_ENVIRONMENT:-AzureUSGovernment}
-      - ATO_GATEWAY__AZURE_ENVIRONMENT=${ATO_GATEWAY__AZURE_ENVIRONMENT:-AzureUSGovernment}
-      - ATO_GATEWAY__DEFAULT_SUBSCRIPTION_ID=${ATO_GATEWAY__DEFAULT_SUBSCRIPTION_ID}
-      - ATO_CONNECTION_STRINGS__DEFAULT_CONNECTION=${ATO_CONNECTION_STRINGS__DEFAULT_CONNECTION:-Data Source=/data/ato-copilot.db}
+
+      # ── Azure AD (skip for local testing) ──────────────────
+      - ATO_AZUREAD__TENANTID=${ATO_AZUREAD__TENANTID}
+      - ATO_AZUREAD__CLIENTID=${ATO_AZUREAD__CLIENTID}
+      - ATO_AZUREAD__CLIENTSECRET=${ATO_AZUREAD__CLIENTSECRET}
+      - ATO_AZUREAD__CLOUDENVIRONMENT=${ATO_AZUREAD__CLOUDENVIRONMENT:-AzureUSGovernment}
+
+      # ── Azure Subscription ────────────────────────────────
+      - ATO_GATEWAY__AZURE__TENANTID=${ATO_GATEWAY__AZURE__TENANTID}
+      - ATO_GATEWAY__AZURE__SUBSCRIPTIONID=${ATO_GATEWAY__AZURE__SUBSCRIPTIONID}
+      - ATO_GATEWAY__AZURE__CLOUDENVIRONMENT=${ATO_GATEWAY__AZURE__CLOUDENVIRONMENT:-AzureGovernment}
+      - ATO_GATEWAY__AZURE__USEMANAGEDIDENTITY=${ATO_GATEWAY__AZURE__USEMANAGEDIDENTITY:-true}
+
+      # ── Azure OpenAI ──────────────────────────────────────
+      - ATO_GATEWAY__AZUREOPENAI__ENDPOINT=${ATO_GATEWAY__AZUREOPENAI__ENDPOINT}
+      - ATO_GATEWAY__AZUREOPENAI__APIKEY=${ATO_GATEWAY__AZUREOPENAI__APIKEY}
+      - ATO_GATEWAY__AZUREOPENAI__CHATDEPLOYMENTNAME=${ATO_GATEWAY__AZUREOPENAI__CHATDEPLOYMENTNAME:-gpt-4o}
+      - ATO_GATEWAY__AZUREOPENAI__USEMANAGEDIDENTITY=${ATO_GATEWAY__AZUREOPENAI__USEMANAGEDIDENTITY:-true}
+      - ATO_GATEWAY__AZUREOPENAI__AGENTAIENABLED=${ATO_GATEWAY__AZUREOPENAI__AGENTAIENABLED:-true}
+      - ATO_GATEWAY__AZUREOPENAI__MAXTOOLCALLROUNDS=${ATO_GATEWAY__AZUREOPENAI__MAXTOOLCALLROUNDS:-5}
+      - ATO_GATEWAY__AZUREOPENAI__TEMPERATURE=${ATO_GATEWAY__AZUREOPENAI__TEMPERATURE:-0.3}
+
+      # ── Managed Identity (Azure Gov authority) ────────────
+      - AZURE_AUTHORITY_HOST=${AZURE_AUTHORITY_HOST:-https://login.microsoftonline.us}
+
+      # ── Database (SQL Server) ─────────────────────────────
+      - ATO_DATABASE__PROVIDER=SqlServer
+      - ATO_CONNECTIONSTRINGS__DEFAULTCONNECTION=Server=sqlserver,1433;Database=AtoCopilot;User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;Encrypt=True
     volumes:
-      - ato-data:/data
       - ato-logs:/app/logs
+      # Mount Azure CLI creds for DefaultAzureCredential in local Docker
+      - ${HOME}/.azure:/home/atocopilot/.azure:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
       interval: 30s
@@ -34,10 +86,48 @@ services:
     networks:
       - ato-network
 
+  # ─── Chat App (SPA + API + SignalR) ──────────────────────
+  ato-chat:
+    build:
+      context: .
+      dockerfile: src/Ato.Copilot.Chat/Dockerfile
+    container_name: ato-copilot-chat
+    restart: unless-stopped
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      ato-copilot:
+        condition: service_healthy
+    ports:
+      - "${CHAT_PORT:-5001}:5001"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
+
+      # ── Chat Database (SQL Server — separate DB) ──────────
+      - ATO_CONNECTIONSTRINGS__CHATDB=Server=sqlserver,1433;Database=AtoCopilotChat;User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;Encrypt=True
+
+      # ── MCP Server endpoint (internal Docker network) ─────
+      - ATO_MCPSERVER__BASEURL=http://ato-copilot:3001
+
+      # ── CORS — allow Chat UI origin ───────────────────────
+      - ATO_CORS__ALLOWEDORIGINS__0=http://localhost:${CHAT_PORT:-5001}
+    volumes:
+      - chat-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - ato-network
+
 volumes:
-  ato-data:
+  sql-data:
     driver: local
   ato-logs:
+    driver: local
+  chat-logs:
     driver: local
 
 networks:

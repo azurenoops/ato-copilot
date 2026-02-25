@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -202,8 +203,10 @@ public class ComplianceAgent : BaseAgent
         NistControlExplainerTool nistControlExplainerTool,
         IDbContextFactory<AtoCopilotContext> dbFactory,
         IServiceScopeFactory scopeFactory,
-        ILogger<ComplianceAgent> logger)
-        : base(logger)
+        ILogger<ComplianceAgent> logger,
+        IChatClient? chatClient = null,
+        IOptions<AzureOpenAIGatewayOptions>? aiOptions = null)
+        : base(logger, chatClient, aiOptions?.Value)
     {
         _assessmentTool = assessmentTool;
         _controlFamilyTool = controlFamilyTool;
@@ -452,7 +455,8 @@ public class ComplianceAgent : BaseAgent
     public override async Task<AgentResponse> ProcessAsync(
         string message,
         AgentConversationContext context,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progress = null)
     {
         var stopwatch = Stopwatch.StartNew();
         Logger.LogInformation("ComplianceAgent processing: {Message}", message[..Math.Min(100, message.Length)]);
@@ -460,6 +464,8 @@ public class ComplianceAgent : BaseAgent
 
         try
         {
+            progress?.Report("Checking authorization...");
+
             // ── Auth-gate: check PIM eligibility for Tier 2 operations (FR-019) ──
             var authGateResult = await CheckAuthGateAsync(message, context, cancellationToken);
             if (authGateResult != null)
@@ -473,6 +479,22 @@ public class ComplianceAgent : BaseAgent
                     ProcessingTimeMs = stopwatch.ElapsedMilliseconds
                 };
             }
+
+            progress?.Report("Routing to ATO Copilot agent...");
+
+            // ── AI-powered processing path (Feature 011) ────────────────────
+            var aiResponse = await TryProcessWithAiAsync(message, context, cancellationToken, progress);
+            if (aiResponse != null)
+            {
+                progress?.Report("Generating response...");
+                // Log successful AI-processed action to audit trail
+                await LogAuditEntryAsync(actionType, GetContextValue(context, "subscription_id"),
+                    AuditOutcome.Success, $"AI-processed: {message[..Math.Min(200, message.Length)]}",
+                    stopwatch.Elapsed, cancellationToken);
+                return aiResponse;
+            }
+
+            progress?.Report("Analyzing intent...");
 
             // Analyze intent and route to appropriate tool
             var toolResult = await RouteToToolAsync(message, context, cancellationToken);

@@ -148,7 +148,7 @@ try
         ResponseWriter = WriteHealthCheckResponseAsync
     });
 
-    app.MapGet("/", () => Results.Json(new
+    app.MapGet("/api/info", () => Results.Json(new
     {
         service = "ATO Copilot Chat",
         version = "1.0.0",

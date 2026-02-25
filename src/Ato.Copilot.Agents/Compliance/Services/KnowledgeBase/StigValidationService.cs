@@ -52,7 +52,7 @@ public class StigValidationService : IStigValidationService
                     Description = $"STIG controls mapped to this NIST control: {stigMapping}",
                     RemediationGuidance = "Review the mapped STIG controls for additional implementation guidance.",
                     ResourceType = "STIG Validation",
-                    ResourceId = subscriptionId,
+                    ResourceId = $"/subscriptions/{subscriptionId}",
                     DiscoveredAt = DateTime.UtcNow,
                     StigFinding = true
                 });

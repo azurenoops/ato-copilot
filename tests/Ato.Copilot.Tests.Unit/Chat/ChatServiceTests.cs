@@ -41,18 +41,15 @@ public class ChatServiceTests : IDisposable
 
     private ChatService CreateService(HttpClient? httpClient = null)
     {
-        var client = httpClient ?? CreateMockHttpClient(new HttpResponseMessage(HttpStatusCode.OK)
+        var client = httpClient ?? CreateSseHttpClient(new
         {
-            Content = new StringContent(JsonSerializer.Serialize(new
+            content = "AI response",
+            success = true,
+            metadata = new Dictionary<string, object>
             {
-                content = "AI response",
-                success = true,
-                metadata = new Dictionary<string, object>
-                {
-                    ["intentType"] = "general",
-                    ["confidence"] = 0.85
-                }
-            }), Encoding.UTF8, "application/json")
+                ["intentType"] = "general",
+                ["confidence"] = 0.85
+            }
         });
 
         _httpClientFactoryMock
@@ -60,6 +57,23 @@ public class ChatServiceTests : IDisposable
             .Returns(client);
 
         return new ChatService(_dbContext, _httpClientFactoryMock.Object, _loggerMock.Object);
+    }
+
+    /// <summary>
+    /// Creates a mock HTTP client that returns an SSE-formatted response
+    /// matching the /mcp/chat/stream endpoint format.
+    /// </summary>
+    private HttpClient CreateSseHttpClient(object resultData)
+    {
+        var sseBody = $"data: {{\"type\":\"progress\",\"step\":\"Processing...\"}}\n\n" +
+                      $"data: {{\"type\":\"result\",\"data\":{JsonSerializer.Serialize(resultData)}}}\n\n";
+
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(sseBody, Encoding.UTF8, "text/event-stream")
+        };
+
+        return CreateMockHttpClient(response);
     }
 
     private HttpClient CreateMockHttpClient(HttpResponseMessage response)

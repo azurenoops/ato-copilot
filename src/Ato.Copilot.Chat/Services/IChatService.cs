@@ -13,8 +13,9 @@ public interface IChatService
     /// Sends a user message and receives an AI response via MCP Server.
     /// </summary>
     /// <param name="request">The send message request.</param>
+    /// <param name="progress">Optional progress reporter for status updates.</param>
     /// <returns>The AI chat response.</returns>
-    Task<ChatResponse> SendMessageAsync(SendMessageRequest request);
+    Task<ChatResponse> SendMessageAsync(SendMessageRequest request, IProgress<string>? progress = null);
 
     /// <summary>
     /// Retrieves messages for a conversation with pagination.

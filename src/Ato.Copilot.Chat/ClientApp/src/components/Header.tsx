@@ -41,7 +41,7 @@ export default function Header({ sidebarOpen, onToggleSidebar }: HeaderProps) {
 
   return (
     <>
-      <header className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 shadow-sm">
+      <header className="flex items-center justify-between px-4 py-2.5 bg-white border-b border-gray-200 shadow-sm">
         <div className="flex items-center gap-3">
           {/* Hamburger Menu */}
           <button
@@ -55,8 +55,16 @@ export default function Header({ sidebarOpen, onToggleSidebar }: HeaderProps) {
             </svg>
           </button>
 
-          {/* Title */}
-          <h1 className="text-lg font-semibold text-gray-800 truncate max-w-md">{title}</h1>
+          {/* Logo + Title */}
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+              </svg>
+            </div>
+            <h1 className="text-base font-semibold text-gray-800 truncate max-w-md">{title}</h1>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">

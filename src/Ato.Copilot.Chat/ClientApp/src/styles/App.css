@@ -60,10 +60,16 @@
   background-color: #94a3b8;
 }
 
-/* ─── Prose Overrides ─────────────────────────────────────────── */
+/* ─── Prose / Markdown Overrides ──────────────────────────────── */
 
 .prose code {
-  @apply text-sm bg-gray-100 px-1 py-0.5 rounded;
+  @apply text-sm bg-gray-100 px-1.5 py-0.5 rounded text-indigo-600 font-medium;
+  font-size: 0.85em;
+}
+
+.prose code::before,
+.prose code::after {
+  content: '' !important;
 }
 
 .prose pre {
@@ -71,7 +77,74 @@
 }
 
 .prose pre code {
-  @apply bg-transparent p-0;
+  @apply bg-transparent p-0 text-inherit font-normal;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  @apply text-gray-900 font-semibold;
+}
+
+.prose h1 { @apply text-lg; }
+.prose h2 { @apply text-base; }
+.prose h3 { @apply text-sm font-bold; }
+
+.prose strong {
+  @apply font-semibold text-gray-900;
+}
+
+.prose a {
+  @apply text-blue-600 no-underline;
+}
+.prose a:hover {
+  @apply underline;
+}
+
+.prose ul {
+  @apply list-disc pl-5;
+}
+
+.prose ol {
+  @apply list-decimal pl-5;
+}
+
+.prose li {
+  @apply my-0.5;
+}
+
+.prose hr {
+  @apply my-4 border-gray-200;
+}
+
+.prose blockquote {
+  @apply border-l-4 border-blue-300 bg-blue-50/50 pl-4 py-1 my-3 text-gray-700 italic;
+}
+
+.prose table {
+  @apply w-full text-sm;
+}
+
+.prose th {
+  @apply text-left font-semibold text-gray-700 bg-gray-50 px-3 py-2;
+}
+
+.prose td {
+  @apply px-3 py-2 border-t border-gray-100;
+}
+
+/* Emoji in lists — ensure proper alignment */
+.prose li p {
+  @apply my-0;
+}
+
+/* Tighter nested list spacing */
+.prose ul ul,
+.prose ol ol,
+.prose ul ol,
+.prose ol ul {
+  @apply my-1;
 }
 
 /* ─── Button Focus Styles ─────────────────────────────────────── */
