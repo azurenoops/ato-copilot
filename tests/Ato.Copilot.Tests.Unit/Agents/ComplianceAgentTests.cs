@@ -158,6 +158,8 @@ public class ComplianceAgentTests
             kanbanBulkUpdate,
             kanbanExport,
             kanbanArchiveBoard,
+            new KanbanGenerateScriptTool(scopeFactory, Mock.Of<ILogger<KanbanGenerateScriptTool>>()),
+            new KanbanGenerateValidationTool(scopeFactory, Mock.Of<ILogger<KanbanGenerateValidationTool>>()),
             cacStatus,
             cacSignOut,
             cacSetTimeout,

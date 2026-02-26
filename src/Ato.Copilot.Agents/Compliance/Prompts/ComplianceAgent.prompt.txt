@@ -197,7 +197,9 @@ When deciding which tool to invoke, follow these guidelines:
 
 **Evidence & documents**: When the user needs audit artifacts, use `compliance_collect_evidence` for technical evidence and `compliance_generate_document` for formal documents (SSP, POA&M, SAR).
 
-**Kanban integration**: After assessments, offer to create a remediation board (`kanban_create_board`) for tracking. Link findings to tasks for structured follow-through.
+**Kanban integration**: After assessments, offer to create a remediation board (`kanban_create_board`) for tracking. Link findings to tasks for structured follow-through. Tasks are automatically enriched with AI-generated remediation scripts and validation criteria during board creation.
+
+**Task enrichment**: When viewing a task, remediation scripts and validation criteria are auto-generated on first access if missing (lazy enrichment). Users can manually regenerate scripts with `kanban_generate_script` (supports AzureCli, PowerShell, Terraform, Bicep) or validation criteria with `kanban_generate_validation`. Use `force=true` to overwrite existing content.
 
 **PIM integration**: If a compliance operation fails due to insufficient permissions, check PIM eligibility and offer inline role activation before retrying.
 

@@ -105,6 +105,9 @@ public class RemediationTask : ConcurrentEntity
     /// <summary>PowerShell/CLI script if available for remediation.</summary>
     public string? RemediationScript { get; set; }
 
+    /// <summary>Script language identifier: "AzureCli", "PowerShell", "Bicep", "Terraform". Used for syntax highlighting.</summary>
+    public string? RemediationScriptType { get; set; }
+
     /// <summary>How to verify the fix.</summary>
     public string? ValidationCriteria { get; set; }
 
@@ -288,4 +291,65 @@ public class NotificationConfig
 
     /// <summary>Master enable/disable toggle.</summary>
     public bool IsEnabled { get; set; }
+}
+
+// ─── Enrichment Result Models (Feature 012) ─────────────────────────────────
+
+/// <summary>
+/// Result of enriching a single task with remediation script and validation criteria.
+/// Not persisted to database — used as a return value from ITaskEnrichmentService.
+/// </summary>
+public class TaskEnrichmentResult
+{
+    /// <summary>Task GUID.</summary>
+    public string TaskId { get; set; } = "";
+
+    /// <summary>Human-readable task number (e.g., REM-001).</summary>
+    public string TaskNumber { get; set; } = "";
+
+    /// <summary>Whether a remediation script was generated or updated.</summary>
+    public bool ScriptGenerated { get; set; }
+
+    /// <summary>Whether validation criteria was generated or updated.</summary>
+    public bool ValidationCriteriaGenerated { get; set; }
+
+    /// <summary>How the content was generated: "AI" or "Template".</summary>
+    public string GenerationMethod { get; set; } = "";
+
+    /// <summary>Script type used (e.g., "AzureCli").</summary>
+    public string? ScriptType { get; set; }
+
+    /// <summary>Error message if enrichment failed for this task.</summary>
+    public string? Error { get; set; }
+
+    /// <summary>Whether enrichment was skipped (task already had script and force=false, or finding was null).</summary>
+    public bool Skipped { get; set; }
+}
+
+/// <summary>
+/// Aggregate result of enriching all tasks on a board.
+/// Not persisted to database — used as a return value from ITaskEnrichmentService.
+/// </summary>
+public class BoardEnrichmentResult
+{
+    /// <summary>Board GUID.</summary>
+    public string BoardId { get; set; } = "";
+
+    /// <summary>Number of tasks that received new enrichment content.</summary>
+    public int TasksEnriched { get; set; }
+
+    /// <summary>Number of tasks skipped (already had content).</summary>
+    public int TasksSkipped { get; set; }
+
+    /// <summary>Number of tasks where enrichment failed.</summary>
+    public int TasksFailed { get; set; }
+
+    /// <summary>Total tasks on the board.</summary>
+    public int TotalTasks { get; set; }
+
+    /// <summary>Wall-clock duration of the enrichment operation.</summary>
+    public TimeSpan Duration { get; set; }
+
+    /// <summary>Per-task enrichment results.</summary>
+    public List<TaskEnrichmentResult> Results { get; set; } = new();
 }

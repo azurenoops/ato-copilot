@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Ato.Copilot.Agents.Common;
 using Ato.Copilot.Core.Interfaces.Auth;
 using Ato.Copilot.Core.Interfaces.Kanban;
+using Ato.Copilot.Core.Data.Context;
 using Ato.Copilot.Core.Models.Compliance;
 using Ato.Copilot.Core.Models.Kanban;
 using TaskStatus = Ato.Copilot.Core.Models.Kanban.TaskStatus;
@@ -285,6 +286,37 @@ public class KanbanGetTaskTool : KanbanToolBase
         if (task == null)
             return Error($"Task '{taskId}' not found.", "TASK_NOT_FOUND");
 
+        // ── Lazy enrichment (Feature 012 — US4): enrich on first view ────
+        bool lazyEnriched = false;
+        if (string.IsNullOrEmpty(task.RemediationScript) && !string.IsNullOrEmpty(task.FindingId))
+        {
+            var enrichmentService = scope.ServiceProvider.GetService<ITaskEnrichmentService>();
+            if (enrichmentService != null)
+            {
+                try
+                {
+                    ComplianceFinding? finding = null;
+                    var context = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+                    finding = await context.Findings.FirstOrDefaultAsync(f => f.Id == task.FindingId, cancellationToken);
+
+                    if (finding != null)
+                    {
+                        var result = await enrichmentService.EnrichTaskAsync(task, finding, ScriptType.AzureCli, false, cancellationToken);
+                        if (result.ScriptGenerated)
+                        {
+                            context.RemediationTasks.Update(task);
+                            await context.SaveChangesAsync(cancellationToken);
+                            lazyEnriched = true;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Lazy enrichment failed for task {TaskId}; returning task without enrichment", task.Id);
+                }
+            }
+        }
+
         return Success(new
         {
             taskId = task.Id, taskNumber = task.TaskNumber, boardId = task.BoardId,
@@ -297,8 +329,11 @@ public class KanbanGetTaskTool : KanbanToolBase
             isOverdue = task.DueDate < DateTime.UtcNow && task.Status != TaskStatus.Done && task.Status != TaskStatus.Blocked,
             createdAt = task.CreatedAt, updatedAt = task.UpdatedAt, createdBy = task.CreatedBy,
             affectedResources = task.AffectedResources,
-            remediationScript = task.RemediationScript, validationCriteria = task.ValidationCriteria,
+            remediationScript = task.RemediationScript,
+            remediationScriptType = task.RemediationScriptType,
+            validationCriteria = task.ValidationCriteria,
             findingId = task.FindingId,
+            lazyEnriched,
             commentCount = task.Comments?.Count ?? 0, historyCount = task.History?.Count ?? 0
         });
     }
@@ -1199,5 +1234,161 @@ public class KanbanArchiveBoardTool : KanbanToolBase
         { return Error(ex.Message, "TASKS_REMAINING"); }
         catch (InvalidOperationException ex) when (ex.Message.Contains("ermission"))
         { return Error(ex.Message, "KANBAN_PERMISSION_DENIED"); }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Enrichment Tools (Feature 012 — Task Enrichment)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// <summary>
+/// MCP tool: kanban_generate_script — Generate or regenerate a remediation script for a task.
+/// FeatureSpec: 012-task-enrichment (US2)
+/// </summary>
+public class KanbanGenerateScriptTool : KanbanToolBase
+{
+    public KanbanGenerateScriptTool(IServiceScopeFactory scopeFactory, ILogger<KanbanGenerateScriptTool> logger)
+        : base(scopeFactory, logger) { }
+
+    public override string Name => "kanban_generate_script";
+    public override string Description => "Generate or regenerate an AI-powered remediation script for a specific task. Supports multiple script types (AzureCli, PowerShell, Terraform, Bicep).";
+
+    public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
+    {
+        ["task_id"] = new() { Name = "task_id", Description = "Task ID or task number (e.g., 'REM-001')", Type = "string", Required = true },
+        ["script_type"] = new() { Name = "script_type", Description = "Script language: AzureCli (default), PowerShell, Terraform, Bicep", Type = "string" },
+        ["force"] = new() { Name = "force", Description = "Regenerate even if a script already exists (default: false)", Type = "boolean" }
+    };
+
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    {
+        var taskId = GetArg<string>(arguments, "task_id");
+        var scriptTypeStr = GetArg<string>(arguments, "script_type");
+        var force = GetArg<bool?>(arguments, "force") ?? false;
+
+        if (string.IsNullOrWhiteSpace(taskId))
+            return Error("Task ID is required.", "TASK_NOT_FOUND");
+
+        var scriptType = ScriptType.AzureCli;
+        if (!string.IsNullOrWhiteSpace(scriptTypeStr) && Enum.TryParse<ScriptType>(scriptTypeStr, true, out var st))
+            scriptType = st;
+
+        using var scope = ScopeFactory.CreateScope();
+        var svc = scope.ServiceProvider.GetRequiredService<IKanbanService>();
+        var enrichmentService = scope.ServiceProvider.GetService<ITaskEnrichmentService>();
+
+        if (enrichmentService == null)
+            return Error("Task enrichment service is not available.", "SERVICE_UNAVAILABLE", "Ensure ITaskEnrichmentService is registered.");
+
+        var task = await svc.GetTaskAsync(taskId, cancellationToken);
+        if (task == null)
+            return Error($"Task '{taskId}' not found.", "TASK_NOT_FOUND");
+
+        if (!string.IsNullOrEmpty(task.RemediationScript) && !force)
+            return Error("Task already has a remediation script. Use force=true to regenerate.",
+                "SCRIPT_EXISTS", "Set force=true to overwrite the existing script.");
+
+        // Look up linked finding
+        ComplianceFinding? finding = null;
+        if (!string.IsNullOrEmpty(task.FindingId))
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+            finding = await context.Findings.FirstOrDefaultAsync(f => f.Id == task.FindingId, cancellationToken);
+        }
+
+        var result = await enrichmentService.EnrichTaskAsync(task, finding, scriptType, force, cancellationToken);
+
+        if (result.Error != null)
+            return Error($"Script generation failed: {result.Error}", "GENERATION_FAILED");
+
+        // Persist enriched task
+        var dbContext = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+        dbContext.RemediationTasks.Update(task);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return Success(new
+        {
+            taskId = task.Id, taskNumber = task.TaskNumber,
+            scriptGenerated = result.ScriptGenerated,
+            validationCriteriaGenerated = result.ValidationCriteriaGenerated,
+            generationMethod = result.GenerationMethod,
+            scriptType = result.ScriptType,
+            remediationScript = task.RemediationScript,
+            remediationScriptType = task.RemediationScriptType,
+            validationCriteria = task.ValidationCriteria
+        });
+    }
+}
+
+/// <summary>
+/// MCP tool: kanban_generate_validation — Generate or regenerate validation criteria for a task.
+/// FeatureSpec: 012-task-enrichment (US3)
+/// </summary>
+public class KanbanGenerateValidationTool : KanbanToolBase
+{
+    public KanbanGenerateValidationTool(IServiceScopeFactory scopeFactory, ILogger<KanbanGenerateValidationTool> logger)
+        : base(scopeFactory, logger) { }
+
+    public override string Name => "kanban_generate_validation";
+    public override string Description => "Generate or regenerate validation criteria for a specific remediation task. Uses AI when available, falls back to template.";
+
+    public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
+    {
+        ["task_id"] = new() { Name = "task_id", Description = "Task ID or task number (e.g., 'REM-001')", Type = "string", Required = true },
+        ["force"] = new() { Name = "force", Description = "Regenerate even if validation criteria already exists (default: false)", Type = "boolean" }
+    };
+
+    public override async Task<string> ExecuteCoreAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken = default)
+    {
+        var taskId = GetArg<string>(arguments, "task_id");
+        var force = GetArg<bool?>(arguments, "force") ?? false;
+
+        if (string.IsNullOrWhiteSpace(taskId))
+            return Error("Task ID is required.", "TASK_NOT_FOUND");
+
+        using var scope = ScopeFactory.CreateScope();
+        var svc = scope.ServiceProvider.GetRequiredService<IKanbanService>();
+        var enrichmentService = scope.ServiceProvider.GetService<ITaskEnrichmentService>();
+
+        if (enrichmentService == null)
+            return Error("Task enrichment service is not available.", "SERVICE_UNAVAILABLE", "Ensure ITaskEnrichmentService is registered.");
+
+        var task = await svc.GetTaskAsync(taskId, cancellationToken);
+        if (task == null)
+            return Error($"Task '{taskId}' not found.", "TASK_NOT_FOUND");
+
+        if (!string.IsNullOrEmpty(task.ValidationCriteria) && !force)
+            return Error("Task already has validation criteria. Use force=true to regenerate.",
+                "CRITERIA_EXISTS", "Set force=true to overwrite the existing criteria.");
+
+        // Look up linked finding
+        ComplianceFinding? finding = null;
+        if (!string.IsNullOrEmpty(task.FindingId))
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+            finding = await context.Findings.FirstOrDefaultAsync(f => f.Id == task.FindingId, cancellationToken);
+        }
+
+        if (finding == null)
+            return Error("No linked finding found for this task. Cannot generate validation criteria.",
+                "FINDING_NOT_FOUND", "Ensure the task has a valid FindingId.");
+
+        var criteria = await enrichmentService.GenerateValidationCriteriaAsync(
+            finding, task.RemediationScript, cancellationToken);
+
+        task.ValidationCriteria = criteria;
+        task.UpdatedAt = DateTime.UtcNow;
+
+        // Persist enriched task
+        var dbContext = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+        dbContext.RemediationTasks.Update(task);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return Success(new
+        {
+            taskId = task.Id, taskNumber = task.TaskNumber,
+            validationCriteria = task.ValidationCriteria,
+            generationMethod = "Generated"
+        });
     }
 }
