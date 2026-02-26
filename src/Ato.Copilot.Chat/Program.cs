@@ -4,6 +4,8 @@ using Serilog;
 using Serilog.Events;
 using Serilog.Sinks.ApplicationInsights.TelemetryConverters;
 using System.Text.Json;
+using Ato.Copilot.Channels.Abstractions;
+using Ato.Copilot.Chat.Channels;
 using Ato.Copilot.Chat.Data;
 using Ato.Copilot.Chat.Hubs;
 using Ato.Copilot.Chat.Services;
@@ -70,6 +72,16 @@ try
     // ─── Services ────────────────────────────────────────────────────
 
     builder.Services.AddScoped<IChatService, ChatService>();
+
+    // ─── Channels Adapter Services ───────────────────────────────────
+    // Bridge SignalR transport with the Channels library abstractions
+    // so Chat and external channels (VS Code, M365) share the same contracts.
+
+    builder.Services.AddSingleton<SignalRConnectionTracker>();
+    builder.Services.AddSingleton<IChannel, SignalRChannel>();
+    builder.Services.AddSingleton<IChannelManager, SignalRChannelManager>();
+    builder.Services.AddScoped<IMessageHandler, ChatServiceMessageHandler>();
+
     builder.Services.AddHttpClient("McpServer", client =>
     {
         var mcpBaseUrl = builder.Configuration.GetValue<string>("McpServer:BaseUrl") ?? "http://localhost:3001";

@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using Ato.Copilot.Channels.Abstractions;
+using Ato.Copilot.Channels.Models;
 using Ato.Copilot.Chat.Hubs;
 using Ato.Copilot.Chat.Models;
 using Ato.Copilot.Chat.Services;
@@ -13,9 +15,12 @@ namespace Ato.Copilot.Tests.Unit.Chat;
 /// <summary>
 /// Unit tests for ChatHub SignalR methods (US3):
 /// JoinConversation, LeaveConversation, SendMessage, NotifyTyping.
+/// Updated to verify delegation through IChannelManager and IChannel adapters.
 /// </summary>
 public class ChatHubTests
 {
+    private readonly Mock<IChannelManager> _channelManagerMock;
+    private readonly Mock<IChannel> _channelMock;
     private readonly Mock<IServiceScopeFactory> _scopeFactoryMock;
     private readonly Mock<ILogger<ChatHub>> _loggerMock;
     private readonly Mock<IHubCallerClients> _clientsMock;
@@ -25,6 +30,8 @@ public class ChatHubTests
 
     public ChatHubTests()
     {
+        _channelManagerMock = new Mock<IChannelManager>();
+        _channelMock = new Mock<IChannel>();
         _scopeFactoryMock = new Mock<IServiceScopeFactory>();
         _loggerMock = new Mock<ILogger<ChatHub>>();
         _clientsMock = new Mock<IHubCallerClients>();
@@ -37,7 +44,7 @@ public class ChatHubTests
 
     private ChatHub CreateHub()
     {
-        var hub = new ChatHub(_scopeFactoryMock.Object, _loggerMock.Object)
+        var hub = new ChatHub(_channelManagerMock.Object, _channelMock.Object, _scopeFactoryMock.Object, _loggerMock.Object)
         {
             Clients = _clientsMock.Object,
             Groups = _groupsMock.Object,
@@ -49,7 +56,7 @@ public class ChatHubTests
     // ─── Positive Tests ──────────────────────────────────────────
 
     [Fact]
-    public async Task JoinConversation_AddsConnectionToGroup()
+    public async Task JoinConversation_DelegatesToChannelManager()
     {
         // Arrange
         var hub = CreateHub();
@@ -59,13 +66,13 @@ public class ChatHubTests
         await hub.JoinConversation(conversationId);
 
         // Assert
-        _groupsMock.Verify(
-            g => g.AddToGroupAsync("test-connection-id", conversationId, default),
+        _channelManagerMock.Verify(
+            m => m.JoinConversationAsync("test-connection-id", conversationId, default),
             Times.Once);
     }
 
     [Fact]
-    public async Task LeaveConversation_RemovesConnectionFromGroup()
+    public async Task LeaveConversation_DelegatesToChannelManager()
     {
         // Arrange
         var hub = CreateHub();
@@ -75,13 +82,13 @@ public class ChatHubTests
         await hub.LeaveConversation(conversationId);
 
         // Assert
-        _groupsMock.Verify(
-            g => g.RemoveFromGroupAsync("test-connection-id", conversationId, default),
+        _channelManagerMock.Verify(
+            m => m.LeaveConversationAsync("test-connection-id", conversationId, default),
             Times.Once);
     }
 
     [Fact]
-    public async Task SendMessage_BroadcastsMessageProcessingAndReceived()
+    public async Task SendMessage_SendsProcessingAndResponseViaChannel()
     {
         // Arrange
         var hub = CreateHub();
@@ -104,8 +111,6 @@ public class ChatHubTests
         scopeMock.Setup(s => s.ServiceProvider).Returns(serviceProviderMock.Object);
         _scopeFactoryMock.Setup(f => f.CreateScope()).Returns(scopeMock.Object);
 
-        _clientsMock.Setup(c => c.Group(conversationId)).Returns(_clientProxyMock.Object);
-
         var request = new SendMessageRequest
         {
             ConversationId = conversationId,
@@ -115,12 +120,16 @@ public class ChatHubTests
         // Act
         await hub.SendMessage(request);
 
-        // Assert — should have been called at least twice (MessageProcessing + MessageReceived)
-        _clientProxyMock.Verify(
-            p => p.SendCoreAsync("MessageProcessing", It.IsAny<object?[]>(), default),
+        // Assert — processing + response sent via IChannel
+        _channelMock.Verify(
+            c => c.SendToConversationAsync(conversationId,
+                It.Is<ChannelMessage>(m => m.Type == MessageType.AgentThinking),
+                default),
             Times.Once);
-        _clientProxyMock.Verify(
-            p => p.SendCoreAsync("MessageReceived", It.IsAny<object?[]>(), default),
+        _channelMock.Verify(
+            c => c.SendToConversationAsync(conversationId,
+                It.Is<ChannelMessage>(m => m.Type == MessageType.AgentResponse),
+                default),
             Times.Once);
     }
 
@@ -235,8 +244,6 @@ public class ChatHubTests
         scopeMock.Setup(s => s.ServiceProvider).Returns(serviceProviderMock.Object);
         _scopeFactoryMock.Setup(f => f.CreateScope()).Returns(scopeMock.Object);
 
-        _clientsMock.Setup(c => c.Group(conversationId)).Returns(_clientProxyMock.Object);
-
         var request = new SendMessageRequest
         {
             ConversationId = conversationId,
@@ -264,7 +271,7 @@ public class ChatHubTests
     }
 
     [Fact]
-    public async Task SendMessage_WhenServiceFails_BroadcastsMessageError()
+    public async Task SendMessage_WhenServiceFails_SendsErrorViaChannel()
     {
         // Arrange
         var hub = CreateHub();
@@ -280,8 +287,6 @@ public class ChatHubTests
         scopeMock.Setup(s => s.ServiceProvider).Returns(serviceProviderMock.Object);
         _scopeFactoryMock.Setup(f => f.CreateScope()).Returns(scopeMock.Object);
 
-        _clientsMock.Setup(c => c.Group(conversationId)).Returns(_clientProxyMock.Object);
-
         var request = new SendMessageRequest
         {
             ConversationId = conversationId,
@@ -291,9 +296,11 @@ public class ChatHubTests
         // Act
         await hub.SendMessage(request);
 
-        // Assert
-        _clientProxyMock.Verify(
-            p => p.SendCoreAsync("MessageError", It.IsAny<object?[]>(), default),
+        // Assert — error sent via IChannel
+        _channelMock.Verify(
+            c => c.SendToConversationAsync(conversationId,
+                It.Is<ChannelMessage>(m => m.Type == MessageType.Error),
+                default),
             Times.Once);
     }
 }

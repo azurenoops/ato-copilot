@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
+using Ato.Copilot.Channels.Abstractions;
+using Ato.Copilot.Channels.Models;
+using Ato.Copilot.Chat.Channels;
 using Ato.Copilot.Chat.Models;
 using Ato.Copilot.Chat.Services;
 
@@ -7,15 +10,25 @@ namespace Ato.Copilot.Chat.Hubs;
 
 /// <summary>
 /// SignalR hub for real-time chat messaging.
-/// Uses IServiceScopeFactory for scoped service resolution per research.md R-003.
+/// Delegates connection management to <see cref="IChannelManager"/>,
+/// message processing to <see cref="IMessageHandler"/>,
+/// and delivery to <see cref="IChannel"/> for Channels library integration.
 /// </summary>
 public class ChatHub : Hub
 {
+    private readonly IChannelManager _channelManager;
+    private readonly IChannel _channel;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ChatHub> _logger;
 
-    public ChatHub(IServiceScopeFactory scopeFactory, ILogger<ChatHub> logger)
+    public ChatHub(
+        IChannelManager channelManager,
+        IChannel channel,
+        IServiceScopeFactory scopeFactory,
+        ILogger<ChatHub> logger)
     {
+        _channelManager = channelManager;
+        _channel = channel;
         _scopeFactory = scopeFactory;
         _logger = logger;
     }
@@ -29,7 +42,7 @@ public class ChatHub : Hub
         if (string.IsNullOrWhiteSpace(conversationId))
             throw new HubException("ConversationId is required");
 
-        await Groups.AddToGroupAsync(Context.ConnectionId, conversationId);
+        await _channelManager.JoinConversationAsync(Context.ConnectionId, conversationId);
         _logger.LogInformation("Connection {ConnectionId} joined conversation {ConversationId}",
             Context.ConnectionId, conversationId);
     }
@@ -43,13 +56,15 @@ public class ChatHub : Hub
         if (string.IsNullOrWhiteSpace(conversationId))
             throw new HubException("ConversationId is required");
 
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, conversationId);
+        await _channelManager.LeaveConversationAsync(Context.ConnectionId, conversationId);
         _logger.LogInformation("Connection {ConnectionId} left conversation {ConversationId}",
             Context.ConnectionId, conversationId);
     }
 
     /// <summary>
     /// Sends a message, processes via AI, and broadcasts result to conversation group.
+    /// Delegates to <see cref="IMessageHandler"/> for processing and <see cref="IChannel"/>
+    /// for delivery, while maintaining backward-compatible SignalR event names.
     /// </summary>
     /// <param name="request">The send message request.</param>
     public async Task SendMessage(SendMessageRequest request)
@@ -67,84 +82,85 @@ public class ChatHub : Hub
 
         try
         {
-            // Notify group: processing started
-            await Clients.Group(request.ConversationId).SendAsync("MessageProcessing", new
+            // Notify group: processing started (via channel)
+            var processingMessage = new ChannelMessage
             {
-                conversationId = request.ConversationId,
-                messageId,
-                status = "Processing"
-            });
+                MessageId = messageId,
+                ConversationId = request.ConversationId,
+                Type = MessageType.AgentThinking,
+                Content = "Processing",
+                IsComplete = false,
+                Metadata = new Dictionary<string, object> { ["status"] = "Processing" }
+            };
+            await _channel.SendToConversationAsync(request.ConversationId, processingMessage);
 
-            // Create progress reporter that pushes SignalR events to the client
-            var clients = Clients;
+            // Create progress reporter that pushes SignalR events via the channel
             var conversationId = request.ConversationId;
             var progress = new Progress<string>(async step =>
             {
                 try
                 {
-                    await clients.Group(conversationId).SendAsync("MessageProgress", new
+                    var progressMessage = new ChannelMessage
                     {
-                        conversationId,
-                        messageId,
-                        step,
-                        timestamp = DateTime.UtcNow
-                    });
+                        MessageId = messageId,
+                        ConversationId = conversationId,
+                        Type = MessageType.ProgressUpdate,
+                        Content = step,
+                        IsComplete = false,
+                        Metadata = new Dictionary<string, object> { ["timestamp"] = DateTime.UtcNow }
+                    };
+                    await _channel.SendToConversationAsync(conversationId, progressMessage);
                 }
                 catch { /* best-effort progress */ }
             });
 
-            // Process message via scoped ChatService
+            // Process message via scoped ChatService (uses IChatService directly for IProgress support;
+            // external channels use IMessageHandler which wraps the same pipeline without progress)
             using var scope = _scopeFactory.CreateScope();
             var chatService = scope.ServiceProvider.GetRequiredService<IChatService>();
             var response = await chatService.SendMessageAsync(request, progress);
 
+            // Map response and send via channel
+            var responseMessage = ChatMessageMapper.ToChannelMessage(response, request.ConversationId);
+
             if (response.Success)
             {
-                // Broadcast the AI response message
-                await Clients.Group(request.ConversationId).SendAsync("MessageReceived", new
-                {
-                    conversationId = request.ConversationId,
-                    message = new
-                    {
-                        id = response.MessageId,
-                        conversationId = request.ConversationId,
-                        role = "Assistant",
-                        content = response.Content,
-                        status = "Completed",
-                        timestamp = DateTime.UtcNow,
-                        metadata = response.Metadata,
-                        attachments = Array.Empty<object>(),
-                        toolResults = Array.Empty<object>()
-                    }
-                });
+                await _channel.SendToConversationAsync(request.ConversationId, responseMessage);
             }
             else
             {
-                // Broadcast error
-                var category = response.Metadata?.TryGetValue("errorCategory", out var cat) == true
-                    ? cat.ToString()
-                    : "ProcessingError";
-
-                await Clients.Group(request.ConversationId).SendAsync("MessageError", new
+                // Send error via channel
+                var errorMessage = new ChannelMessage
                 {
-                    conversationId = request.ConversationId,
-                    messageId,
-                    error = response.Error ?? "The request could not be processed",
-                    category
-                });
+                    MessageId = messageId,
+                    ConversationId = request.ConversationId,
+                    Type = MessageType.Error,
+                    Content = response.Error ?? "The request could not be processed",
+                    IsComplete = true,
+                    Metadata = new Dictionary<string, object>
+                    {
+                        ["errorCategory"] = response.Metadata?.TryGetValue("errorCategory", out var cat) == true
+                            ? cat.ToString()!
+                            : "ProcessingError"
+                    }
+                };
+                await _channel.SendToConversationAsync(request.ConversationId, errorMessage);
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing SignalR message for conversation {ConversationId}", request.ConversationId);
 
-            await Clients.Group(request.ConversationId).SendAsync("MessageError", new
+            var errorMessage = new ChannelMessage
             {
-                conversationId = request.ConversationId,
-                messageId,
-                error = "The request could not be processed",
-                category = "ProcessingError"
-            });
+                MessageId = messageId,
+                ConversationId = request.ConversationId,
+                Type = MessageType.Error,
+                Content = "The request could not be processed",
+                IsComplete = true,
+                Metadata = new Dictionary<string, object> { ["errorCategory"] = "ProcessingError" }
+            };
+            await _channel.SendToConversationAsync(request.ConversationId, errorMessage);
         }
     }
 
@@ -166,21 +182,28 @@ public class ChatHub : Hub
     }
 
     /// <summary>
-    /// Logs connection establishment.
+    /// Registers the connection with <see cref="IChannelManager"/> on connect.
     /// </summary>
-    public override Task OnConnectedAsync()
+    public override async Task OnConnectedAsync()
     {
-        _logger.LogInformation("ChatHub connection established: {ConnectionId}", Context.ConnectionId);
-        return base.OnConnectedAsync();
+        var userId = Context.User?.Identity?.Name ?? Context.ConnectionId;
+        await _channelManager.RegisterConnectionAsync(userId, new Dictionary<string, object>
+        {
+            ["signalRConnectionId"] = Context.ConnectionId
+        });
+        _logger.LogInformation("ChatHub connection established: {ConnectionId} for user {UserId}",
+            Context.ConnectionId, userId);
+        await base.OnConnectedAsync();
     }
 
     /// <summary>
-    /// Logs disconnection with reason.
+    /// Unregisters the connection from <see cref="IChannelManager"/> on disconnect.
     /// </summary>
-    public override Task OnDisconnectedAsync(Exception? exception)
+    public override async Task OnDisconnectedAsync(Exception? exception)
     {
+        await _channelManager.UnregisterConnectionAsync(Context.ConnectionId);
         _logger.LogInformation("ChatHub connection closed: {ConnectionId}. Reason: {Reason}",
             Context.ConnectionId, exception?.Message ?? "Client disconnected");
-        return base.OnDisconnectedAsync(exception);
+        await base.OnDisconnectedAsync(exception);
     }
 }

@@ -4,6 +4,7 @@
     <ProjectReference Include="..\Ato.Copilot.Core\Ato.Copilot.Core.csproj" />
     <ProjectReference Include="..\Ato.Copilot.Agents\Ato.Copilot.Agents.csproj" />
     <ProjectReference Include="..\Ato.Copilot.State\Ato.Copilot.State.csproj" />
+    <ProjectReference Include="..\Ato.Copilot.Channels\Ato.Copilot.Channels.csproj" />
   </ItemGroup>
 
   <ItemGroup>
