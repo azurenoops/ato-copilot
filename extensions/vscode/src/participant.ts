@@ -74,10 +74,108 @@ function getEditorContext(): {
 }
 
 /**
+ * Render tool execution summary as a Markdown table (FR-022).
+ */
+function renderToolsSummary(
+  response: McpChatResponse,
+  stream: vscode.ChatResponseStream
+): void {
+  if (!response.toolsExecuted?.length) {
+    return;
+  }
+
+  stream.markdown("\n\n**🔧 Tools Used**\n\n");
+  stream.markdown("| Tool | Time | Status |\n|------|------|--------|\n");
+  for (const tool of response.toolsExecuted) {
+    const status = tool.success ? "✓" : "✗";
+    stream.markdown(
+      `| ${tool.toolName} | ${tool.executionTimeMs}ms | ${status} |\n`
+    );
+  }
+}
+
+/**
+ * Render compliance summary table when applicable (FR-025).
+ */
+function renderComplianceSummary(
+  response: McpChatResponse,
+  stream: vscode.ChatResponseStream
+): void {
+  if (response.intentType !== "compliance" || !response.data) {
+    return;
+  }
+
+  const data = response.data;
+  const score = data.complianceScore as number | undefined;
+  const passCount = data.passCount as number | undefined;
+  const warnCount = data.warnCount as number | undefined;
+  const failCount = data.failCount as number | undefined;
+
+  if (score === undefined && passCount === undefined) {
+    return;
+  }
+
+  stream.markdown("\n\n**Compliance Summary**\n\n");
+  stream.markdown("| Metric | Value |\n|--------|-------|\n");
+
+  if (score !== undefined) {
+    stream.markdown(`| Score | ${score}% |\n`);
+  }
+  if (passCount !== undefined) {
+    stream.markdown(`| Pass | ${passCount} |\n`);
+  }
+  if (warnCount !== undefined) {
+    stream.markdown(`| Warning | ${warnCount} |\n`);
+  }
+  if (failCount !== undefined) {
+    stream.markdown(`| Fail | ${failCount} |\n`);
+  }
+}
+
+/**
+ * Render follow-up prompt with reply button (FR-024).
+ */
+function renderFollowUp(
+  response: McpChatResponse,
+  stream: vscode.ChatResponseStream
+): void {
+  if (!response.requiresFollowUp || !response.followUpPrompt) {
+    return;
+  }
+
+  stream.markdown(`\n\n> **Follow-up needed:** ${response.followUpPrompt}`);
+
+  if (response.missingFields?.length) {
+    stream.markdown(`\n> Missing: ${response.missingFields.join(", ")}`);
+  }
+}
+
+/**
+ * Render suggestion buttons as follow-up commands (FR-023).
+ */
+function renderSuggestions(
+  response: McpChatResponse,
+  stream: vscode.ChatResponseStream
+): void {
+  if (!response.suggestions?.length) {
+    return;
+  }
+
+  for (const suggestion of response.suggestions) {
+    stream.button({
+      command: "ato.followUpSuggestion",
+      title: suggestion,
+      arguments: [suggestion],
+    });
+  }
+}
+
+/**
  * Creates the @ato chat participant handler.
  *
  * Routes slash commands to the appropriate agent, rebuilds conversation history
- * from ChatContext.history, and renders streamed Markdown responses with agent attribution.
+ * from ChatContext.history, and renders streamed Markdown responses with agent attribution,
+ * tool execution summaries, compliance tables, suggestion buttons, and follow-up prompts.
  */
 export function createParticipantHandler(
   mcpClient: McpClient
@@ -133,10 +231,22 @@ export function createParticipantHandler(
         }
       }
 
-      // Agent attribution (FR-028)
+      // Compliance summary (FR-025)
+      renderComplianceSummary(response, stream);
+
+      // Tool execution summary (FR-022)
+      renderToolsSummary(response, stream);
+
+      // Follow-up prompt (FR-024)
+      renderFollowUp(response, stream);
+
+      // Agent attribution (FR-021)
       if (response.agentUsed) {
         stream.markdown(`\n\n*Processed by: ${response.agentUsed}*`);
       }
+
+      // Suggestion buttons (FR-023)
+      renderSuggestions(response, stream);
 
       return {};
     } catch (error) {

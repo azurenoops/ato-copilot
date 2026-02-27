@@ -1,0 +1,231 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "McpChatResponse",
+  "description": "Enriched MCP chat response with intent classification, structured data, and tool execution details",
+  "type": "object",
+  "required": ["success", "response", "conversationId"],
+  "properties": {
+    "success": {
+      "type": "boolean",
+      "description": "Whether the request was processed successfully"
+    },
+    "response": {
+      "type": "string",
+      "description": "Text response content (Markdown)"
+    },
+    "conversationId": {
+      "type": "string",
+      "description": "Session identifier"
+    },
+    "agentUsed": {
+      "type": ["string", "null"],
+      "description": "Display name of the agent that processed the request (was 'agentName', FR-003)"
+    },
+    "intentType": {
+      "type": ["string", "null"],
+      "description": "Intent classification derived from agent ID (FR-001)",
+      "enum": ["compliance", "knowledgebase", "configuration", "general", null]
+    },
+    "processingTimeMs": {
+      "type": "number",
+      "description": "Total processing time in milliseconds"
+    },
+    "toolsExecuted": {
+      "type": "array",
+      "description": "List of tools invoked during processing (FR-002)",
+      "items": {
+        "$ref": "#/definitions/ToolExecution"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "description": "Structured error entries (FR-007, Constitution VII)",
+      "items": {
+        "$ref": "#/definitions/ErrorDetail"
+      }
+    },
+    "suggestions": {
+      "type": "array",
+      "description": "Dynamic follow-up suggestions from the agent (FR-004)",
+      "items": { "type": "string" },
+      "maxItems": 10
+    },
+    "requiresFollowUp": {
+      "type": "boolean",
+      "description": "Whether the agent needs additional user input (FR-005)"
+    },
+    "followUpPrompt": {
+      "type": ["string", "null"],
+      "description": "Prompt text when follow-up is needed (FR-005)"
+    },
+    "missingFields": {
+      "type": ["array", "null"],
+      "description": "Fields the agent needs to complete the request (FR-005)",
+      "items": { "type": "string" }
+    },
+    "data": {
+      "type": ["object", "null"],
+      "description": "Structured intent-specific data payload (FR-006). Schema varies by intentType — see definitions.",
+      "additionalProperties": true
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Extensible metadata",
+      "additionalProperties": true
+    }
+  },
+  "definitions": {
+    "ToolExecution": {
+      "type": "object",
+      "required": ["toolName", "success", "executionTimeMs"],
+      "properties": {
+        "toolName": { "type": "string" },
+        "success": { "type": "boolean" },
+        "executionTimeMs": { "type": "number" }
+      }
+    },
+    "ErrorDetail": {
+      "type": "object",
+      "required": ["errorCode", "message", "suggestion"],
+      "properties": {
+        "errorCode": {
+          "type": "string",
+          "description": "Machine-readable error code",
+          "enum": [
+            "AGENT_TIMEOUT",
+            "UNAUTHORIZED",
+            "TOOL_FAILURE",
+            "ACTION_UNAVAILABLE",
+            "CAC_AUTH_REQUIRED",
+            "PIM_EXPIRED",
+            "PIM_NOT_ACTIVE",
+            "VALIDATION_ERROR",
+            "INTERNAL_ERROR"
+          ]
+        },
+        "message": { "type": "string", "description": "Human-readable error description" },
+        "suggestion": { "type": "string", "description": "Corrective guidance (Constitution VII)" }
+      }
+    },
+    "ComplianceData": {
+      "description": "Structured data for intentType='compliance', data.type='assessment'",
+      "type": "object",
+      "properties": {
+        "type": { "const": "assessment" },
+        "complianceScore": { "type": "number", "minimum": 0, "maximum": 100 },
+        "passedControls": { "type": "integer", "minimum": 0 },
+        "warningControls": { "type": "integer", "minimum": 0 },
+        "failedControls": { "type": "integer", "minimum": 0 },
+        "findings": { "type": "integer", "minimum": 0 },
+        "framework": { "type": "string" },
+        "assessmentScope": { "type": "string" }
+      }
+    },
+    "FindingData": {
+      "description": "Structured data for intentType='compliance', data.type='finding'",
+      "type": "object",
+      "properties": {
+        "type": { "const": "finding" },
+        "finding": { "$ref": "#/definitions/ComplianceFinding" }
+      }
+    },
+    "ComplianceFinding": {
+      "type": "object",
+      "properties": {
+        "findingId": { "type": "string" },
+        "controlId": { "type": "string" },
+        "controlFamily": { "type": "string" },
+        "title": { "type": "string" },
+        "severity": { "type": "string", "enum": ["critical", "high", "medium", "low", "informational"] },
+        "description": { "type": "string" },
+        "recommendation": { "type": "string" },
+        "resourceId": { "type": ["string", "null"] },
+        "resourceType": { "type": ["string", "null"] },
+        "autoRemediable": { "type": "boolean" },
+        "remediationScript": { "type": ["string", "null"] },
+        "riskLevel": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
+        "frameworkReference": { "type": "string" },
+        "findingStatus": { "type": "string", "enum": ["open", "acknowledged", "remediated", "verified"] }
+      }
+    },
+    "KnowledgeBaseData": {
+      "description": "Structured data for intentType='knowledgebase'",
+      "type": "object",
+      "properties": {
+        "type": { "const": "answer" },
+        "answer": { "type": "string" },
+        "sources": { "type": "array", "items": { "type": "string" } },
+        "controlId": { "type": ["string", "null"] },
+        "controlFamily": { "type": ["string", "null"] }
+      }
+    },
+    "ConfigurationData": {
+      "description": "Structured data for intentType='configuration'",
+      "type": "object",
+      "properties": {
+        "type": { "const": "configuration" },
+        "subscriptionId": { "type": ["string", "null"] },
+        "framework": { "type": ["string", "null"] },
+        "baseline": { "type": ["string", "null"] },
+        "cloudEnvironment": { "type": ["string", "null"] },
+        "dryRunDefault": { "type": ["boolean", "null"] },
+        "defaultScanType": { "type": ["string", "null"] },
+        "region": { "type": ["string", "null"] }
+      }
+    },
+    "RemediationPlanData": {
+      "description": "Structured data for intentType='compliance', data.type='remediationPlan'",
+      "type": "object",
+      "properties": {
+        "type": { "const": "remediationPlan" },
+        "phases": { "type": "array", "items": { "type": "object" } },
+        "findings": { "type": "array", "items": { "$ref": "#/definitions/ComplianceFinding" } },
+        "riskReduction": { "type": "number" }
+      }
+    },
+    "AlertData": {
+      "description": "Structured data for intentType='compliance', data.type='alert'",
+      "type": "object",
+      "properties": {
+        "type": { "const": "alert" },
+        "alertId": { "type": "string" },
+        "severity": { "type": "string" },
+        "affectedResources": { "type": "array", "items": { "type": "string" } },
+        "slaDeadline": { "type": "string", "format": "date-time" },
+        "status": { "type": "string" }
+      }
+    },
+    "TrendData": {
+      "description": "Structured data for intentType='compliance', data.type='trend'",
+      "type": "object",
+      "properties": {
+        "type": { "const": "trend" },
+        "dataPoints": { "type": "array", "items": { "type": "object" } },
+        "direction": { "type": "string", "enum": ["improving", "declining", "stable"] },
+        "significantEvents": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "EvidenceData": {
+      "description": "Structured data for intentType='compliance', data.type='evidence'",
+      "type": "object",
+      "properties": {
+        "type": { "const": "evidence" },
+        "completeness": { "type": "number", "minimum": 0, "maximum": 100 },
+        "items": { "type": "array", "items": { "type": "object" } },
+        "framework": { "type": "string" }
+      }
+    },
+    "ControlData": {
+      "description": "Structured data for intentType='knowledgebase', data.type='control'",
+      "type": "object",
+      "properties": {
+        "type": { "const": "control" },
+        "controlId": { "type": "string" },
+        "statement": { "type": "string" },
+        "implementationGuidance": { "type": "string" },
+        "relatedStigs": { "type": "array", "items": { "type": "string" } },
+        "fedRampBaseline": { "type": "string" }
+      }
+    }
+  }
+}

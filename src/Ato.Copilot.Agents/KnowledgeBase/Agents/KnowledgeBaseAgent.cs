@@ -248,7 +248,16 @@ public class KnowledgeBaseAgent : BaseAgent
                         Result = result,
                         ExecutionTimeMs = sw.Elapsed.TotalMilliseconds
                     }
-                ]
+                ],
+                // T022c: Populate ResponseData with knowledge base answer data (FR-007b)
+                ResponseData = new Dictionary<string, object>
+                {
+                    ["type"] = "answer",
+                    ["answer"] = result,
+                    ["queryType"] = queryType.ToString()
+                },
+                // T022c: Contextual follow-up suggestions (FR-007d)
+                Suggestions = GetKnowledgeBaseSuggestions(queryType)
             };
         }
         catch (Exception ex)
@@ -267,6 +276,28 @@ public class KnowledgeBaseAgent : BaseAgent
                 ProcessingTimeMs = sw.Elapsed.TotalMilliseconds
             };
         }
+    }
+
+    /// <summary>
+    /// Returns contextual follow-up suggestions based on the knowledge query type (T022c, FR-007d).
+    /// </summary>
+    private static List<string> GetKnowledgeBaseSuggestions(KnowledgeQueryType queryType)
+    {
+        return queryType switch
+        {
+            KnowledgeQueryType.NistControl or KnowledgeQueryType.NistSearch =>
+                new List<string> { "View related controls", "Run compliance assessment", "Show implementation guidance" },
+            KnowledgeQueryType.Stig or KnowledgeQueryType.StigSearch =>
+                new List<string> { "View STIG fix guidance", "Run compliance assessment", "Show related NIST controls" },
+            KnowledgeQueryType.Rmf =>
+                new List<string> { "View RMF step details", "Run compliance assessment", "Generate SSP document" },
+            KnowledgeQueryType.ImpactLevel =>
+                new List<string> { "Compare impact levels", "View FedRAMP baseline", "Run compliance assessment" },
+            KnowledgeQueryType.FedRamp =>
+                new List<string> { "Generate SSP document", "View FedRAMP requirements", "Run compliance assessment" },
+            _ =>
+                new List<string> { "Search NIST controls", "View compliance status", "Run compliance assessment" }
+        };
     }
 
     /// <summary>

@@ -112,7 +112,8 @@ export async function analyzeWorkspace(mcpClient: McpClient): Promise<void> {
         createAnalysisPanel(
           "Workspace Compliance Analysis",
           allFindings,
-          "workspace"
+          "workspace",
+          mcpClient
         );
       }
     );

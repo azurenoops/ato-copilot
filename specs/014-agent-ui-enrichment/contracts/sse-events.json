@@ -1,0 +1,114 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SSE Event Types",
+  "description": "Server-Sent Event types for /mcp/chat/stream endpoint (FR-029a)",
+  "definitions": {
+    "AgentRoutedEvent": {
+      "description": "Emitted when the server selects the target agent",
+      "type": "object",
+      "required": ["type", "agentId", "agentName"],
+      "properties": {
+        "type": { "const": "agentRouted" },
+        "agentId": { "type": "string", "examples": ["compliance-agent", "knowledgebase-agent", "configuration-agent"] },
+        "agentName": { "type": "string", "examples": ["Compliance Agent", "KnowledgeBase Agent", "Configuration Agent"] }
+      }
+    },
+    "ThinkingEvent": {
+      "description": "Emitted when the agent begins processing",
+      "type": "object",
+      "required": ["type", "status"],
+      "properties": {
+        "type": { "const": "thinking" },
+        "status": { "const": "processing" }
+      }
+    },
+    "ToolStartEvent": {
+      "description": "Emitted when a tool invocation begins",
+      "type": "object",
+      "required": ["type", "toolName", "toolIndex"],
+      "properties": {
+        "type": { "const": "toolStart" },
+        "toolName": { "type": "string" },
+        "toolIndex": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "ToolProgressEvent": {
+      "description": "Emitted periodically during long tool executions",
+      "type": "object",
+      "required": ["type", "toolName", "percentComplete"],
+      "properties": {
+        "type": { "const": "toolProgress" },
+        "toolName": { "type": "string" },
+        "percentComplete": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "statusMessage": { "type": ["string", "null"] }
+      }
+    },
+    "ToolCompleteEvent": {
+      "description": "Emitted when a tool finishes execution",
+      "type": "object",
+      "required": ["type", "toolName", "success", "executionTimeMs"],
+      "properties": {
+        "type": { "const": "toolComplete" },
+        "toolName": { "type": "string" },
+        "success": { "type": "boolean" },
+        "executionTimeMs": { "type": "number" },
+        "resultSummary": { "type": ["string", "null"] }
+      }
+    },
+    "PartialEvent": {
+      "description": "Emitted for incremental response text chunks",
+      "type": "object",
+      "required": ["type", "text"],
+      "properties": {
+        "type": { "const": "partial" },
+        "text": { "type": "string", "description": "Text chunk to append to response" }
+      }
+    },
+    "ValidatingEvent": {
+      "description": "Emitted when the agent performs post-processing validation",
+      "type": "object",
+      "required": ["type", "status"],
+      "properties": {
+        "type": { "const": "validating" },
+        "status": { "const": "validating" }
+      }
+    },
+    "CompleteEvent": {
+      "description": "Emitted once with the final full McpChatResponse payload",
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "complete" }
+      },
+      "additionalProperties": true,
+      "description_extended": "Payload is the full McpChatResponse schema (see mcp-chat-response.json)"
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/definitions/AgentRoutedEvent" },
+    { "$ref": "#/definitions/ThinkingEvent" },
+    { "$ref": "#/definitions/ToolStartEvent" },
+    { "$ref": "#/definitions/ToolProgressEvent" },
+    { "$ref": "#/definitions/ToolCompleteEvent" },
+    { "$ref": "#/definitions/PartialEvent" },
+    { "$ref": "#/definitions/ValidatingEvent" },
+    { "$ref": "#/definitions/CompleteEvent" }
+  ],
+  "examples": [
+    { "type": "agentRouted", "agentId": "compliance-agent", "agentName": "Compliance Agent" },
+    { "type": "thinking", "status": "processing" },
+    { "type": "toolStart", "toolName": "ComplianceAssessmentTool", "toolIndex": 0 },
+    { "type": "toolProgress", "toolName": "ComplianceAssessmentTool", "percentComplete": 45, "statusMessage": "Scanning AC controls..." },
+    { "type": "toolComplete", "toolName": "ComplianceAssessmentTool", "success": true, "executionTimeMs": 12340.5, "resultSummary": "Found 23 findings across 5 control families" },
+    { "type": "partial", "text": "## Compliance Assessment Results\n\n" },
+    { "type": "validating", "status": "validating" },
+    { "type": "complete", "success": true, "response": "...", "intentType": "compliance", "agentUsed": "Compliance Agent" }
+  ],
+  "transport": {
+    "protocol": "SSE (Server-Sent Events)",
+    "contentType": "text/event-stream",
+    "encoding": "Each event is sent as: data: {json}\\n\\n",
+    "ordering": "Events MUST be emitted in the order listed in definitions",
+    "reconnection": "Client retries once with exponential backoff, then falls back to sync /mcp/chat"
+  }
+}

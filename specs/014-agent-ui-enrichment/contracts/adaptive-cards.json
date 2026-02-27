@@ -1,0 +1,264 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "M365 Adaptive Card Contracts",
+  "description": "Adaptive Card template contracts for M365 Teams extension (FR-008 through FR-014)",
+  "definitions": {
+    "CardRouting": {
+      "description": "Card selection logic based on intentType and data.type",
+      "type": "object",
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "priority": { "type": "integer" },
+              "condition": { "type": "string" },
+              "card": { "type": "string" }
+            }
+          }
+        }
+      },
+      "examples": [{
+        "rules": [
+          { "priority": 0, "condition": "success === false", "card": "errorCard" },
+          { "priority": 1, "condition": "requiresFollowUp && followUpPrompt", "card": "followUpCard" },
+          { "priority": 2, "condition": "data?.type === 'clarification'", "card": "clarificationCard" },
+          { "priority": 3, "condition": "intentType === 'compliance' && data?.type === 'finding'", "card": "findingDetailCard" },
+          { "priority": 4, "condition": "intentType === 'compliance' && data?.type === 'remediationPlan'", "card": "remediationPlanCard" },
+          { "priority": 5, "condition": "intentType === 'compliance' && data?.type === 'alert'", "card": "alertLifecycleCard" },
+          { "priority": 6, "condition": "intentType === 'compliance' && data?.type === 'trend'", "card": "complianceTrendCard" },
+          { "priority": 7, "condition": "intentType === 'compliance' && data?.type === 'evidence'", "card": "evidenceCollectionCard" },
+          { "priority": 8, "condition": "intentType === 'compliance' && data?.type === 'kanban'", "card": "kanbanBoardCard" },
+          { "priority": 9, "condition": "intentType === 'compliance'", "card": "complianceCard" },
+          { "priority": 10, "condition": "intentType === 'knowledgebase' && data?.type === 'control'", "card": "nistControlCard" },
+          { "priority": 11, "condition": "intentType === 'knowledgebase'", "card": "knowledgeBaseCard" },
+          { "priority": 12, "condition": "intentType === 'configuration'", "card": "configurationCard" },
+          { "priority": 99, "condition": "default", "card": "genericCard" }
+        ]
+      }]
+    },
+    "ComplianceCard": {
+      "description": "Overall compliance assessment results (updated, FR-011)",
+      "requiredData": ["complianceScore", "passedControls", "warningControls", "failedControls"],
+      "elements": [
+        "Header with framework badge and assessment scope",
+        "Overall score with color coding (green ≥80%, orange ≥60%, red <60%)",
+        "Passed / Warning / Failed control counts with icons",
+        "Agent attribution footer (agentUsed)",
+        "Suggestions as Action.Submit buttons"
+      ],
+      "actions": [
+        { "type": "Action.Submit", "title": "View Detailed Findings", "data": { "action": "drillDown", "actionContext": { "view": "findings" } } },
+        { "type": "Action.Submit", "title": "Generate Remediation Plan", "data": { "action": "drillDown", "actionContext": { "view": "remediationPlan" } } },
+        { "type": "Action.Submit", "title": "Export Report", "data": { "action": "drillDown", "actionContext": { "view": "export" } } }
+      ]
+    },
+    "FindingDetailCard": {
+      "description": "Individual compliance finding detail (new, FR-010a)",
+      "requiredData": ["finding"],
+      "elements": [
+        "Severity badge (5-level: Critical=purple, High=red, Medium=orange, Low=yellow, Informational=blue)",
+        "Control ID and control family",
+        "Finding title and description",
+        "Resource context (resourceId, resourceType)",
+        "Remediation guidance",
+        "Auto-remediable indicator badge",
+        "Risk level indicator",
+        "Agent attribution footer"
+      ],
+      "actions": [
+        { "type": "Action.Submit", "title": "Apply Fix", "data": { "action": "remediate", "actionContext": { "findingId": "{finding.findingId}" } }, "condition": "finding.autoRemediable === true" },
+        { "type": "Action.OpenUrl", "title": "View in Azure Portal", "url": "https://portal.azure.us/#@/resource/{finding.resourceId}" }
+      ]
+    },
+    "RemediationPlanCard": {
+      "description": "Remediation plan with phased timeline (new, FR-010a)",
+      "requiredData": ["phases", "findings", "riskReduction"],
+      "elements": [
+        "Risk reduction projection percentage",
+        "Prioritized finding list with severity badges",
+        "5-phase timeline with estimated durations",
+        "Agent attribution footer"
+      ],
+      "actions": [
+        { "type": "Action.Submit", "title": "Start Remediation", "data": { "action": "remediate", "actionContext": { "planId": "{planId}" } } }
+      ]
+    },
+    "AlertLifecycleCard": {
+      "description": "Security alert with lifecycle actions (new, FR-010a)",
+      "requiredData": ["alertId", "severity", "affectedResources"],
+      "elements": [
+        "Alert severity badge",
+        "Affected resources list",
+        "SLA countdown timer (if slaDeadline present)",
+        "Alert status indicator",
+        "Agent attribution footer"
+      ],
+      "actions": [
+        { "type": "Action.Submit", "title": "Acknowledge", "data": { "action": "acknowledgeAlert", "actionContext": { "alertId": "{alertId}" } } },
+        { "type": "Action.Submit", "title": "Dismiss", "data": { "action": "dismissAlert", "actionContext": { "alertId": "{alertId}" } } },
+        { "type": "Action.Submit", "title": "Escalate", "data": { "action": "escalateAlert", "actionContext": { "alertId": "{alertId}" } } }
+      ]
+    },
+    "ComplianceTrendCard": {
+      "description": "Compliance score trend over time (new, FR-010a)",
+      "requiredData": ["dataPoints", "direction"],
+      "elements": [
+        "Sparkline-style score visualization (TextBlock approximation with Unicode)",
+        "Trend direction indicator (↑ improving / ↓ declining / → stable)",
+        "Significant events markers",
+        "Agent attribution footer"
+      ],
+      "actions": []
+    },
+    "EvidenceCollectionCard": {
+      "description": "Evidence collection status and items (new, FR-010a)",
+      "requiredData": ["completeness", "items"],
+      "elements": [
+        "Completeness meter (percentage bar)",
+        "Evidence items with verification hashes",
+        "Framework badge",
+        "Agent attribution footer"
+      ],
+      "actions": [
+        { "type": "Action.Submit", "title": "Collect More", "data": { "action": "collectEvidence", "actionContext": { "framework": "{framework}" } } }
+      ]
+    },
+    "NistControlCard": {
+      "description": "NIST 800-53 control detail (new, FR-010a sub-routed from knowledgebase)",
+      "requiredData": ["controlId", "statement"],
+      "elements": [
+        "Control ID and title",
+        "Control statement text",
+        "Implementation guidance",
+        "Related STIGs list",
+        "FedRAMP baseline applicability (Low/Moderate/High)",
+        "Agent attribution footer"
+      ],
+      "actions": [
+        { "type": "Action.Submit", "title": "Show Related Controls", "data": { "action": "drillDown", "actionContext": { "controlFamily": "{controlFamily}" } } }
+      ]
+    },
+    "KnowledgeBaseCard": {
+      "description": "Knowledge base answer (new, FR-009)",
+      "requiredData": ["answer"],
+      "elements": [
+        "Answer text (full Markdown rendered)",
+        "Source references list (if available)",
+        "Agent attribution footer"
+      ],
+      "actions": [
+        { "type": "Action.OpenUrl", "title": "Learn More", "url": "{firstSourceUrl}" }
+      ]
+    },
+    "ConfigurationCard": {
+      "description": "Current configuration settings (new, FR-010)",
+      "requiredData": ["framework", "baseline", "subscriptionId", "cloudEnvironment"],
+      "elements": [
+        "Current settings table (Framework, Baseline, Subscription, Environment)",
+        "Agent attribution footer"
+      ],
+      "actions": [
+        { "type": "Action.Submit", "title": "Update Framework", "data": { "action": "drillDown", "actionContext": { "setting": "framework" } } },
+        { "type": "Action.Submit", "title": "Update Baseline", "data": { "action": "drillDown", "actionContext": { "setting": "baseline" } } },
+        { "type": "Action.Submit", "title": "Update Subscription", "data": { "action": "drillDown", "actionContext": { "setting": "subscription" } } }
+      ]
+    },
+    "ClarificationCard": {
+      "description": "Multi-turn clarification request (new, FR-010a)",
+      "requiredData": ["followUpPrompt", "missingFields"],
+      "elements": [
+        "Follow-up prompt text",
+        "Missing fields with input dropdowns where applicable",
+        "Agent attribution footer"
+      ],
+      "actions": [
+        { "type": "Action.Submit", "title": "Submit", "data": { "action": "drillDown" } }
+      ]
+    },
+    "FollowUpCard": {
+      "description": "Simple follow-up prompt (existing, updated)",
+      "elements": [
+        "Follow-up prompt text",
+        "Numbered missing fields list",
+        "Quick-reply suggestion buttons"
+      ]
+    },
+    "GenericCard": {
+      "description": "Fallback card for unrecognized intent types (existing, updated)",
+      "elements": [
+        "Response text",
+        "Agent attribution footer (when agentUsed present)",
+        "Suggestion buttons (when suggestions present)"
+      ]
+    },
+    "ErrorCard": {
+      "description": "Structured error display (existing, updated for ErrorDetail)",
+      "elements": [
+        "Error code badge",
+        "Error message text",
+        "Suggestion text for corrective action",
+        "Retry button"
+      ]
+    },
+    "ConfirmationCard": {
+      "description": "Remediation confirmation before execution (FR-018e)",
+      "elements": [
+        "Remediation script preview (code block)",
+        "Affected resource (resourceId, resourceType)",
+        "Risk level indicator",
+        "Control ID and finding severity",
+        "PIM role status",
+        "Agent attribution footer"
+      ],
+      "actions": [
+        { "type": "Action.Submit", "title": "Confirm Remediation", "data": { "action": "remediate", "actionContext": { "findingId": "{findingId}", "confirmed": "true" } } },
+        { "type": "Action.Submit", "title": "Cancel", "data": {} }
+      ]
+    },
+    "KanbanBoardCard": {
+      "description": "Remediation kanban board showing tasks by status (new, FR-010a)",
+      "requiredData": ["board"],
+      "elements": [
+        "Board title and summary stats",
+        "Status columns: To Do, In Progress, Done/Verified",
+        "Task cards with finding title, severity badge, assigned resource",
+        "Agent attribution footer"
+      ],
+      "actions": [
+        { "type": "Action.Submit", "title": "Move to In Progress", "data": { "action": "moveKanbanTask", "actionContext": { "taskId": "{taskId}", "status": "InProgress" } } },
+        { "type": "Action.Submit", "title": "Mark Complete", "data": { "action": "moveKanbanTask", "actionContext": { "taskId": "{taskId}", "status": "Done" } } }
+      ]
+    }
+  },
+  "removedCards": {
+    "description": "Cards to be deleted (FR-008)",
+    "cards": [
+      { "file": "costCard.ts", "reason": "No agent produces cost data" },
+      { "file": "deploymentCard.ts", "reason": "No agent produces deployment data" },
+      { "file": "infrastructureCard.ts", "reason": "No agent produces infrastructure data" },
+      { "file": "resourceCard.ts", "reason": "No agent produces resource discovery data" }
+    ]
+  },
+  "commonElements": {
+    "agentAttribution": {
+      "description": "Footer shown on all cards when agentUsed is present (FR-013)",
+      "template": {
+        "type": "TextBlock",
+        "text": "Processed by: {agentUsed}",
+        "size": "Small",
+        "color": "Accent",
+        "horizontalAlignment": "Right"
+      }
+    },
+    "suggestionButtons": {
+      "description": "Dynamic suggestion buttons appended to all cards (FR-023a)",
+      "template": {
+        "type": "Action.Submit",
+        "title": "{suggestion}",
+        "data": { "message": "{suggestion}", "conversationId": "{conversationId}" }
+      }
+    }
+  }
+}

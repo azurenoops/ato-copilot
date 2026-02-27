@@ -3,14 +3,34 @@ import { McpClient, McpChatRequest, McpError } from "../services/mcpClient";
 import { createAnalysisPanel } from "../webview/analysisPanel";
 
 /**
- * Compliance finding from analysis response.
+ * Compliance finding from analysis response (FR-015, FR-018, data-model entity 6).
+ * Severity expanded to 5 levels; enriched with control family, resource context,
+ * remediation metadata, and finding lifecycle status.
  */
 export interface ComplianceFinding {
   controlId: string;
   title: string;
-  severity: "high" | "medium" | "low";
+  severity: "critical" | "high" | "medium" | "low" | "informational";
   description: string;
   recommendation: string;
+  /** Control family derived from controlId, e.g. "AC" */
+  controlFamily?: string;
+  /** Azure resource identifier */
+  resourceId?: string;
+  /** Azure resource type, e.g. "Microsoft.Storage/storageAccounts" */
+  resourceType?: string;
+  /** Whether an automated fix is available */
+  autoRemediable?: boolean;
+  /** Script content for auto-remediation */
+  remediationScript?: string;
+  /** Risk assessment level */
+  riskLevel?: "critical" | "high" | "medium" | "low";
+  /** Framework reference, e.g. "NIST 800-53 Rev 5" */
+  frameworkReference?: string;
+  /** Finding lifecycle status */
+  findingStatus?: "open" | "acknowledged" | "remediated" | "verified";
+  /** Unique finding identifier */
+  findingId?: string;
 }
 
 /**
@@ -62,7 +82,9 @@ export async function analyzeCurrentFile(mcpClient: McpClient): Promise<void> {
         createAnalysisPanel(
           `Compliance Analysis: ${fileName}`,
           findings,
-          fileName
+          fileName,
+          mcpClient,
+          response
         );
       }
     );

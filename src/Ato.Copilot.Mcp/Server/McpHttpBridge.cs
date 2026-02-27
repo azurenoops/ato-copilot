@@ -136,7 +136,9 @@ public class McpHttpBridge
                 chatRequest.Message,
                 chatRequest.ConversationId,
                 chatRequest.Context,
-                chatRequest.ConversationHistory?.Select(m => (m.Role, m.Content)).ToList());
+                chatRequest.ConversationHistory?.Select(m => (m.Role, m.Content)).ToList(),
+                action: chatRequest.Action,
+                actionContext: chatRequest.ActionContext);
 
             return Results.Json(result, _jsonOptions);
         }
@@ -170,12 +172,21 @@ public class McpHttpBridge
             context.Response.Headers["Connection"] = "keep-alive";
             await context.Response.Body.FlushAsync();
 
-            // Create progress reporter that writes SSE events
+            // Create progress reporter that writes SSE events (T018: typed events)
             var progress = new Progress<string>(async step =>
             {
                 try
                 {
-                    var eventData = JsonSerializer.Serialize(new { type = "progress", step }, _sseJsonOptions);
+                    // Try to parse typed SSE event JSON; fallback to plain progress
+                    string eventData;
+                    if (step.StartsWith("{") && step.Contains("\"type\""))
+                    {
+                        eventData = step; // Already a typed JSON event from McpServer
+                    }
+                    else
+                    {
+                        eventData = JsonSerializer.Serialize(new { type = "progress", step }, _sseJsonOptions);
+                    }
                     await context.Response.WriteAsync($"data: {eventData}\n\n");
                     await context.Response.Body.FlushAsync();
                 }
@@ -188,7 +199,9 @@ public class McpHttpBridge
                 chatRequest.Context,
                 chatRequest.ConversationHistory?.Select(m => (m.Role, m.Content)).ToList(),
                 context.RequestAborted,
-                progress);
+                progress,
+                chatRequest.Action,
+                chatRequest.ActionContext);
 
             // Write final result as SSE event
             var resultData = JsonSerializer.Serialize(new { type = "result", data = result }, _sseJsonOptions);
@@ -320,6 +333,19 @@ public class ChatRequest
     public string? ConversationId { get; set; }
     public Dictionary<string, object>? Context { get; set; }
     public List<ChatMessage>? ConversationHistory { get; set; }
+
+    /// <summary>
+    /// Optional action identifier for drill-down and tool invocation routing.
+    /// When present, the server routes to the corresponding MCP tool instead of normal agent processing.
+    /// Examples: "remediate", "drillDown", "collectEvidence", "showKanban" (FR-014a, R-006).
+    /// </summary>
+    public string? Action { get; set; }
+
+    /// <summary>
+    /// Contextual data for the specified <see cref="Action"/>.
+    /// Contains action-specific parameters (e.g., controlId for drillDown, findingId for remediate).
+    /// </summary>
+    public Dictionary<string, object>? ActionContext { get; set; }
 }
 
 /// <summary>

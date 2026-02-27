@@ -154,6 +154,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ComplianceStatusTool>();
         services.AddSingleton<ComplianceMonitoringTool>();
         services.AddSingleton<ComplianceChatTool>();
+        services.AddSingleton<IacComplianceScanTool>();
 
         // Compliance Watch monitoring tools
         services.AddSingleton<WatchEnableMonitoringTool>();

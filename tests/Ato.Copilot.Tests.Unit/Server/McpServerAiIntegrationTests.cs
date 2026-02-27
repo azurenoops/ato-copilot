@@ -398,7 +398,8 @@ public class McpServerAiIntegrationTests
             new WatchCreateAutoRemediationRuleTool(w, Mock.Of<ILogger<WatchCreateAutoRemediationRuleTool>>()),
             new WatchListAutoRemediationRulesTool(w, Mock.Of<ILogger<WatchListAutoRemediationRulesTool>>()),
             new NistControlSearchTool(n, Mock.Of<ILogger<NistControlSearchTool>>()),
-            new NistControlExplainerTool(n, Mock.Of<ILogger<NistControlExplainerTool>>()));
+            new NistControlExplainerTool(n, Mock.Of<ILogger<NistControlExplainerTool>>()),
+            new IacComplianceScanTool(Mock.Of<ILogger<IacComplianceScanTool>>()));
     }
 
     private KnowledgeBaseMcpTools CreateKnowledgeBaseMcpTools()

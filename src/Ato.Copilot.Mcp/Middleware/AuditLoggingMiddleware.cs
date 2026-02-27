@@ -45,19 +45,48 @@ public class AuditLoggingMiddleware
             : rawUserId;
 
         // Push structured properties to Serilog LogContext (per FR-048)
+        // T022: Include PIM role and action context for infrastructure-modifying actions (FR-018d)
+        var pimRole = context.User?.FindFirst("pim_role")?.Value ?? string.Empty;
+        var actionName = string.Empty;
+        var actionContextStr = string.Empty;
+
+        // For chat/action requests, try to extract action and actionContext from the request body
+        if (context.Request.Path.Value?.Contains("/mcp/chat") == true &&
+            context.Request.ContentLength > 0 && context.Request.Body.CanSeek)
+        {
+            try
+            {
+                context.Request.Body.Position = 0;
+                using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
+                var body = await reader.ReadToEndAsync();
+                context.Request.Body.Position = 0;
+
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("action", out var actionProp))
+                    actionName = actionProp.GetString() ?? string.Empty;
+                if (doc.RootElement.TryGetProperty("actionContext", out var contextProp))
+                    actionContextStr = contextProp.GetRawText();
+            }
+            catch { /* body parsing is best-effort for audit */ }
+        }
+
         using (LogContext.PushProperty("CorrelationId", correlationId))
         using (LogContext.PushProperty("AgentName", "compliance"))
         using (LogContext.PushProperty("ToolName", toolName))
         using (LogContext.PushProperty("UserId", redactedUserId))
+        using (LogContext.PushProperty("PimRole", pimRole))
+        using (LogContext.PushProperty("Action", actionName))
         {
             // Log request
             _logger.LogInformation(
-                "ATO Audit | ReqId: {RequestId} | Method: {Method} | Path: {Path} | IP: {IP} | User: {UserId}",
+                "ATO Audit | ReqId: {RequestId} | Method: {Method} | Path: {Path} | IP: {IP} | User: {UserId} | PimRole: {PimRole} | Action: {Action}",
                 requestId,
                 context.Request.Method,
                 context.Request.Path,
                 context.Connection.RemoteIpAddress,
-                redactedUserId);
+                redactedUserId,
+                pimRole,
+                actionName);
 
             try
             {

@@ -80,7 +80,9 @@ public class McpServer
         Dictionary<string, object>? context = null,
         List<(string Role, string Content)>? conversationHistory = null,
         CancellationToken cancellationToken = default,
-        IProgress<string>? progress = null)
+        IProgress<string>? progress = null,
+        string? action = null,
+        Dictionary<string, object>? actionContext = null)
     {
         conversationId ??= Guid.NewGuid().ToString();
         var stopwatch = Stopwatch.StartNew();
@@ -107,15 +109,46 @@ public class McpServer
                     agentContext.WorkflowState[kvp.Key] = kvp.Value;
             }
 
+            // T016: Action routing — when Action is present, route to tool directly
+            if (!string.IsNullOrEmpty(action))
+            {
+                return await HandleActionRoutingAsync(
+                    action, actionContext, message, conversationId, agentContext,
+                    stopwatch, cancellationToken, progress);
+            }
+
             // Route to appropriate agent via confidence-scored orchestrator
-            progress?.Report("Selecting agent...");
-            var targetAgent = _orchestrator.SelectAgent(message) ?? _complianceAgent;
-            progress?.Report($"Routed to {targetAgent.AgentName}...");
+            // T019: Emit typed SSE events for agent routing and thinking phases
+            progress?.Report(JsonSerializer.Serialize(
+                new SseThinkingEvent { Message = "Selecting agent..." }, _jsonOptions));
+
+            // Honor client routing hint (e.g., slash command → targetAgent) when present
+            BaseAgent? targetAgent = null;
+            if (context != null &&
+                context.TryGetValue("targetAgent", out var targetAgentHint) &&
+                targetAgentHint is string agentHint &&
+                !string.IsNullOrEmpty(agentHint))
+            {
+                targetAgent = ResolveAgentByHint(agentHint);
+                if (targetAgent != null)
+                {
+                    _logger.LogInformation("Routing to {Agent} via client hint | ConvId: {ConvId}",
+                        targetAgent.AgentName, conversationId);
+                }
+            }
+
+            targetAgent ??= _orchestrator.SelectAgent(message) ?? _complianceAgent;
+
+            progress?.Report(JsonSerializer.Serialize(
+                new SseAgentRoutedEvent { AgentName = targetAgent.AgentName, Confidence = targetAgent.CanHandle(message) }, _jsonOptions));
             var response = await targetAgent.ProcessAsync(message, agentContext, cancellationToken, progress);
             stopwatch.Stop();
 
             _logger.LogInformation("Routed to {Agent} | ConvId: {ConvId}",
                 targetAgent.AgentName, conversationId);
+
+            // T012: Intent type mapping
+            var intentType = MapIntentType(targetAgent.AgentId);
 
             return new McpChatResponse
             {
@@ -123,7 +156,21 @@ public class McpServer
                 Response = response.Response,
                 ConversationId = conversationId,
                 AgentName = response.AgentName,
-                ProcessingTimeMs = stopwatch.ElapsedMilliseconds
+                IntentType = intentType,
+                ProcessingTimeMs = stopwatch.ElapsedMilliseconds,
+                // T013: Map ToolsExecuted from AgentResponse
+                ToolsExecuted = response.ToolsExecuted.Select(t => new ToolExecution
+                {
+                    ToolName = t.ToolName,
+                    Success = t.Success,
+                    ExecutionTimeMs = t.ExecutionTimeMs
+                }).ToList(),
+                // T014: Map enrichment fields from AgentResponse
+                Suggestions = response.Suggestions,
+                RequiresFollowUp = response.RequiresFollowUp,
+                FollowUpPrompt = response.FollowUpPrompt,
+                MissingFields = response.MissingFields,
+                Data = response.ResponseData
             };
         }
         catch (Exception ex)
@@ -137,9 +184,152 @@ public class McpServer
                 Response = $"Error processing request: {ex.Message}",
                 ConversationId = conversationId,
                 ProcessingTimeMs = stopwatch.ElapsedMilliseconds,
-                Errors = new List<string> { ex.Message }
+                Errors = new List<ErrorDetail>
+                {
+                    new ErrorDetail
+                    {
+                        ErrorCode = "PROCESSING_ERROR",
+                        Message = ex.Message,
+                        Suggestion = "Please try again or rephrase your request."
+                    }
+                }
             };
         }
+    }
+
+    /// <summary>
+    /// Maps an agent's ID to a client-facing intent type string (T012, FR-001, R-002).
+    /// </summary>
+    private static readonly Dictionary<string, string> IntentTypeMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["compliance-agent"] = "compliance",
+        ["knowledgebase-agent"] = "knowledgebase",
+        ["configuration-agent"] = "configuration"
+    };
+
+    private static string MapIntentType(string agentId)
+        => IntentTypeMap.TryGetValue(agentId, out var intentType) ? intentType : "general";
+
+    /// <summary>
+    /// Resolves an agent by client routing hint (e.g., "ComplianceAgent", "ConfigurationAgent").
+    /// Matches against AgentId or AgentName, case-insensitive.
+    /// </summary>
+    private BaseAgent? ResolveAgentByHint(string hint)
+    {
+        // Try exact match on AgentId first (e.g., "compliance-agent")
+        if (string.Equals(hint, _complianceAgent.AgentId, StringComparison.OrdinalIgnoreCase))
+            return _complianceAgent;
+        if (string.Equals(hint, _configurationAgent.AgentId, StringComparison.OrdinalIgnoreCase))
+            return _configurationAgent;
+
+        // Try class-name style match (e.g., "ComplianceAgent", "ConfigurationAgent")
+        if (hint.Contains("compliance", StringComparison.OrdinalIgnoreCase))
+            return _complianceAgent;
+        if (hint.Contains("configuration", StringComparison.OrdinalIgnoreCase) ||
+            hint.Contains("config", StringComparison.OrdinalIgnoreCase))
+            return _configurationAgent;
+        if (hint.Contains("knowledge", StringComparison.OrdinalIgnoreCase))
+        {
+            // KnowledgeBase agent may be registered via orchestrator
+            return _orchestrator.SelectAgent("knowledge base") ?? _complianceAgent;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Routes an action request to the corresponding MCP tool (T016, FR-014a, R-006).
+    /// </summary>
+    private static readonly Dictionary<string, string> ActionToToolMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["remediate"] = "compliance_remediate",
+        ["drillDown"] = "kb_search_nist_controls",
+        ["collectEvidence"] = "compliance_collect_evidence",
+        ["acknowledgeAlert"] = "compliance_monitoring",
+        ["dismissAlert"] = "compliance_monitoring",
+        ["escalateAlert"] = "compliance_monitoring",
+        ["updateFindingStatus"] = "compliance_status",
+        ["showKanban"] = "kanban_board_show",
+        ["moveKanbanTask"] = "kanban_move_task",
+        ["checkPimStatus"] = "pim_list_active",
+        ["activatePim"] = "pim_activate_role",
+        ["listEligiblePimRoles"] = "pim_list_eligible"
+    };
+
+    private async Task<McpChatResponse> HandleActionRoutingAsync(
+        string action,
+        Dictionary<string, object>? actionContext,
+        string message,
+        string conversationId,
+        AgentConversationContext agentContext,
+        Stopwatch stopwatch,
+        CancellationToken cancellationToken,
+        IProgress<string>? progress)
+    {
+        if (!ActionToToolMap.TryGetValue(action, out var toolName))
+        {
+            stopwatch.Stop();
+            return new McpChatResponse
+            {
+                Success = false,
+                Response = $"Unknown action: {action}",
+                ConversationId = conversationId,
+                ProcessingTimeMs = stopwatch.ElapsedMilliseconds,
+                Errors = new List<ErrorDetail>
+                {
+                    new ErrorDetail
+                    {
+                        ErrorCode = "UNKNOWN_ACTION",
+                        Message = $"The action '{action}' is not recognized.",
+                        Suggestion = $"Available actions: {string.Join(", ", ActionToToolMap.Keys)}"
+                    }
+                }
+            };
+        }
+
+        progress?.Report($"Executing action: {action}...");
+        _logger.LogInformation("Action routing: {Action} → {Tool} | ConvId: {ConvId}",
+            action, toolName, conversationId);
+
+        // Build tool arguments from actionContext
+        var toolArgs = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        if (actionContext != null)
+        {
+            foreach (var kvp in actionContext)
+                toolArgs[kvp.Key] = kvp.Value;
+        }
+
+        // Add the message as a fallback argument
+        if (!string.IsNullOrEmpty(message))
+            toolArgs.TryAdd("message", message);
+
+        // Route to compliance agent to execute the tool
+        var response = await _complianceAgent.ProcessAsync(
+            $"Execute tool '{toolName}' with context: {JsonSerializer.Serialize(toolArgs, _jsonOptions)}",
+            agentContext, cancellationToken, progress);
+
+        stopwatch.Stop();
+
+        return new McpChatResponse
+        {
+            Success = response.Success,
+            Response = response.Response,
+            ConversationId = conversationId,
+            AgentName = response.AgentName,
+            IntentType = "compliance",
+            ProcessingTimeMs = stopwatch.ElapsedMilliseconds,
+            ToolsExecuted = response.ToolsExecuted.Select(t => new ToolExecution
+            {
+                ToolName = t.ToolName,
+                Success = t.Success,
+                ExecutionTimeMs = t.ExecutionTimeMs
+            }).ToList(),
+            Suggestions = response.Suggestions,
+            RequiresFollowUp = response.RequiresFollowUp,
+            FollowUpPrompt = response.FollowUpPrompt,
+            MissingFields = response.MissingFields,
+            Data = response.ResponseData
+        };
     }
 
     /// <summary>
