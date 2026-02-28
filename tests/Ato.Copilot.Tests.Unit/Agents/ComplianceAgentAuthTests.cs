@@ -71,7 +71,7 @@ public class ComplianceAgentAuthTests
         // Create tool instances
         var assessmentTool = new ComplianceAssessmentTool(complianceEngine, _scopeFactory, Mock.Of<ILogger<ComplianceAssessmentTool>>());
         var controlFamilyTool = new ControlFamilyTool(nistControls, Mock.Of<ILogger<ControlFamilyTool>>());
-        var documentGenerationTool = new DocumentGenerationTool(docGen, _scopeFactory, Mock.Of<ILogger<DocumentGenerationTool>>());
+        var documentGenerationTool = new DocumentGenerationTool(docGen, Mock.Of<IDocumentTemplateService>(), _scopeFactory, Mock.Of<ILogger<DocumentGenerationTool>>());
         var evidenceCollectionTool = new EvidenceCollectionTool(evidence, Mock.Of<ILogger<EvidenceCollectionTool>>());
         var remediationExecuteTool = new RemediationExecuteTool(remediationEngine, Mock.Of<ILogger<RemediationExecuteTool>>());
         var validateRemediationTool = new ValidateRemediationTool(remediationEngine, Mock.Of<ILogger<ValidateRemediationTool>>());
@@ -369,7 +369,7 @@ public class ComplianceAgentAuthTests
         return new ComplianceAgent(
             new ComplianceAssessmentTool(complianceEngine, scopeFactory, Mock.Of<ILogger<ComplianceAssessmentTool>>()),
             new ControlFamilyTool(nistControls, Mock.Of<ILogger<ControlFamilyTool>>()),
-            new DocumentGenerationTool(docGen, scopeFactory, Mock.Of<ILogger<DocumentGenerationTool>>()),
+            new DocumentGenerationTool(docGen, Mock.Of<IDocumentTemplateService>(), scopeFactory, Mock.Of<ILogger<DocumentGenerationTool>>()),
             new EvidenceCollectionTool(evidence, Mock.Of<ILogger<EvidenceCollectionTool>>()),
             new RemediationExecuteTool(remediationEngine, Mock.Of<ILogger<RemediationExecuteTool>>()),
             new ValidateRemediationTool(remediationEngine, Mock.Of<ILogger<ValidateRemediationTool>>()),

@@ -21,6 +21,10 @@ import { buildNistControlCard } from "./nistControlCard";
 import { buildClarificationCard } from "./clarificationCard";
 import { buildConfirmationCard } from "./confirmationCard";
 import { buildKanbanBoardCard } from "./kanbanBoardCard";
+import { buildSystemSummaryCard } from "./systemSummaryCard";
+import { buildCategorizationCard } from "./categorizationCard";
+import { buildAuthorizationCard } from "./authorizationCard";
+import { buildDashboardCard } from "./dashboardCard";
 
 /**
  * Select and build the appropriate Adaptive Card for an MCP response.
@@ -65,6 +69,88 @@ export function selectCard(response: McpResponse): Record<string, unknown> {
   // Priority 3–8: Compliance sub-types
   if (intentType === "compliance") {
     switch (dataType) {
+      case "systemSummary":
+        return buildSystemSummaryCard({
+          systemName: (data?.systemName as string) ?? "Unknown System",
+          acronym: data?.acronym as string,
+          systemType: data?.systemType as string,
+          hostingEnvironment: data?.hostingEnvironment as string,
+          currentRmfStep: data?.currentRmfStep as string,
+          rmfStepNumber: data?.rmfStepNumber as number,
+          missionCriticality: data?.missionCriticality as string,
+          impactLevel: data?.impactLevel as string,
+          complianceScore: data?.complianceScore as number,
+          activeAlerts: data?.activeAlerts as number,
+          isActive: data?.isActive as boolean,
+          authorizedDate: data?.authorizedDate as string,
+          atoExpiration: data?.atoExpiration as string,
+          agentUsed,
+          suggestions,
+          conversationId,
+        });
+
+      case "categorization":
+        return buildCategorizationCard({
+          systemName: (data?.systemName as string) ?? "Unknown System",
+          fipsCategory: data?.fipsCategory as string,
+          impactLevel: data?.impactLevel as string,
+          confidentialityImpact: data?.confidentialityImpact as string,
+          integrityImpact: data?.integrityImpact as string,
+          availabilityImpact: data?.availabilityImpact as string,
+          overallImpact: data?.overallImpact as string,
+          informationTypes: data?.informationTypes as Array<{
+            name: string;
+            confidentiality: string;
+            integrity: string;
+            availability: string;
+          }>,
+          justification: data?.justification as string,
+          categorizedDate: data?.categorizedDate as string,
+          agentUsed,
+          suggestions,
+          conversationId,
+        });
+
+      case "authorization":
+        return buildAuthorizationCard({
+          systemName: (data?.systemName as string) ?? "Unknown System",
+          decisionType: data?.decisionType as string,
+          status: data?.status as string,
+          riskLevel: data?.riskLevel as string,
+          authorizedDate: data?.authorizedDate as string,
+          expirationDate: data?.expirationDate as string,
+          daysUntilExpiration: data?.daysUntilExpiration as number,
+          authorizingOfficialName: data?.authorizingOfficialName as string,
+          conditions: data?.conditions as Array<{ description: string; status?: string }>,
+          riskAcceptances: data?.riskAcceptances as number,
+          openFindings: data?.openFindings as number,
+          agentUsed,
+          suggestions,
+          conversationId,
+        });
+
+      case "dashboard":
+        return buildDashboardCard({
+          title: data?.title as string,
+          systems: (data?.systems as Array<{
+            systemName: string;
+            acronym?: string;
+            currentRmfStep?: string;
+            complianceScore?: number;
+            impactLevel?: string;
+            atoStatus?: string;
+            activeAlerts?: number;
+          }>) ?? [],
+          totalSystems: data?.totalSystems as number,
+          averageComplianceScore: data?.averageComplianceScore as number,
+          rmfDistribution: data?.rmfDistribution as Array<{ step: string; count: number }>,
+          criticalAlerts: data?.criticalAlerts as number,
+          expiringAtos: data?.expiringAtos as number,
+          agentUsed,
+          suggestions,
+          conversationId,
+        });
+
       case "finding":
         return buildFindingDetailCard({
           title: (data?.title as string) ?? "Compliance Finding",

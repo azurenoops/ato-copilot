@@ -141,6 +141,13 @@ public static class ServiceCollectionExtensions
         // Compliance validation service (validates 11 system-critical control IDs)
         services.AddSingleton<ComplianceValidationService>();
 
+        // ─── RMF Lifecycle & Boundary Services (Feature 015) ────────────────
+        services.AddSingleton<IRmfLifecycleService, RmfLifecycleService>();
+        services.AddSingleton<IBoundaryService, BoundaryService>();
+        services.AddSingleton<ICategorizationService, CategorizationService>();
+        services.AddSingleton<IReferenceDataService, ReferenceDataService>();
+        services.AddSingleton<IBaselineService, BaselineService>();
+
         // Register compliance tools
         services.AddSingleton<ComplianceAssessmentTool>();
         services.AddSingleton<ControlFamilyTool>();
@@ -197,6 +204,81 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<NistControlSearchTool>();
         services.AddSingleton<NistControlExplainerTool>();
 
+        // RMF Registration tools (Feature 015)
+        services.AddSingleton<RegisterSystemTool>();
+        services.AddSingleton<ListSystemsTool>();
+        services.AddSingleton<GetSystemTool>();
+        services.AddSingleton<AdvanceRmfStepTool>();
+        services.AddSingleton<DefineBoundaryTool>();
+        services.AddSingleton<ExcludeFromBoundaryTool>();
+        services.AddSingleton<AssignRmfRoleTool>();
+        services.AddSingleton<ListRmfRolesTool>();
+
+        // RMF Categorization tools (Feature 015 - US2)
+        services.AddSingleton<CategorizeSystemTool>();
+        services.AddSingleton<GetCategorizationTool>();
+        services.AddSingleton<SuggestInfoTypesTool>();
+
+        // RMF Baseline tools (Feature 015 - US3)
+        services.AddSingleton<SelectBaselineTool>();
+        services.AddSingleton<TailorBaselineTool>();
+        services.AddSingleton<SetInheritanceTool>();
+        services.AddSingleton<GetBaselineTool>();
+        services.AddSingleton<GenerateCrmTool>();
+
+        // RMF STIG Mapping tools (Feature 015 - US4)
+        services.AddSingleton<ShowStigMappingTool>();
+
+        // SSP Authoring service and tools (Feature 015 - US5)
+        services.AddScoped<ISspService, SspService>();
+        services.AddSingleton<WriteNarrativeTool>();
+        services.AddSingleton<SuggestNarrativeTool>();
+        services.AddSingleton<BatchPopulateNarrativesTool>();
+        services.AddSingleton<NarrativeProgressTool>();
+        services.AddSingleton<GenerateSspTool>();
+
+        // Assessment Artifact service and tools (Feature 015 - US7)
+        services.AddScoped<IAssessmentArtifactService, AssessmentArtifactService>();
+        services.AddSingleton<AssessControlTool>();
+        services.AddSingleton<TakeSnapshotTool>();
+        services.AddSingleton<CompareSnapshotsTool>();
+        services.AddSingleton<VerifyEvidenceTool>();
+        services.AddSingleton<CheckEvidenceCompletenessTool>();
+        services.AddSingleton<GenerateSarTool>();
+
+        // Authorization Decision service and tools (Feature 015 - US8)
+        services.AddScoped<IAuthorizationService, AuthorizationService>();
+        services.AddSingleton<IssueAuthorizationTool>();
+        services.AddSingleton<AcceptRiskTool>();
+        services.AddSingleton<ShowRiskRegisterTool>();
+        services.AddSingleton<CreatePoamTool>();
+        services.AddSingleton<ListPoamTool>();
+        services.AddSingleton<GenerateRarTool>();
+        services.AddSingleton<BundleAuthorizationPackageTool>();
+
+        // ─── US9: Continuous Monitoring tools ────────────────────────────────
+        services.AddScoped<IConMonService, ConMonService>();
+        services.AddSingleton<CreateConMonPlanTool>();
+        services.AddSingleton<GenerateConMonReportTool>();
+        services.AddSingleton<ReportSignificantChangeTool>();
+        services.AddSingleton<TrackAtoExpirationTool>();
+        services.AddSingleton<MultiSystemDashboardTool>();
+        services.AddSingleton<ReauthorizationWorkflowTool>();
+        services.AddSingleton<NotificationDeliveryTool>();
+
+        // ─── US10: eMASS & OSCAL Interoperability tools ──────────────────────
+        services.AddScoped<IEmassExportService, EmassExportService>();
+        services.AddSingleton<ExportEmassTool>();
+        services.AddSingleton<ImportEmassTool>();
+        services.AddSingleton<ExportOscalTool>();
+
+        // ─── US11: Document Templates & PDF Export tools ─────────────────────
+        services.AddSingleton<IDocumentTemplateService, DocumentTemplateService>();
+        services.AddSingleton<UploadTemplateTool>();
+        services.AddSingleton<ListTemplatesTool>();
+        services.AddSingleton<UpdateTemplateTool>();
+        services.AddSingleton<DeleteTemplateTool>();
+
         // Compliance Watch notification & escalation services (US4)
         services.AddSingleton<AlertNotificationService>();
         services.AddSingleton<IAlertNotificationService>(sp => sp.GetRequiredService<AlertNotificationService>());
@@ -245,6 +327,75 @@ public static class ServiceCollectionExtensions
         // NIST Controls knowledge tools as BaseTool (Feature 007)
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<NistControlSearchTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<NistControlExplainerTool>());
+
+        // RMF Registration tools as BaseTool (Feature 015)
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<RegisterSystemTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ListSystemsTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<GetSystemTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<AdvanceRmfStepTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<DefineBoundaryTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ExcludeFromBoundaryTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<AssignRmfRoleTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ListRmfRolesTool>());
+
+        // RMF Categorization tools as BaseTool (Feature 015 - US2)
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<CategorizeSystemTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<GetCategorizationTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<SuggestInfoTypesTool>());
+
+        // RMF Baseline tools as BaseTool (Feature 015 - US3)
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<SelectBaselineTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<TailorBaselineTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<SetInheritanceTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<GetBaselineTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<GenerateCrmTool>());
+
+        // RMF STIG Mapping tools as BaseTool (Feature 015 - US4)
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ShowStigMappingTool>());
+
+        // SSP Authoring tools as BaseTool (Feature 015 - US5)
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WriteNarrativeTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<SuggestNarrativeTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<BatchPopulateNarrativesTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<NarrativeProgressTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<GenerateSspTool>());
+
+        // Assessment Artifact tools as BaseTool (Feature 015 - US7)
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<AssessControlTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<TakeSnapshotTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<CompareSnapshotsTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<VerifyEvidenceTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<CheckEvidenceCompletenessTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<GenerateSarTool>());
+
+        // Authorization Decision tools as BaseTool (Feature 015 - US8)
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<IssueAuthorizationTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<AcceptRiskTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ShowRiskRegisterTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<CreatePoamTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ListPoamTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<GenerateRarTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<BundleAuthorizationPackageTool>());
+
+        // US9: Continuous Monitoring BaseTool wrappers
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<CreateConMonPlanTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<GenerateConMonReportTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ReportSignificantChangeTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<TrackAtoExpirationTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<MultiSystemDashboardTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ReauthorizationWorkflowTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<NotificationDeliveryTool>());
+
+        // US10: eMASS & OSCAL BaseTool wrappers
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ExportEmassTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ImportEmassTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ExportOscalTool>());
+
+        // US11: Document Templates & PDF Export BaseTool wrappers
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<UploadTemplateTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ListTemplatesTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<UpdateTemplateTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<DeleteTemplateTool>());
 
         // Register the agent
         services.AddSingleton<ComplianceAgent>();

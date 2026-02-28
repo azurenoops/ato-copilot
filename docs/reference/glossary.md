@@ -1,0 +1,186 @@
+# Glossary
+
+> Acronyms, abbreviations, and key terms used throughout ATO Copilot.
+
+---
+
+## A
+
+| Term | Definition |
+|------|-----------|
+| **AO** | Authorizing Official — Senior official with authority to formally assume responsibility for operating a system at an acceptable level of risk |
+| **ATO** | Authority to Operate — Formal authorization granted by the AO for a system to operate |
+| **ATOwC** | ATO with Conditions — Authorization that includes specific constraints or compensating controls |
+
+## B
+
+| Term | Definition |
+|------|-----------|
+| **Baseline** | A predefined set of NIST 800-53 controls appropriate for a system's impact level (Low, Moderate, High) |
+
+## C
+
+| Term | Definition |
+|------|-----------|
+| **CAC** | Common Access Card — DoD smart card used for PKI-based authentication |
+| **CAT** | Category (STIG severity) — CAT I (Critical), CAT II (Significant), CAT III (Low) |
+| **CCI** | Control Correlation Identifier — Maps NIST 800-53 controls to STIG rules |
+| **CISO** | Chief Information Security Officer |
+| **CM** | Continuous Monitoring — Ongoing awareness of security posture (NIST SP 800-137) |
+| **CMRS** | Cybersecurity Mitigation and Remediation System |
+| **CNSSI** | Committee on National Security Systems Instruction |
+| **ConMon** | Continuous Monitoring — See CM |
+| **CRM** | Customer Responsibility Matrix — Documents shared/inherited control responsibilities between provider and tenant |
+| **CSP** | Cloud Service Provider |
+| **CUI** | Controlled Unclassified Information — Sensitive but unclassified information requiring safeguarding |
+
+## D
+
+| Term | Definition |
+|------|-----------|
+| **DATO** | Denial of Authorization to Operate — AO determination that a system must not operate |
+| **DISA** | Defense Information Systems Agency |
+| **DITPR** | DoD IT Portfolio Repository |
+
+## E
+
+| Term | Definition |
+|------|-----------|
+| **eMASS** | Enterprise Mission Assurance Support Service — DoD's official RMF workflow and artifact management system |
+
+## F
+
+| Term | Definition |
+|------|-----------|
+| **FedRAMP** | Federal Risk and Authorization Management Program — Standardized approach for security assessment of cloud services |
+| **FIPS** | Federal Information Processing Standards |
+| **FIPS 140-2** | Security standard for cryptographic modules |
+| **FIPS 199** | Standards for Security Categorization of Federal Information and Information Systems |
+| **FOUO** | For Official Use Only (legacy marking, replaced by CUI) |
+
+## G–H
+
+| Term | Definition |
+|------|-----------|
+| **GRC** | Governance, Risk, and Compliance |
+
+## I
+
+| Term | Definition |
+|------|-----------|
+| **IaC** | Infrastructure as Code — Machine-readable configuration files (Terraform, Bicep, ARM templates) |
+| **IATT** | Interim Authority to Test — Temporary authorization for testing purposes |
+| **IL** | Impact Level — DoD classification tier (IL2–IL6) determining security requirements |
+| **ISSM** | Information System Security Manager — Responsible for day-to-day security operations of a system |
+| **ISSO** | Information System Security Officer — Supports the ISSM in managing system security |
+
+## J
+
+| Term | Definition |
+|------|-----------|
+| **JIT** | Just-In-Time — Time-limited privilege elevation requiring explicit activation and approval |
+
+## K–L
+
+| Term | Definition |
+|------|-----------|
+
+## M
+
+| Term | Definition |
+|------|-----------|
+| **MCP** | Model Context Protocol — Protocol used by ATO Copilot to expose tools and prompts to AI assistants |
+
+## N
+
+| Term | Definition |
+|------|-----------|
+| **NIST** | National Institute of Standards and Technology |
+| **NIST 800-37** | Risk Management Framework for Information Systems and Organizations (Rev. 2) |
+| **NIST 800-53** | Security and Privacy Controls for Information Systems and Organizations (Rev. 5) |
+| **NIST 800-60** | Guide for Mapping Types of Information and Information Systems to Security Categories |
+| **NIST 800-137** | Information Security Continuous Monitoring for Federal Information Systems |
+| **NSS** | National Security System |
+
+## O
+
+| Term | Definition |
+|------|-----------|
+| **ODP** | Organization-Defined Parameter — Customizable values within NIST 800-53 controls |
+
+## P
+
+| Term | Definition |
+|------|-----------|
+| **PIM** | Privileged Identity Management — Azure AD feature for JIT role elevation |
+| **PIV** | Personal Identity Verification — Federal smart card standard (FIPS 201) |
+| **POA&M** | Plan of Action and Milestones — Document identifying tasks to correct security weaknesses |
+
+## Q–R
+
+| Term | Definition |
+|------|-----------|
+| **RAR** | Risk Assessment Report — Documents risks identified during security assessment |
+| **RBAC** | Role-Based Access Control — Authorization model based on assigned roles |
+| **RMF** | Risk Management Framework — NIST framework for managing security risk (SP 800-37) |
+
+## S
+
+| Term | Definition |
+|------|-----------|
+| **SAR** | Security Assessment Report — Documents assessment results and findings |
+| **SCA** | Security Control Assessor — Person who assesses the effectiveness of security controls |
+| **SCAP** | Security Content Automation Protocol — Standard for automated vulnerability management |
+| **SCIF** | Sensitive Compartmented Information Facility |
+| **SRG** | Security Requirements Guide — DISA document specifying security requirements for a technology area |
+| **SSP** | System Security Plan — Formal document describing how security controls are implemented |
+| **STIG** | Security Technical Implementation Guide — DISA configuration standard for IT products |
+
+## T
+
+| Term | Definition |
+|------|-----------|
+| **TLS** | Transport Layer Security — Cryptographic protocol for secure communications |
+
+## U–V
+
+| Term | Definition |
+|------|-----------|
+
+## W
+
+| Term | Definition |
+|------|-----------|
+
+## X
+
+| Term | Definition |
+|------|-----------|
+| **XCCDF** | Extensible Configuration Checklist Description Format — SCAP specification for security checklists |
+
+## Y–Z
+
+| Term | Definition |
+|------|-----------|
+
+---
+
+## ATO Copilot-Specific Terms
+
+| Term | Definition |
+|------|-----------|
+| **Adaptive Card** | Microsoft Teams card format (v1.5) used to render structured compliance data |
+| **Agent** | AI-powered compliance assistant implementing `BaseAgent` for domain-specific reasoning |
+| **BaseTool** | Abstract base class for all MCP tools; provides parameter validation, authorization, and execution framework |
+| **Compliance Gate** | CI/CD action that blocks deployments when CAT I/II STIG findings or unmitigated risks exist |
+| **Control Effectiveness** | Assessment record tracking whether a control is Satisfied, Other Than Satisfied, or Not Applicable |
+| **Control Inheritance** | Mechanism where a system inherits controls from an underlying provider (e.g., cloud platform) |
+| **Control Tailoring** | Process of customizing a baseline by scoping, compensating, or adding controls |
+| **Gate Condition** | Prerequisite that must be met before an RMF phase transition can occur |
+| **High-Water Mark** | FIPS 199 method of determining system impact level from the highest CIA impact among all information types |
+| **MCP Bridge** | HTTP-to-MCP translation layer (`McpHttpBridge`) connecting REST clients to the MCP server |
+| **Persona** | RBAC role representing a compliance stakeholder (ISSM, SCA, Engineer, AO, etc.) |
+| **Registered System** | An information system registered in ATO Copilot for RMF lifecycle management |
+| **Risk Acceptance** | Formal AO decision to accept residual risk for a specific control finding |
+| **RMF Step** | One of seven lifecycle phases: Prepare, Categorize, Select, Implement, Assess, Authorize, Monitor |
+| **Significant Change** | An event that may require system reauthorization per NIST SP 800-37 |

@@ -209,7 +209,7 @@ public class SystemPromptEnhancementTests
         return new ComplianceAgent(
             new ComplianceAssessmentTool(e, sf, Mock.Of<ILogger<ComplianceAssessmentTool>>()),
             new ControlFamilyTool(n, Mock.Of<ILogger<ControlFamilyTool>>()),
-            new DocumentGenerationTool(d, sf, Mock.Of<ILogger<DocumentGenerationTool>>()),
+            new DocumentGenerationTool(d, Mock.Of<IDocumentTemplateService>(), sf, Mock.Of<ILogger<DocumentGenerationTool>>()),
             new EvidenceCollectionTool(ev, Mock.Of<ILogger<EvidenceCollectionTool>>()),
             new RemediationExecuteTool(r, Mock.Of<ILogger<RemediationExecuteTool>>()),
             new ValidateRemediationTool(r, Mock.Of<ILogger<ValidateRemediationTool>>()),

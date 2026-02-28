@@ -13,6 +13,9 @@ public static class ComplianceRoles
 
     /// <summary>Default fallback role for CAC-authenticated users with no explicit mapping (FR-028).</summary>
     public const string PlatformEngineer = "Compliance.PlatformEngineer";
+
+    /// <summary>Authorizing Official — issues ATO/ATOwC/IATT/DATO decisions per DoDI 8510.01.</summary>
+    public const string AuthorizingOfficial = "Compliance.AuthorizingOfficial";
 }
 
 /// <summary>

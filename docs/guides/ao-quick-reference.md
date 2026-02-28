@@ -1,0 +1,188 @@
+# Authorizing Official (AO) Quick Reference
+
+> Feature 015: Persona-Driven RMF Workflows — US8
+
+This guide covers the Authorizing Official's tools for issuing authorization decisions, accepting risk, and reviewing the risk register.
+
+---
+
+## Prerequisites
+
+- ATO Copilot MCP server access
+- `Compliance.AuthorizingOfficial` role assigned to the system
+- Assessment completed (SAR generated, POA&M items created)
+
+---
+
+## Authorization Decision Types
+
+| Type | Description | Expiration Required |
+|------|-------------|---------------------|
+| **ATO** | Authority to Operate — full authorization | Yes |
+| **ATOwC** | ATO with Conditions — authorization with stipulations | Yes |
+| **IATT** | Interim Authority to Test — limited testing authorization | Yes |
+| **DATO** | Denial of Authorization to Operate | No |
+
+---
+
+## Issue an Authorization Decision
+
+Tool: `compliance_issue_authorization`
+
+### Basic ATO
+
+```json
+{
+  "system_id": "<system-guid>",
+  "decision_type": "ATO",
+  "expiration_date": "2028-01-15",
+  "residual_risk_level": "Low",
+  "residual_risk_justification": "All CAT I findings remediated, 2 CAT III accepted"
+}
+```
+
+### ATO with Conditions
+
+```json
+{
+  "system_id": "<system-guid>",
+  "decision_type": "AtoWithConditions",
+  "expiration_date": "2026-06-30",
+  "residual_risk_level": "Medium",
+  "residual_risk_justification": "CAT II findings under remediation per POA&M",
+  "terms_and_conditions": "MFA enforcement must be completed within 90 days. Quarterly POA&M reviews required."
+}
+```
+
+### ATO with Inline Risk Acceptances
+
+Accept risk on specific findings as part of the authorization decision:
+
+```json
+{
+  "system_id": "<system-guid>",
+  "decision_type": "ATO",
+  "expiration_date": "2028-01-15",
+  "residual_risk_level": "Low",
+  "risk_acceptances": "[{\"finding_id\":\"<finding-guid>\",\"control_id\":\"CM-6\",\"cat_severity\":\"CatIII\",\"justification\":\"Configuration deviation documented and approved\",\"compensating_control\":\"Continuous monitoring alerts configured\",\"expiration_date\":\"2026-01-15\"}]"
+}
+```
+
+### Deny Authorization (DATO)
+
+```json
+{
+  "system_id": "<system-guid>",
+  "decision_type": "DATO",
+  "residual_risk_level": "Critical",
+  "residual_risk_justification": "3 unmitigated CAT I findings with no remediation plan"
+}
+```
+
+### Key Behaviors
+
+- **Supersedes prior decisions**: Any existing active authorization is deactivated
+- **Compliance score**: Calculated automatically from control effectiveness records at decision time
+- **RMF advancement**: System moves to the **Monitor** phase after authorization
+- **Findings captured**: Open findings at decision time are recorded in the decision record
+
+---
+
+## Accept Risk on a Finding
+
+Tool: `compliance_accept_risk`
+
+Accept risk on a specific finding after an authorization decision has been issued:
+
+```json
+{
+  "system_id": "<system-guid>",
+  "finding_id": "<finding-guid>",
+  "control_id": "AC-2",
+  "cat_severity": "CatII",
+  "justification": "Network segmentation provides equivalent protection",
+  "compensating_control": "Azure NSG rules restrict lateral movement",
+  "expiration_date": "2025-12-31"
+}
+```
+
+### Requirements
+
+- An **active** authorization decision must exist for the system
+- The finding must exist in the database
+- The expiration date determines when the risk acceptance auto-expires
+
+---
+
+## View Risk Register
+
+Tool: `compliance_show_risk_register`
+
+### Active Acceptances Only (default)
+
+```json
+{
+  "system_id": "<system-guid>"
+}
+```
+
+### All Acceptances (including expired and revoked)
+
+```json
+{
+  "system_id": "<system-guid>",
+  "status_filter": "all"
+}
+```
+
+### Filter Options
+
+| Filter | Shows |
+|--------|-------|
+| `active` | Currently active risk acceptances (default) |
+| `expired` | Past expiration date — automatically marked |
+| `revoked` | Manually revoked acceptances |
+| `all` | All acceptances regardless of status |
+
+**Note:** Past-due risk acceptances are automatically expired when querying the register.
+
+---
+
+## AO Workflow Summary
+
+```
+1. Review SAR and RAR prepared by ISSM/SCA
+2. Review POA&M items and remediation timelines
+3. Review authorization package (bundle)
+4. Make authorization decision:
+   a. ATO — if risk is acceptable
+   b. ATOwC — if conditional approval is appropriate
+   c. IATT — for limited testing authorization
+   d. DATO — if risk is unacceptable
+5. Accept risk on specific findings as needed
+6. Monitor risk register for expiring acceptances
+```
+
+---
+
+## RBAC Summary
+
+| Action | Required Role |
+|--------|---------------|
+| Issue authorization decision | `Compliance.AuthorizingOfficial` (exclusive) |
+| Accept risk | `Compliance.AuthorizingOfficial` (exclusive) |
+| View risk register | All compliance roles |
+| View POA&M items | All compliance roles |
+| View RAR/SAR | All compliance roles |
+
+---
+
+## Error Scenarios
+
+| Error | Cause | Resolution |
+|-------|-------|------------|
+| `System not found` | Invalid system_id | Verify system is registered |
+| `No active authorization` | Risk acceptance without prior ATO | Issue authorization decision first |
+| `Invalid decision_type` | Unrecognized type string | Use: `ATO`, `AtoWithConditions`, `IATT`, `DATO` |
+| `Invalid residual_risk_level` | Unrecognized level | Use: `Low`, `Medium`, `High`, `Critical` |
+| `Finding not found` | Invalid finding_id for risk acceptance | Verify finding exists |

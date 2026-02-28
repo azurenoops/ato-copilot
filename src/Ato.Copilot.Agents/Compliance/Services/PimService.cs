@@ -2,6 +2,8 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Graph;
+using Microsoft.Graph.Models;
 using Ato.Copilot.Core.Configuration;
 using Ato.Copilot.Core.Constants;
 using Ato.Copilot.Core.Data.Context;
@@ -24,6 +26,7 @@ public class PimService : IPimService
     private readonly PimServiceOptions _options;
     private readonly ILogger<PimService> _logger;
     private readonly INotificationService? _notificationService;
+    private readonly GraphServiceClient? _graphClient;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PimService"/> class.
@@ -32,12 +35,14 @@ public class PimService : IPimService
         IDbContextFactory<AtoCopilotContext> dbFactory,
         IOptions<PimServiceOptions> options,
         ILogger<PimService> logger,
-        INotificationService? notificationService = null)
+        INotificationService? notificationService = null,
+        GraphServiceClient? graphClient = null)
     {
         _dbFactory = dbFactory;
         _options = options.Value;
         _logger = logger;
         _notificationService = notificationService;
+        _graphClient = graphClient;
     }
 
     /// <inheritdoc />
@@ -67,37 +72,9 @@ public class PimService : IPimService
             .Select(r => $"{r.RoleName}|{r.Scope}")
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        // Simulated eligible roles — in production replaced by Graph API call
-        var eligibleRoles = new List<PimEligibleRole>
-        {
-            new()
-            {
-                RoleName = "Contributor",
-                RoleDefinitionId = "b24988ac-6180-42a0-ab88-20f7382dd24c",
-                Scope = "/subscriptions/default",
-                ScopeDisplayName = "Default Subscription",
-                MaxDuration = $"PT{_options.MaxActivationDurationHours}H",
-                RequiresApproval = false
-            },
-            new()
-            {
-                RoleName = "Reader",
-                RoleDefinitionId = "acdd72a7-3385-48ef-bd42-f606fba81ae7",
-                Scope = "/subscriptions/default",
-                ScopeDisplayName = "Default Subscription",
-                MaxDuration = $"PT{_options.MaxActivationDurationHours}H",
-                RequiresApproval = false
-            },
-            new()
-            {
-                RoleName = "Owner",
-                RoleDefinitionId = "8e3af657-a8ff-443c-a75c-2fe8c4bcb635",
-                Scope = "/subscriptions/default",
-                ScopeDisplayName = "Default Subscription",
-                MaxDuration = $"PT{_options.MaxActivationDurationHours}H",
-                RequiresApproval = true
-            }
-        };
+        // Query Graph PIM API for eligible role assignments; fall back to simulated data
+        var eligibleRoles = await GetEligibleRolesFromGraphAsync(userId, cancellationToken)
+            ?? GetSimulatedEligibleRoles();
 
         // Mark active status
         foreach (var role in eligibleRoles)
@@ -647,6 +624,96 @@ public class PimService : IPimService
             Message = $"Denied {request.RoleName} activation for {request.UserDisplayName}. Requester has been notified with denial reason."
         };
     }
+
+    // ─── Graph PIM API integration ──────────────────────────────────────────
+
+    /// <summary>
+    /// Queries the Microsoft Graph PIM API for eligible role assignments.
+    /// Returns null when no Graph client is configured (falls back to simulated data).
+    /// Uses roleEligibilityScheduleInstances for directory roles per:
+    ///   GET https://graph.microsoft.us/v1.0/roleManagement/directory/roleEligibilityScheduleInstances
+    /// </summary>
+    private async Task<List<PimEligibleRole>?> GetEligibleRolesFromGraphAsync(
+        string userId, CancellationToken cancellationToken)
+    {
+        if (_graphClient is null)
+        {
+            _logger.LogDebug("No Graph client configured — using simulated PIM eligible roles");
+            return null;
+        }
+
+        try
+        {
+            _logger.LogInformation("Querying Graph PIM API for eligible roles: user={UserId}", userId);
+
+            var scheduleInstances = await _graphClient.RoleManagement.Directory
+                .RoleEligibilityScheduleInstances
+                .GetAsync(r =>
+                {
+                    r.QueryParameters.Filter = $"principalId eq '{userId}'";
+                    r.QueryParameters.Expand = ["roleDefinition"];
+                }, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (scheduleInstances?.Value is null || scheduleInstances.Value.Count == 0)
+            {
+                _logger.LogInformation("No eligible PIM roles found via Graph API for user {UserId}", userId);
+                return [];
+            }
+
+            var roles = scheduleInstances.Value.Select(instance => new PimEligibleRole
+            {
+                RoleName = instance.RoleDefinition?.DisplayName ?? "Unknown",
+                RoleDefinitionId = instance.RoleDefinitionId ?? string.Empty,
+                Scope = instance.DirectoryScopeId ?? "/",
+                ScopeDisplayName = instance.DirectoryScopeId ?? "Directory",
+                MaxDuration = $"PT{_options.MaxActivationDurationHours}H",
+                RequiresApproval = IsHighPrivilegeRole(instance.RoleDefinition?.DisplayName ?? ""),
+            }).ToList();
+
+            _logger.LogInformation("Graph PIM API returned {Count} eligible roles for user {UserId}", roles.Count, userId);
+            return roles;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Graph PIM API call failed for user {UserId} — falling back to simulated roles", userId);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Returns simulated eligible roles for development/testing when Graph API is unavailable.
+    /// </summary>
+    private List<PimEligibleRole> GetSimulatedEligibleRoles() =>
+    [
+        new()
+        {
+            RoleName = "Contributor",
+            RoleDefinitionId = "b24988ac-6180-42a0-ab88-20f7382dd24c",
+            Scope = "/subscriptions/default",
+            ScopeDisplayName = "Default Subscription",
+            MaxDuration = $"PT{_options.MaxActivationDurationHours}H",
+            RequiresApproval = false
+        },
+        new()
+        {
+            RoleName = "Reader",
+            RoleDefinitionId = "acdd72a7-3385-48ef-bd42-f606fba81ae7",
+            Scope = "/subscriptions/default",
+            ScopeDisplayName = "Default Subscription",
+            MaxDuration = $"PT{_options.MaxActivationDurationHours}H",
+            RequiresApproval = false
+        },
+        new()
+        {
+            RoleName = "Owner",
+            RoleDefinitionId = "8e3af657-a8ff-443c-a75c-2fe8c4bcb635",
+            Scope = "/subscriptions/default",
+            ScopeDisplayName = "Default Subscription",
+            MaxDuration = $"PT{_options.MaxActivationDurationHours}H",
+            RequiresApproval = true
+        }
+    ];
 
     /// <inheritdoc />
     public bool IsHighPrivilegeRole(string roleName) =>

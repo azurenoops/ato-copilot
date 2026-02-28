@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Ato.Copilot.Core.Interfaces.Compliance;
 using Ato.Copilot.Core.Models.Compliance;
@@ -83,15 +84,21 @@ public class RemediationScriptExecutor : IRemediationScriptExecutor
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 cts.CancelAfter(ScriptTimeout);
 
-                // Simulated script execution — in production, delegate to az CLI / PowerShell subprocess
-                await Task.Delay(100, cts.Token);
+                // Execute script via subprocess (az CLI / PowerShell / bash)
+                var (exitCode, stdout, stderr) = await RunSubprocessAsync(script, cts.Token);
+
+                if (exitCode != 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Script exited with code {exitCode}: {stderr}");
+                }
 
                 execution.Status = RemediationExecutionStatus.Completed;
                 execution.StepsExecuted = 1;
-                execution.ChangesApplied = new List<string>
-                {
-                    $"Executed {script.ScriptType} script: {script.Description}"
-                };
+                execution.ChangesApplied = string.IsNullOrWhiteSpace(stdout)
+                    ? [$"Executed {script.ScriptType} script: {script.Description}"]
+                    : [$"Executed {script.ScriptType} script: {script.Description}",
+                       $"Output: {stdout[..Math.Min(stdout.Length, 2000)]}"];
                 execution.CompletedAt = DateTime.UtcNow;
                 execution.Duration = execution.CompletedAt - execution.StartedAt;
 
@@ -136,4 +143,59 @@ public class RemediationScriptExecutor : IRemediationScriptExecutor
 
         return execution;
     }
+
+    /// <summary>
+    /// Runs a remediation script as a subprocess using the appropriate shell
+    /// based on <see cref="RemediationScript.ScriptType"/>. Captures stdout and stderr.
+    /// Virtual to allow test overrides without actual subprocess execution.
+    /// </summary>
+    protected virtual async Task<(int ExitCode, string Stdout, string Stderr)> RunSubprocessAsync(
+        RemediationScript script, CancellationToken ct)
+    {
+        var (fileName, arguments) = script.ScriptType switch
+        {
+            ScriptType.PowerShell =>
+                ("pwsh", $"-NoProfile -NonInteractive -Command \"{EscapeShellArg(script.Content)}\""),
+            ScriptType.AzureCli =>
+                ("bash", $"-c \"{EscapeShellArg(script.Content)}\""),
+            ScriptType.Bicep or ScriptType.Terraform =>
+                ("bash", $"-c \"{EscapeShellArg(script.Content)}\""),
+            _ => ("bash", $"-c \"{EscapeShellArg(script.Content)}\"")
+        };
+
+        _logger.LogDebug("Launching subprocess: {FileName} for script type {ScriptType}",
+            fileName, script.ScriptType);
+
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            },
+            EnableRaisingEvents = true,
+        };
+
+        var stdoutBuilder = new System.Text.StringBuilder();
+        var stderrBuilder = new System.Text.StringBuilder();
+
+        process.OutputDataReceived += (_, e) => { if (e.Data is not null) stdoutBuilder.AppendLine(e.Data); };
+        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderrBuilder.AppendLine(e.Data); };
+
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        await process.WaitForExitAsync(ct).ConfigureAwait(false);
+
+        return (process.ExitCode, stdoutBuilder.ToString().Trim(), stderrBuilder.ToString().Trim());
+    }
+
+    /// <summary>Escapes double-quotes inside a shell argument string.</summary>
+    private static string EscapeShellArg(string content) =>
+        content.Replace("\\", "\\\\").Replace("\"", "\\\"");
 }

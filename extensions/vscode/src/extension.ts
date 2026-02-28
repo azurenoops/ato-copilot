@@ -3,6 +3,8 @@ import { McpClient } from "./services/mcpClient";
 import { createParticipantHandler } from "./participant";
 import { checkHealth } from "./commands/health";
 import { configure } from "./commands/configure";
+import { IacDiagnosticsProvider } from "./diagnostics/iacDiagnosticsProvider";
+import { IacCodeActionProvider } from "./codeActions/iacCodeActionProvider";
 
 let outputChannel: vscode.OutputChannel;
 
@@ -89,6 +91,25 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Silent background health check on activation (FR-034)
   checkHealth(mcpClient, true);
+
+  // IaC compliance diagnostics — inline squiggly underlines for findings (US6)
+  const iacDiagnostics = new IacDiagnosticsProvider(mcpClient);
+  context.subscriptions.push(iacDiagnostics);
+
+  // Quick Fix code actions for auto-remediable IaC findings (US6)
+  const iacCodeActions = new IacCodeActionProvider();
+  const iacSelector: vscode.DocumentSelector = [
+    { language: "bicep" },
+    { language: "terraform" },
+    { language: "hcl" },
+    { language: "json", pattern: "**/*.json" },
+    { language: "jsonc", pattern: "**/*.json" },
+  ];
+  context.subscriptions.push(
+    vscode.languages.registerCodeActionsProvider(iacSelector, iacCodeActions, {
+      providedCodeActionKinds: IacCodeActionProvider.providedCodeActionKinds,
+    })
+  );
 
   outputChannel.appendLine("ATO Copilot extension activated");
 }

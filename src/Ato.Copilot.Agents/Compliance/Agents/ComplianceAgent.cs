@@ -22,6 +22,12 @@ namespace Ato.Copilot.Agents.Compliance.Agents;
 /// </summary>
 public class ComplianceAgent : BaseAgent
 {
+    // ─── RMF Step-Aware Routing (US12) ──────────────────────────────────────
+    // AsyncLocal because the agent is a singleton — concurrent callers each
+    // get their own copy of the current step for GetSystemPrompt().
+    private static readonly AsyncLocal<RmfPhase?> _activeRmfStep = new();
+    private static readonly AsyncLocal<string?> _activeSystemName = new();
+
     private readonly ComplianceAssessmentTool _assessmentTool;
     private readonly ControlFamilyTool _controlFamilyTool;
     private readonly DocumentGenerationTool _documentGenerationTool;
@@ -456,7 +462,16 @@ public class ComplianceAgent : BaseAgent
         }
 
         using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
+        var basePrompt = reader.ReadToEnd();
+
+        // ── US12: Append dynamic RMF step context when a system is active ────
+        var activeStep = _activeRmfStep.Value;
+        if (activeStep.HasValue)
+        {
+            basePrompt += GetRmfStepContextSupplement(activeStep.Value, _activeSystemName.Value);
+        }
+
+        return basePrompt;
     }
 
     /// <summary>
@@ -475,6 +490,9 @@ public class ComplianceAgent : BaseAgent
         try
         {
             progress?.Report("Checking authorization...");
+
+            // ── US12: Resolve current system's RMF step for prompt routing ──
+            await ResolveRmfStepContextAsync(context, cancellationToken);
 
             // ── Auth-gate: check PIM eligibility for Tier 2 operations (FR-019) ──
             var authGateResult = await CheckAuthGateAsync(message, context, cancellationToken);
@@ -1457,6 +1475,176 @@ public class ComplianceAgent : BaseAgent
         if (message.Contains("poam", StringComparison.OrdinalIgnoreCase) || message.Contains("poa&m", StringComparison.OrdinalIgnoreCase)) return "poam";
         if (message.Contains("sar", StringComparison.OrdinalIgnoreCase)) return "sar";
         return "ssp";
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // US12 — RMF Step-Aware Routing
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Looks up the current system's RMF step from the conversation context and
+    /// stores it in <see cref="_activeRmfStep"/> for <see cref="GetSystemPrompt"/>.
+    /// Falls back gracefully if no system_id is present.
+    /// </summary>
+    private async Task ResolveRmfStepContextAsync(
+        AgentConversationContext context,
+        CancellationToken cancellationToken)
+    {
+        var systemId = GetContextValue(context, "system_id");
+        if (string.IsNullOrEmpty(systemId))
+        {
+            _activeRmfStep.Value = null;
+            _activeSystemName.Value = null;
+            return;
+        }
+
+        try
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+            var system = await db.RegisteredSystems
+                .AsNoTracking()
+                .Where(s => s.Id == systemId && s.IsActive)
+                .Select(s => new { s.CurrentRmfStep, s.Name })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (system != null)
+            {
+                _activeRmfStep.Value = system.CurrentRmfStep;
+                _activeSystemName.Value = system.Name;
+                Logger.LogDebug(
+                    "RMF step routing: System {SystemId} ({SystemName}) is at {RmfStep}",
+                    systemId, system.Name, system.CurrentRmfStep);
+            }
+            else
+            {
+                _activeRmfStep.Value = null;
+                _activeSystemName.Value = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to resolve RMF step for system {SystemId}", systemId);
+            _activeRmfStep.Value = null;
+            _activeSystemName.Value = null;
+        }
+    }
+
+    /// <summary>
+    /// Returns a dynamic prompt supplement that tells the LLM which RMF step the
+    /// active system is on, which tools are most relevant, and what the next step is.
+    /// Appended to the base system prompt by <see cref="GetSystemPrompt"/>.
+    /// </summary>
+    internal static string GetRmfStepContextSupplement(RmfPhase step, string? systemName)
+    {
+        var systemLabel = string.IsNullOrEmpty(systemName) ? "The active system" : $"System \"{systemName}\"";
+        var stepDisplay = Core.Constants.ComplianceFrameworks.GetStepDisplayName(step);
+
+        var supplement = $"\n\n## ⚡ Active System Context\n{systemLabel} is currently at **{stepDisplay}**.\n";
+
+        supplement += step switch
+        {
+            RmfPhase.Prepare =>
+                "**Prioritize**: `compliance_register_system`, `compliance_define_boundary`, " +
+                "`compliance_assign_rmf_role`, `compliance_list_rmf_roles`.\n" +
+                "**Suggest next**: Categorize → `compliance_categorize_system`.\n",
+
+            RmfPhase.Categorize =>
+                "**Prioritize**: `compliance_categorize_system`, `compliance_get_categorization`, " +
+                "`compliance_suggest_info_types`.\n" +
+                "**Suggest next**: Select baseline → `compliance_select_baseline`.\n",
+
+            RmfPhase.Select =>
+                "**Prioritize**: `compliance_select_baseline`, `compliance_tailor_baseline`, " +
+                "`compliance_set_inheritance`, `compliance_get_baseline`, `compliance_generate_crm`.\n" +
+                "**Suggest next**: Implement controls → `compliance_write_narrative`.\n",
+
+            RmfPhase.Implement =>
+                "**Prioritize**: `compliance_write_narrative`, `compliance_suggest_narrative`, " +
+                "`compliance_batch_populate_narratives`, `compliance_narrative_progress`, " +
+                "`compliance_generate_ssp`, `compliance_remediate`.\n" +
+                "**Suggest next**: Assess controls → `compliance_assess_control`.\n",
+
+            RmfPhase.Assess =>
+                "**Prioritize**: `compliance_assess_control`, `compliance_take_snapshot`, " +
+                "`compliance_compare_snapshots`, `compliance_verify_evidence`, " +
+                "`compliance_generate_sar`, `compliance_collect_evidence`.\n" +
+                "**Suggest next**: Build authorization package → `compliance_bundle_authorization_package`.\n",
+
+            RmfPhase.Authorize =>
+                "**Prioritize**: `compliance_issue_authorization`, `compliance_accept_risk`, " +
+                "`compliance_show_risk_register`, `compliance_create_poam`, `compliance_generate_rar`, " +
+                "`compliance_bundle_authorization_package`.\n" +
+                "**Suggest next**: Set up monitoring → `compliance_create_conmon_plan`.\n",
+
+            RmfPhase.Monitor =>
+                "**Prioritize**: `compliance_create_conmon_plan`, `compliance_generate_conmon_report`, " +
+                "`compliance_track_ato_expiration`, `compliance_multi_system_dashboard`, " +
+                "`compliance_export_emass`, `compliance_export_oscal`, `watch_enable_monitoring`.\n" +
+                "**Suggest next**: Check `compliance_track_ato_expiration` for reauthorization timeline.\n",
+
+            _ => ""
+        };
+
+        supplement += "Always accept cross-step requests — the step context is advisory, not restrictive.\n";
+        return supplement;
+    }
+
+    /// <summary>
+    /// Maps each RMF phase to its prioritized set of tool names.
+    /// Used by deterministic routing and test validation.
+    /// </summary>
+    internal static IReadOnlyList<string> GetPrioritizedToolsForStep(RmfPhase step)
+    {
+        return step switch
+        {
+            RmfPhase.Prepare => new[]
+            {
+                "compliance_register_system", "compliance_list_systems", "compliance_get_system",
+                "compliance_define_boundary", "compliance_exclude_from_boundary",
+                "compliance_assign_rmf_role", "compliance_list_rmf_roles"
+            },
+            RmfPhase.Categorize => new[]
+            {
+                "compliance_categorize_system", "compliance_get_categorization",
+                "compliance_suggest_info_types"
+            },
+            RmfPhase.Select => new[]
+            {
+                "compliance_select_baseline", "compliance_tailor_baseline",
+                "compliance_set_inheritance", "compliance_get_baseline",
+                "compliance_generate_crm", "compliance_show_stig_mapping"
+            },
+            RmfPhase.Implement => new[]
+            {
+                "compliance_write_narrative", "compliance_suggest_narrative",
+                "compliance_batch_populate_narratives", "compliance_narrative_progress",
+                "compliance_generate_ssp", "compliance_generate_document",
+                "compliance_remediate", "compliance_generate_plan"
+            },
+            RmfPhase.Assess => new[]
+            {
+                "compliance_assess_control", "compliance_take_snapshot",
+                "compliance_compare_snapshots", "compliance_verify_evidence",
+                "compliance_check_evidence_completeness", "compliance_generate_sar",
+                "compliance_assess", "compliance_collect_evidence"
+            },
+            RmfPhase.Authorize => new[]
+            {
+                "compliance_issue_authorization", "compliance_accept_risk",
+                "compliance_show_risk_register", "compliance_create_poam", "compliance_list_poam",
+                "compliance_generate_rar", "compliance_bundle_authorization_package",
+                "compliance_upload_template", "compliance_generate_document"
+            },
+            RmfPhase.Monitor => new[]
+            {
+                "compliance_create_conmon_plan", "compliance_generate_conmon_report",
+                "compliance_report_significant_change", "compliance_track_ato_expiration",
+                "compliance_multi_system_dashboard", "compliance_reauthorization_workflow",
+                "compliance_send_notification", "compliance_export_emass", "compliance_export_oscal",
+                "watch_enable_monitoring", "watch_show_alerts", "watch_compliance_trend"
+            },
+            _ => Array.Empty<string>()
+        };
     }
 
     /// <summary>

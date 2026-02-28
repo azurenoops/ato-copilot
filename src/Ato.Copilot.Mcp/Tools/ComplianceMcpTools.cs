@@ -118,6 +118,75 @@ public class ComplianceMcpTools
     // IaC Compliance Scan tool (Feature 014)
     private readonly IacComplianceScanTool _iacComplianceScanTool;
 
+    // RMF Registration tools (Feature 015)
+    private readonly RegisterSystemTool _registerSystemTool;
+    private readonly ListSystemsTool _listSystemsTool;
+    private readonly GetSystemTool _getSystemTool;
+    private readonly AdvanceRmfStepTool _advanceRmfStepTool;
+    private readonly DefineBoundaryTool _defineBoundaryTool;
+    private readonly ExcludeFromBoundaryTool _excludeFromBoundaryTool;
+    private readonly AssignRmfRoleTool _assignRmfRoleTool;
+    private readonly ListRmfRolesTool _listRmfRolesTool;
+
+    // RMF Categorization tools (Feature 015 - US2)
+    private readonly CategorizeSystemTool _categorizeSystemTool;
+    private readonly GetCategorizationTool _getCategorizationTool;
+    private readonly SuggestInfoTypesTool _suggestInfoTypesTool;
+
+    // RMF Baseline tools (Feature 015 - US3)
+    private readonly SelectBaselineTool _selectBaselineTool;
+    private readonly TailorBaselineTool _tailorBaselineTool;
+    private readonly SetInheritanceTool _setInheritanceTool;
+    private readonly GetBaselineTool _getBaselineTool;
+    private readonly GenerateCrmTool _generateCrmTool;
+
+    // RMF STIG Mapping tools (Feature 015 - US4)
+    private readonly ShowStigMappingTool _showStigMappingTool;
+
+    // SSP Authoring tools (Feature 015 - US5)
+    private readonly WriteNarrativeTool _writeNarrativeTool;
+    private readonly SuggestNarrativeTool _suggestNarrativeTool;
+    private readonly BatchPopulateNarrativesTool _batchPopulateNarrativesTool;
+    private readonly NarrativeProgressTool _narrativeProgressTool;
+    private readonly GenerateSspTool _generateSspTool;
+
+    // Assessment Artifact tools (Feature 015 - US7)
+    private readonly AssessControlTool _assessControlTool;
+    private readonly TakeSnapshotTool _takeSnapshotTool;
+    private readonly CompareSnapshotsTool _compareSnapshotsTool;
+    private readonly VerifyEvidenceTool _verifyEvidenceTool;
+    private readonly CheckEvidenceCompletenessTool _checkEvidenceCompletenessTool;
+    private readonly GenerateSarTool _generateSarTool;
+
+    // Authorization Decision tools (Feature 015 - US8)
+    private readonly IssueAuthorizationTool _issueAuthorizationTool;
+    private readonly AcceptRiskTool _acceptRiskTool;
+    private readonly ShowRiskRegisterTool _showRiskRegisterTool;
+    private readonly CreatePoamTool _createPoamTool;
+    private readonly ListPoamTool _listPoamTool;
+    private readonly GenerateRarTool _generateRarTool;
+    private readonly BundleAuthorizationPackageTool _bundleAuthorizationPackageTool;
+
+    // ─── US9: Continuous Monitoring tools ──────────────────────────────────
+    private readonly CreateConMonPlanTool _createConMonPlanTool;
+    private readonly GenerateConMonReportTool _generateConMonReportTool;
+    private readonly ReportSignificantChangeTool _reportSignificantChangeTool;
+    private readonly TrackAtoExpirationTool _trackAtoExpirationTool;
+    private readonly MultiSystemDashboardTool _multiSystemDashboardTool;
+    private readonly ReauthorizationWorkflowTool _reauthorizationWorkflowTool;
+    private readonly NotificationDeliveryTool _notificationDeliveryTool;
+
+    // ─── US10: eMASS & OSCAL tools ─────────────────────────────────────────
+    private readonly ExportEmassTool _exportEmassTool;
+    private readonly ImportEmassTool _importEmassTool;
+    private readonly ExportOscalTool _exportOscalTool;
+
+    // ─── US11: Document Templates & PDF Export tools ───────────────────────
+    private readonly UploadTemplateTool _uploadTemplateTool;
+    private readonly ListTemplatesTool _listTemplatesTool;
+    private readonly UpdateTemplateTool _updateTemplateTool;
+    private readonly DeleteTemplateTool _deleteTemplateTool;
+
     public ComplianceMcpTools(
         ComplianceAssessmentTool assessmentTool,
         ControlFamilyTool controlFamilyTool,
@@ -190,7 +259,59 @@ public class ComplianceMcpTools
         WatchListAutoRemediationRulesTool watchListAutoRemediationRules,
         NistControlSearchTool nistControlSearchTool,
         NistControlExplainerTool nistControlExplainerTool,
-        IacComplianceScanTool iacComplianceScanTool)
+        IacComplianceScanTool iacComplianceScanTool,
+        RegisterSystemTool registerSystemTool,
+        ListSystemsTool listSystemsTool,
+        GetSystemTool getSystemTool,
+        AdvanceRmfStepTool advanceRmfStepTool,
+        DefineBoundaryTool defineBoundaryTool,
+        ExcludeFromBoundaryTool excludeFromBoundaryTool,
+        AssignRmfRoleTool assignRmfRoleTool,
+        ListRmfRolesTool listRmfRolesTool,
+        CategorizeSystemTool categorizeSystemTool,
+        GetCategorizationTool getCategorizationTool,
+        SuggestInfoTypesTool suggestInfoTypesTool,
+        SelectBaselineTool selectBaselineTool,
+        TailorBaselineTool tailorBaselineTool,
+        SetInheritanceTool setInheritanceTool,
+        GetBaselineTool getBaselineTool,
+        GenerateCrmTool generateCrmTool,
+        ShowStigMappingTool showStigMappingTool,
+        WriteNarrativeTool writeNarrativeTool,
+        SuggestNarrativeTool suggestNarrativeTool,
+        BatchPopulateNarrativesTool batchPopulateNarrativesTool,
+        NarrativeProgressTool narrativeProgressTool,
+        GenerateSspTool generateSspTool,
+        AssessControlTool assessControlTool,
+        TakeSnapshotTool takeSnapshotTool,
+        CompareSnapshotsTool compareSnapshotsTool,
+        VerifyEvidenceTool verifyEvidenceTool,
+        CheckEvidenceCompletenessTool checkEvidenceCompletenessTool,
+        GenerateSarTool generateSarTool,
+        IssueAuthorizationTool issueAuthorizationTool,
+        AcceptRiskTool acceptRiskTool,
+        ShowRiskRegisterTool showRiskRegisterTool,
+        CreatePoamTool createPoamTool,
+        ListPoamTool listPoamTool,
+        GenerateRarTool generateRarTool,
+        BundleAuthorizationPackageTool bundleAuthorizationPackageTool,
+        // US9: Continuous Monitoring tools
+        CreateConMonPlanTool createConMonPlanTool,
+        GenerateConMonReportTool generateConMonReportTool,
+        ReportSignificantChangeTool reportSignificantChangeTool,
+        TrackAtoExpirationTool trackAtoExpirationTool,
+        MultiSystemDashboardTool multiSystemDashboardTool,
+        ReauthorizationWorkflowTool reauthorizationWorkflowTool,
+        NotificationDeliveryTool notificationDeliveryTool,
+        // US10: eMASS & OSCAL tools
+        ExportEmassTool exportEmassTool,
+        ImportEmassTool importEmassTool,
+        ExportOscalTool exportOscalTool,
+        // US11: Document Templates & PDF Export tools
+        UploadTemplateTool uploadTemplateTool,
+        ListTemplatesTool listTemplatesTool,
+        UpdateTemplateTool updateTemplateTool,
+        DeleteTemplateTool deleteTemplateTool)
     {
         _assessmentTool = assessmentTool;
         _controlFamilyTool = controlFamilyTool;
@@ -264,6 +385,61 @@ public class ComplianceMcpTools
         _nistControlSearchTool = nistControlSearchTool;
         _nistControlExplainerTool = nistControlExplainerTool;
         _iacComplianceScanTool = iacComplianceScanTool;
+        _registerSystemTool = registerSystemTool;
+        _listSystemsTool = listSystemsTool;
+        _getSystemTool = getSystemTool;
+        _advanceRmfStepTool = advanceRmfStepTool;
+        _defineBoundaryTool = defineBoundaryTool;
+        _excludeFromBoundaryTool = excludeFromBoundaryTool;
+        _assignRmfRoleTool = assignRmfRoleTool;
+        _listRmfRolesTool = listRmfRolesTool;
+        _categorizeSystemTool = categorizeSystemTool;
+        _getCategorizationTool = getCategorizationTool;
+        _suggestInfoTypesTool = suggestInfoTypesTool;
+        _selectBaselineTool = selectBaselineTool;
+        _tailorBaselineTool = tailorBaselineTool;
+        _setInheritanceTool = setInheritanceTool;
+        _getBaselineTool = getBaselineTool;
+        _generateCrmTool = generateCrmTool;
+        _showStigMappingTool = showStigMappingTool;
+        _writeNarrativeTool = writeNarrativeTool;
+        _suggestNarrativeTool = suggestNarrativeTool;
+        _batchPopulateNarrativesTool = batchPopulateNarrativesTool;
+        _narrativeProgressTool = narrativeProgressTool;
+        _generateSspTool = generateSspTool;
+        _assessControlTool = assessControlTool;
+        _takeSnapshotTool = takeSnapshotTool;
+        _compareSnapshotsTool = compareSnapshotsTool;
+        _verifyEvidenceTool = verifyEvidenceTool;
+        _checkEvidenceCompletenessTool = checkEvidenceCompletenessTool;
+        _generateSarTool = generateSarTool;
+        _issueAuthorizationTool = issueAuthorizationTool;
+        _acceptRiskTool = acceptRiskTool;
+        _showRiskRegisterTool = showRiskRegisterTool;
+        _createPoamTool = createPoamTool;
+        _listPoamTool = listPoamTool;
+        _generateRarTool = generateRarTool;
+        _bundleAuthorizationPackageTool = bundleAuthorizationPackageTool;
+
+        // US9: Continuous Monitoring
+        _createConMonPlanTool = createConMonPlanTool;
+        _generateConMonReportTool = generateConMonReportTool;
+        _reportSignificantChangeTool = reportSignificantChangeTool;
+        _trackAtoExpirationTool = trackAtoExpirationTool;
+        _multiSystemDashboardTool = multiSystemDashboardTool;
+        _reauthorizationWorkflowTool = reauthorizationWorkflowTool;
+        _notificationDeliveryTool = notificationDeliveryTool;
+
+        // US10: eMASS & OSCAL
+        _exportEmassTool = exportEmassTool;
+        _importEmassTool = importEmassTool;
+        _exportOscalTool = exportOscalTool;
+
+        // US11: Document Templates & PDF Export
+        _uploadTemplateTool = uploadTemplateTool;
+        _listTemplatesTool = listTemplatesTool;
+        _updateTemplateTool = updateTemplateTool;
+        _deleteTemplateTool = deleteTemplateTool;
     }
 
     [Description("Run a NIST 800-53 compliance assessment. Scan types: quick, policy, full.")]
@@ -1291,5 +1467,794 @@ public class ComplianceMcpTools
             ["framework"] = framework
         };
         return await _iacComplianceScanTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ─── RMF Registration Tools (Feature 015) ────────────────────────────
+
+    [Description("Register a new information system for RMF processing. Returns the system with ID and initial step 'Prepare'.")]
+    public async Task<string> RegisterSystemAsync(
+        string name,
+        string systemType,
+        string missionCriticality,
+        string hostingEnvironment,
+        string? acronym = null,
+        string? description = null,
+        string? cloudEnvironment = null,
+        List<string>? subscriptionIds = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["name"] = name, ["system_type"] = systemType,
+            ["mission_criticality"] = missionCriticality,
+            ["hosting_environment"] = hostingEnvironment,
+            ["acronym"] = acronym, ["description"] = description,
+            ["cloud_environment"] = cloudEnvironment,
+            ["subscription_ids"] = subscriptionIds
+        };
+        return await _registerSystemTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("List all registered information systems with pagination.")]
+    public async Task<string> ListSystemsAsync(
+        bool? activeOnly = null,
+        int? page = null,
+        int? pageSize = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["active_only"] = activeOnly, ["page"] = page, ["page_size"] = pageSize
+        };
+        return await _listSystemsTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Get full details of a registered system including categorization, baseline, and role assignments.")]
+    public async Task<string> GetSystemAsync(
+        string systemId,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["system_id"] = systemId };
+        return await _getSystemTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Advance a system to the next RMF step with gate condition validation.")]
+    public async Task<string> AdvanceRmfStepAsync(
+        string systemId,
+        string targetStep,
+        bool? force = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId, ["target_step"] = targetStep, ["force"] = force
+        };
+        return await _advanceRmfStepTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Define or update the authorization boundary for a system by adding resources.")]
+    public async Task<string> DefineBoundaryAsync(
+        string systemId,
+        List<Dictionary<string, string?>> resources,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId, ["resources"] = resources
+        };
+        return await _defineBoundaryTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Exclude a resource from the authorization boundary with documented rationale.")]
+    public async Task<string> ExcludeFromBoundaryAsync(
+        string systemId,
+        string resourceId,
+        string rationale,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId, ["resource_id"] = resourceId, ["rationale"] = rationale
+        };
+        return await _excludeFromBoundaryTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Assign an RMF role (AO, ISSM, ISSO, SCA, SystemOwner) to a user for a registered system.")]
+    public async Task<string> AssignRmfRoleAsync(
+        string systemId,
+        string role,
+        string userId,
+        string? userDisplayName = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId, ["role"] = role,
+            ["user_id"] = userId, ["user_display_name"] = userDisplayName
+        };
+        return await _assignRmfRoleTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("List all active RMF role assignments for a registered system.")]
+    public async Task<string> ListRmfRolesAsync(
+        string systemId,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["system_id"] = systemId };
+        return await _listRmfRolesTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ─── RMF Categorization (Feature 015 - US2) ─────────────────────────────
+
+    [Description("Perform FIPS 199 / SP 800-60 security categorization for a system. Provide info types with C/I/A impacts.")]
+    public async Task<string> CategorizeSystemAsync(
+        string systemId,
+        object informationTypes,
+        bool? isNationalSecuritySystem = null,
+        string? justification = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["information_types"] = informationTypes,
+            ["is_national_security_system"] = isNationalSecuritySystem,
+            ["justification"] = justification
+        };
+        return await _categorizeSystemTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Retrieve the FIPS 199 security categorization for a system including info types and computed fields.")]
+    public async Task<string> GetCategorizationAsync(
+        string systemId,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["system_id"] = systemId };
+        return await _getCategorizationTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Suggest SP 800-60 information types based on system description. Returns ranked list with confidence scores.")]
+    public async Task<string> SuggestInfoTypesAsync(
+        string systemId,
+        string? description = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["description"] = description
+        };
+        return await _suggestInfoTypesTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ─── RMF Baseline Selection (Feature 015 - US3) ─────────────────────────
+
+    [Description("Select the NIST 800-53 control baseline for a system based on FIPS 199 categorization. Optionally applies CNSSI 1253 overlay.")]
+    public async Task<string> SelectBaselineAsync(
+        string systemId,
+        bool? applyOverlay = null,
+        string? overlayName = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["apply_overlay"] = applyOverlay,
+            ["overlay_name"] = overlayName
+        };
+        return await _selectBaselineTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Tailor the NIST 800-53 baseline by adding or removing controls with documented rationale.")]
+    public async Task<string> TailorBaselineAsync(
+        string systemId,
+        object tailoringActions,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["tailoring_actions"] = tailoringActions
+        };
+        return await _tailorBaselineTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Set control inheritance type (Inherited/Shared/Customer) for controls in the baseline.")]
+    public async Task<string> SetInheritanceAsync(
+        string systemId,
+        object inheritanceMappings,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["inheritance_mappings"] = inheritanceMappings
+        };
+        return await _setInheritanceTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Retrieve the NIST 800-53 control baseline for a system with optional details and family filter.")]
+    public async Task<string> GetBaselineAsync(
+        string systemId,
+        bool? includeDetails = null,
+        string? familyFilter = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["include_details"] = includeDetails,
+            ["family_filter"] = familyFilter
+        };
+        return await _getBaselineTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Generate a Customer Responsibility Matrix (CRM) showing inherited/shared/customer control breakdowns.")]
+    public async Task<string> GenerateCrmAsync(
+        string systemId,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["system_id"] = systemId };
+        return await _generateCrmTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ─── RMF STIG Mapping (Feature 015 - US4) ───────────────────────────────
+
+    [Description("Show DISA STIG rules mapped to a NIST 800-53 control via the CCI chain. Returns STIG Rule IDs, benchmark names, and CAT severity levels.")]
+    public async Task<string> ShowStigMappingAsync(
+        string controlId,
+        string? severity = null,
+        int? maxResults = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["control_id"] = controlId,
+            ["severity"] = severity,
+            ["max_results"] = maxResults
+        };
+        return await _showStigMappingTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ─── SSP Authoring (Feature 015 - US5) ───────────────────────────────
+
+    [Description("Write or update an implementation narrative for a NIST 800-53 control in the system's SSP.")]
+    public async Task<string> WriteNarrativeAsync(
+        string systemId,
+        string controlId,
+        string narrative,
+        string? status = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["control_id"] = controlId,
+            ["narrative"] = narrative,
+            ["status"] = status
+        };
+        return await _writeNarrativeTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Generate an AI-suggested implementation narrative for a NIST 800-53 control based on system context and inheritance data.")]
+    public async Task<string> SuggestNarrativeAsync(
+        string systemId,
+        string controlId,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["control_id"] = controlId
+        };
+        return await _suggestNarrativeTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Auto-populate implementation narratives for inherited and/or shared controls using provider templates.")]
+    public async Task<string> BatchPopulateNarrativesAsync(
+        string systemId,
+        string? inheritanceType = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["inheritance_type"] = inheritanceType
+        };
+        return await _batchPopulateNarrativesTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Get SSP narrative completion status with per-family progress and overall percentage.")]
+    public async Task<string> NarrativeProgressAsync(
+        string systemId,
+        string? familyFilter = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["family_filter"] = familyFilter
+        };
+        return await _narrativeProgressTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Generate the System Security Plan (SSP) document with system info, categorization, baseline, and per-control narratives.")]
+    public async Task<string> GenerateSspAsync(
+        string systemId,
+        string? format = null,
+        string? sections = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["format"] = format,
+            ["sections"] = sections
+        };
+        return await _generateSspTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Assessment Artifact Tools (Feature 015 — US7)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    [Description("Record an SCA's per-control effectiveness determination (Satisfied/OtherThanSatisfied) with CAT severity mapping.")]
+    public async Task<string> AssessControlAsync(
+        string assessmentId,
+        string controlId,
+        string determination,
+        string? method = null,
+        string? evidenceIds = null,
+        string? notes = null,
+        string? catSeverity = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["assessment_id"] = assessmentId,
+            ["control_id"] = controlId,
+            ["determination"] = determination,
+            ["method"] = method,
+            ["evidence_ids"] = evidenceIds,
+            ["notes"] = notes,
+            ["cat_severity"] = catSeverity
+        };
+        return await _assessControlTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Create an immutable SHA-256-hashed snapshot of assessment state for audit trail.")]
+    public async Task<string> TakeSnapshotAsync(
+        string systemId,
+        string assessmentId,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["assessment_id"] = assessmentId
+        };
+        return await _takeSnapshotTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Compare two assessment snapshots side-by-side showing controls changed, score delta, and findings.")]
+    public async Task<string> CompareSnapshotsAsync(
+        string snapshotIdA,
+        string snapshotIdB,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["snapshot_id_a"] = snapshotIdA,
+            ["snapshot_id_b"] = snapshotIdB
+        };
+        return await _compareSnapshotsTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Recompute SHA-256 hash of evidence content and verify integrity (verified or tampered).")]
+    public async Task<string> VerifyEvidenceAsync(
+        string evidenceId,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["evidence_id"] = evidenceId
+        };
+        return await _verifyEvidenceTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Report which controls have verified evidence vs. missing evidence with completeness percentage.")]
+    public async Task<string> CheckEvidenceCompletenessAsync(
+        string systemId,
+        string? assessmentId = null,
+        string? familyFilter = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["assessment_id"] = assessmentId,
+            ["family_filter"] = familyFilter
+        };
+        return await _checkEvidenceCompletenessTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Generate a Security Assessment Report (SAR) with executive summary, control results, risk summary, and CAT breakdown.")]
+    public async Task<string> GenerateSarAsync(
+        string systemId,
+        string assessmentId,
+        string? format = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["assessment_id"] = assessmentId,
+            ["format"] = format
+        };
+        return await _generateSarTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Authorization Decision Tools (Feature 015 — US8)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    [Description("Issue an authorization decision (ATO/ATOwC/IATT/DATO) for a system. Supersedes prior active decisions. RBAC: AuthorizingOfficial ONLY.")]
+    public async Task<string> IssueAuthorizationAsync(
+        string systemId,
+        string decisionType,
+        string residualRiskLevel,
+        string? expirationDate = null,
+        string? termsAndConditions = null,
+        string? residualRiskJustification = null,
+        string? riskAcceptances = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["decision_type"] = decisionType,
+            ["residual_risk_level"] = residualRiskLevel,
+            ["expiration_date"] = expirationDate,
+            ["terms_and_conditions"] = termsAndConditions,
+            ["residual_risk_justification"] = residualRiskJustification,
+            ["risk_acceptances"] = riskAcceptances
+        };
+        return await _issueAuthorizationTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Accept risk on a specific finding/control. Requires an active authorization decision. RBAC: AuthorizingOfficial ONLY.")]
+    public async Task<string> AcceptRiskAsync(
+        string systemId,
+        string findingId,
+        string controlId,
+        string catSeverity,
+        string justification,
+        string expirationDate,
+        string? compensatingControl = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["finding_id"] = findingId,
+            ["control_id"] = controlId,
+            ["cat_severity"] = catSeverity,
+            ["justification"] = justification,
+            ["expiration_date"] = expirationDate,
+            ["compensating_control"] = compensatingControl
+        };
+        return await _acceptRiskTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("View the risk register showing all risk acceptances for a system. Filter by active/expired/revoked/all.")]
+    public async Task<string> ShowRiskRegisterAsync(
+        string systemId,
+        string? statusFilter = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["status_filter"] = statusFilter
+        };
+        return await _showRiskRegisterTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Create a formal POA&M item with optional milestones. Links weakness to NIST control and CAT severity.")]
+    public async Task<string> CreatePoamAsync(
+        string systemId,
+        string weakness,
+        string controlId,
+        string catSeverity,
+        string poc,
+        string scheduledCompletion,
+        string? findingId = null,
+        string? resourcesRequired = null,
+        string? milestones = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["weakness"] = weakness,
+            ["control_id"] = controlId,
+            ["cat_severity"] = catSeverity,
+            ["poc"] = poc,
+            ["scheduled_completion"] = scheduledCompletion,
+            ["finding_id"] = findingId,
+            ["resources_required"] = resourcesRequired,
+            ["milestones"] = milestones
+        };
+        return await _createPoamTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("List POA&M items for a system with status, severity, and overdue-only filters.")]
+    public async Task<string> ListPoamAsync(
+        string systemId,
+        string? statusFilter = null,
+        string? severityFilter = null,
+        string? overdueOnly = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["status_filter"] = statusFilter,
+            ["severity_filter"] = severityFilter,
+            ["overdue_only"] = overdueOnly
+        };
+        return await _listPoamTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Generate a Risk Assessment Report (RAR) with per-family risk analysis and CAT severity breakdown.")]
+    public async Task<string> GenerateRarAsync(
+        string systemId,
+        string assessmentId,
+        string? format = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["assessment_id"] = assessmentId,
+            ["format"] = format
+        };
+        return await _generateRarTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Bundle a complete authorization package (SSP + SAR + RAR + POA&M + CRM + ATO Letter) with document status.")]
+    public async Task<string> BundleAuthorizationPackageAsync(
+        string systemId,
+        string? format = null,
+        string? includeEvidence = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["format"] = format,
+            ["include_evidence"] = includeEvidence
+        };
+        return await _bundleAuthorizationPackageTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ═══ US9: Continuous Monitoring wrapper methods ════════════════════════════════════
+
+    [Description("Create or update a continuous monitoring plan for a system. One plan per system.")]
+    public async Task<string> CreateConMonPlanAsync(
+        string systemId,
+        string assessmentFrequency,
+        string annualReviewDate,
+        string? reportDistribution = null,
+        string? significantChangeTriggers = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["assessment_frequency"] = assessmentFrequency,
+            ["annual_review_date"] = annualReviewDate,
+            ["report_distribution"] = reportDistribution,
+            ["significant_change_triggers"] = significantChangeTriggers
+        };
+        return await _createConMonPlanTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Generate a continuous monitoring report with compliance score, delta, findings, and POA&M status.")]
+    public async Task<string> GenerateConMonReportAsync(
+        string systemId,
+        string reportType,
+        string period,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["report_type"] = reportType,
+            ["period"] = period
+        };
+        return await _generateConMonReportTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Report a significant change that may trigger reauthorization review.")]
+    public async Task<string> ReportSignificantChangeAsync(
+        string systemId,
+        string changeType,
+        string description,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["change_type"] = changeType,
+            ["description"] = description
+        };
+        return await _reportSignificantChangeTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Check ATO expiration status with graduated alerts at 90/60/30 days.")]
+    public async Task<string> TrackAtoExpirationAsync(
+        string systemId,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId
+        };
+        return await _trackAtoExpirationTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("View multi-system dashboard with authorization status, compliance scores, and alerts.")]
+    public async Task<string> MultiSystemDashboardAsync(
+        string? activeOnly = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["active_only"] = activeOnly
+        };
+        return await _multiSystemDashboardTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Detect reauthorization triggers and optionally initiate reauthorization workflow.")]
+    public async Task<string> ReauthorizationWorkflowAsync(
+        string systemId,
+        string? initiate = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["initiate"] = initiate
+        };
+        return await _reauthorizationWorkflowTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Send continuous monitoring notifications (expiration alerts, significant change events).")]
+    public async Task<string> SendNotificationAsync(
+        string systemId,
+        string notificationType,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["notification_type"] = notificationType
+        };
+        return await _notificationDeliveryTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  US10: eMASS & OSCAL Interoperability
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [Description("Export system data in eMASS-compatible Excel format (controls, POA&M, or full).")]
+    public async Task<string> ExportEmassAsync(
+        string systemId,
+        string exportType,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["export_type"] = exportType
+        };
+        return await _exportEmassTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Import eMASS Excel export with conflict resolution (skip, overwrite, merge). Supports dry-run.")]
+    public async Task<string> ImportEmassAsync(
+        string systemId,
+        string fileBase64,
+        string? conflictStrategy = null,
+        string? dryRun = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["file_base64"] = fileBase64,
+            ["conflict_strategy"] = conflictStrategy,
+            ["dry_run"] = dryRun
+        };
+        return await _importEmassTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Export system data in OSCAL JSON format (v1.0.6). Models: ssp, assessment-results, poam.")]
+    public async Task<string> ExportOscalAsync(
+        string systemId,
+        string model,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["model"] = model
+        };
+        return await _exportOscalTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  US11: Document Templates & PDF Export
+    // ═════════════════════════════════════════════════════════════════════════
+
+    [Description("Upload a custom DOCX template for compliance document generation. Validates merge fields.")]
+    public async Task<string> UploadTemplateAsync(
+        string templateName,
+        string documentType,
+        string fileBase64,
+        string uploadedBy,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["template_name"] = templateName,
+            ["document_type"] = documentType,
+            ["file_base64"] = fileBase64,
+            ["uploaded_by"] = uploadedBy
+        };
+        return await _uploadTemplateTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("List available document templates. Optionally filter by document type.")]
+    public async Task<string> ListTemplatesAsync(
+        string? documentType = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["document_type"] = documentType
+        };
+        return await _listTemplatesTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Update an existing document template (replace file and/or rename).")]
+    public async Task<string> UpdateTemplateAsync(
+        string templateId,
+        string updatedBy,
+        string? fileBase64 = null,
+        string? newName = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["template_id"] = templateId,
+            ["file_base64"] = fileBase64,
+            ["new_name"] = newName,
+            ["updated_by"] = updatedBy
+        };
+        return await _updateTemplateTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Delete a document template by ID.")]
+    public async Task<string> DeleteTemplateAsync(
+        string templateId,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["template_id"] = templateId
+        };
+        return await _deleteTemplateTool.ExecuteAsync(args, cancellationToken);
     }
 }

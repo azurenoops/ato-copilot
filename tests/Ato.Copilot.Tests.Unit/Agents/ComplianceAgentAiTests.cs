@@ -42,7 +42,7 @@ public class ComplianceAgentAiTests
 
         var assessmentTool = new ComplianceAssessmentTool(complianceEngine, _scopeFactory, Mock.Of<ILogger<ComplianceAssessmentTool>>());
         var controlFamilyTool = new ControlFamilyTool(nistControls, Mock.Of<ILogger<ControlFamilyTool>>());
-        var documentGenerationTool = new DocumentGenerationTool(docGen, _scopeFactory, Mock.Of<ILogger<DocumentGenerationTool>>());
+        var documentGenerationTool = new DocumentGenerationTool(docGen, Mock.Of<IDocumentTemplateService>(), _scopeFactory, Mock.Of<ILogger<DocumentGenerationTool>>());
         var evidenceCollectionTool = new EvidenceCollectionTool(evidence, Mock.Of<ILogger<EvidenceCollectionTool>>());
         var remediationExecuteTool = new RemediationExecuteTool(remediationEngine, Mock.Of<ILogger<RemediationExecuteTool>>());
         var validateRemediationTool = new ValidateRemediationTool(remediationEngine, Mock.Of<ILogger<ValidateRemediationTool>>());

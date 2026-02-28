@@ -1,0 +1,651 @@
+using System.Text;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Ato.Copilot.Core.Data.Context;
+using Ato.Copilot.Core.Interfaces.Compliance;
+using Ato.Copilot.Core.Models.Compliance;
+
+namespace Ato.Copilot.Agents.Compliance.Services;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Continuous Monitoring Service (Feature 015 — US9)
+// Spec §4.1–4.7: ConMon plans, periodic reports, ATO expiration tracking,
+// significant change detection, reauthorization workflow, multi-system dashboard.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// <summary>
+/// Service for continuous monitoring lifecycle management.
+/// Uses <see cref="IServiceScopeFactory"/> for scoped DbContext access.
+/// </summary>
+public class ConMonService : IConMonService
+{
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<ConMonService> _logger;
+
+    public ConMonService(IServiceScopeFactory scopeFactory, ILogger<ConMonService> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _logger = logger;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // §4.1 — Create or Update ConMon Plan
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// <inheritdoc />
+    public async Task<ConMonPlan> CreatePlanAsync(
+        string systemId, string assessmentFrequency, DateTime annualReviewDate,
+        List<string>? reportDistribution, List<string>? significantChangeTriggers,
+        string createdBy, CancellationToken cancellationToken = default)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+
+        var system = await db.RegisteredSystems
+            .FirstOrDefaultAsync(s => s.Id == systemId, cancellationToken)
+            ?? throw new InvalidOperationException($"System '{systemId}' not found.");
+
+        // One plan per system — upsert
+        var existing = await db.ConMonPlans
+            .FirstOrDefaultAsync(p => p.RegisteredSystemId == systemId, cancellationToken);
+
+        if (existing != null)
+        {
+            existing.AssessmentFrequency = assessmentFrequency;
+            existing.AnnualReviewDate = annualReviewDate;
+            existing.ReportDistribution = reportDistribution ?? existing.ReportDistribution;
+            existing.SignificantChangeTriggers = significantChangeTriggers ?? existing.SignificantChangeTriggers;
+            existing.ModifiedAt = DateTime.UtcNow;
+
+            await db.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Updated ConMon plan {PlanId} for system '{SystemId}'", existing.Id, systemId);
+            return existing;
+        }
+
+        var plan = new ConMonPlan
+        {
+            RegisteredSystemId = systemId,
+            AssessmentFrequency = assessmentFrequency,
+            AnnualReviewDate = annualReviewDate,
+            ReportDistribution = reportDistribution ?? new List<string>(),
+            SignificantChangeTriggers = significantChangeTriggers ?? new List<string>(),
+            CreatedBy = createdBy,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        db.ConMonPlans.Add(plan);
+        await db.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Created ConMon plan {PlanId} for system '{SystemId}'", plan.Id, systemId);
+        return plan;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // §4.2 — Generate Periodic ConMon Report
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// <inheritdoc />
+    public async Task<ConMonReport> GenerateReportAsync(
+        string systemId, string reportType, string period,
+        string generatedBy, CancellationToken cancellationToken = default)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+
+        var system = await db.RegisteredSystems
+            .FirstOrDefaultAsync(s => s.Id == systemId, cancellationToken)
+            ?? throw new InvalidOperationException($"System '{systemId}' not found.");
+
+        var plan = await db.ConMonPlans
+            .FirstOrDefaultAsync(p => p.RegisteredSystemId == systemId, cancellationToken)
+            ?? throw new InvalidOperationException($"No ConMon plan found for system '{systemId}'. Create a plan first.");
+
+        // Calculate current compliance score
+        var effectivenessRecords = await db.ControlEffectivenessRecords
+            .Where(e => e.RegisteredSystemId == systemId)
+            .ToListAsync(cancellationToken);
+
+        var assessed = effectivenessRecords.Count;
+        var satisfied = effectivenessRecords.Count(e => e.Determination == EffectivenessDetermination.Satisfied);
+        var complianceScore = assessed > 0 ? Math.Round((double)satisfied / assessed * 100, 2) : 0.0;
+
+        // Get authorized baseline score (from most recent active authorization)
+        var activeAuth = await db.AuthorizationDecisions
+            .Where(d => d.RegisteredSystemId == systemId && d.IsActive)
+            .OrderByDescending(d => d.DecisionDate)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        double? baselineScore = activeAuth?.ComplianceScoreAtDecision;
+
+        // Count findings
+        var openFindings = await db.Findings
+            .CountAsync(f =>
+                db.Assessments.Any(a => a.Id == f.AssessmentId && a.RegisteredSystemId == systemId) &&
+                (f.Status == FindingStatus.Open || f.Status == FindingStatus.InProgress),
+                cancellationToken);
+
+        var resolvedFindings = await db.Findings
+            .CountAsync(f =>
+                db.Assessments.Any(a => a.Id == f.AssessmentId && a.RegisteredSystemId == systemId) &&
+                (f.Status == FindingStatus.Remediated || f.Status == FindingStatus.FalsePositive),
+                cancellationToken);
+
+        // POA&M status
+        var openPoam = await db.PoamItems
+            .CountAsync(p => p.RegisteredSystemId == systemId &&
+                (p.Status == PoamStatus.Ongoing || p.Status == PoamStatus.Delayed),
+                cancellationToken);
+
+        var overduePoam = await db.PoamItems
+            .Where(p => p.RegisteredSystemId == systemId &&
+                p.Status == PoamStatus.Ongoing &&
+                p.ScheduledCompletionDate < DateTime.UtcNow &&
+                p.ActualCompletionDate == null)
+            .CountAsync(cancellationToken);
+
+        // Generate markdown content
+        var content = GenerateReportContent(
+            system.Name, reportType, period,
+            complianceScore, baselineScore,
+            openFindings, resolvedFindings,
+            openPoam, overduePoam, activeAuth);
+
+        var report = new ConMonReport
+        {
+            ConMonPlanId = plan.Id,
+            RegisteredSystemId = systemId,
+            ReportPeriod = period,
+            ReportType = reportType,
+            ComplianceScore = complianceScore,
+            AuthorizedBaselineScore = baselineScore,
+            NewFindings = openFindings,
+            ResolvedFindings = resolvedFindings,
+            OpenPoamItems = openPoam,
+            OverduePoamItems = overduePoam,
+            ReportContent = content,
+            GeneratedAt = DateTime.UtcNow,
+            GeneratedBy = generatedBy
+        };
+
+        db.ConMonReports.Add(report);
+        await db.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Generated {ReportType} ConMon report for system '{SystemId}', period '{Period}'",
+            reportType, systemId, period);
+        return report;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // §4.4 — Report Significant Change
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// <inheritdoc />
+    public async Task<SignificantChange> ReportChangeAsync(
+        string systemId, string changeType, string description,
+        string detectedBy, CancellationToken cancellationToken = default)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+
+        var system = await db.RegisteredSystems
+            .FirstOrDefaultAsync(s => s.Id == systemId, cancellationToken)
+            ?? throw new InvalidOperationException($"System '{systemId}' not found.");
+
+        // Determine if this change type requires reauthorization
+        var requiresReauth = IsReauthorizationRequired(changeType);
+
+        var change = new SignificantChange
+        {
+            RegisteredSystemId = systemId,
+            ChangeType = changeType,
+            Description = description,
+            DetectedAt = DateTime.UtcNow,
+            DetectedBy = detectedBy,
+            RequiresReauthorization = requiresReauth
+        };
+
+        db.SignificantChanges.Add(change);
+        await db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Reported significant change '{ChangeType}' for system '{SystemId}', reauthorization={Reauth}",
+            changeType, systemId, requiresReauth);
+
+        return change;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // §4.3 — Check ATO Expiration
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// <inheritdoc />
+    public async Task<ExpirationStatus> CheckExpirationAsync(
+        string systemId, CancellationToken cancellationToken = default)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+
+        var system = await db.RegisteredSystems
+            .FirstOrDefaultAsync(s => s.Id == systemId, cancellationToken)
+            ?? throw new InvalidOperationException($"System '{systemId}' not found.");
+
+        var activeAuth = await db.AuthorizationDecisions
+            .Where(d => d.RegisteredSystemId == systemId && d.IsActive)
+            .OrderByDescending(d => d.DecisionDate)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var status = new ExpirationStatus
+        {
+            SystemId = systemId,
+            SystemName = system.Name
+        };
+
+        if (activeAuth == null)
+        {
+            status.HasActiveAuthorization = false;
+            status.AlertLevel = "Warning";
+            status.AlertMessage = "No active authorization decision for this system.";
+            return status;
+        }
+
+        status.HasActiveAuthorization = true;
+        status.DecisionType = activeAuth.DecisionType.ToString();
+        status.DecisionDate = activeAuth.DecisionDate;
+        status.ExpirationDate = activeAuth.ExpirationDate;
+
+        if (activeAuth.ExpirationDate == null)
+        {
+            // DATO has no expiration; it's a denial
+            if (activeAuth.DecisionType == AuthorizationDecisionType.Dato)
+            {
+                status.AlertLevel = "Urgent";
+                status.AlertMessage = "System has a Denial of Authorization to Operate (DATO). System should not be in production.";
+            }
+            else
+            {
+                status.AlertLevel = "None";
+                status.AlertMessage = "Authorization has no expiration date.";
+            }
+            return status;
+        }
+
+        var daysUntil = (int)(activeAuth.ExpirationDate.Value.Date - DateTime.UtcNow.Date).TotalDays;
+        status.DaysUntilExpiration = daysUntil;
+
+        if (daysUntil < 0)
+        {
+            // Expired — mark as inactive
+            status.IsExpired = true;
+            status.AlertLevel = "Expired";
+            status.AlertMessage = $"Authorization EXPIRED {Math.Abs(daysUntil)} days ago on {activeAuth.ExpirationDate.Value:yyyy-MM-dd}. " +
+                "System is operating without authorization. Initiate reauthorization immediately.";
+
+            // Auto-deactivate expired authorization (spec §4.3)
+            activeAuth.IsActive = false;
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        else if (daysUntil <= 30)
+        {
+            status.AlertLevel = "Urgent";
+            status.AlertMessage = $"Authorization expires in {daysUntil} days on {activeAuth.ExpirationDate.Value:yyyy-MM-dd}. " +
+                "Begin reauthorization process immediately.";
+        }
+        else if (daysUntil <= 60)
+        {
+            status.AlertLevel = "Warning";
+            status.AlertMessage = $"Authorization expires in {daysUntil} days on {activeAuth.ExpirationDate.Value:yyyy-MM-dd}. " +
+                "Schedule reauthorization activities.";
+        }
+        else if (daysUntil <= 90)
+        {
+            status.AlertLevel = "Info";
+            status.AlertMessage = $"Authorization expires in {daysUntil} days on {activeAuth.ExpirationDate.Value:yyyy-MM-dd}. " +
+                "Plan for upcoming reauthorization.";
+        }
+        else
+        {
+            status.AlertLevel = "None";
+            status.AlertMessage = $"Authorization valid for {daysUntil} more days (expires {activeAuth.ExpirationDate.Value:yyyy-MM-dd}).";
+        }
+
+        return status;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // §4.6 — Multi-System Dashboard
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// <inheritdoc />
+    public async Task<DashboardResult> GetDashboardAsync(
+        bool activeOnly, CancellationToken cancellationToken = default)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+
+        var query = db.RegisteredSystems.AsQueryable();
+        if (activeOnly)
+            query = query.Where(s => s.IsActive);
+
+        var systems = await query
+            .Include(s => s.SecurityCategorization)
+            .ToListAsync(cancellationToken);
+
+        var result = new DashboardResult();
+        result.TotalSystems = systems.Count;
+
+        foreach (var system in systems)
+        {
+            var row = new DashboardSystemRow
+            {
+                SystemId = system.Id,
+                Name = system.Name,
+                Acronym = system.Acronym,
+                CurrentRmfStep = system.CurrentRmfStep.ToString()
+            };
+
+            // Impact level from categorization
+            if (system.SecurityCategorization != null)
+            {
+                // Need info types loaded for computed OverallCategorization
+                var infoTypes = await db.InformationTypes
+                    .Where(it => it.SecurityCategorizationId == system.SecurityCategorization.Id)
+                    .ToListAsync(cancellationToken);
+                system.SecurityCategorization.InformationTypes = infoTypes;
+                row.ImpactLevel = system.SecurityCategorization.OverallCategorization.ToString();
+            }
+
+            // Authorization status
+            var auth = await db.AuthorizationDecisions
+                .Where(d => d.RegisteredSystemId == system.Id && d.IsActive)
+                .OrderByDescending(d => d.DecisionDate)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (auth != null)
+            {
+                row.DecisionType = auth.DecisionType.ToString();
+
+                if (auth.ExpirationDate.HasValue)
+                {
+                    row.ExpirationDate = auth.ExpirationDate;
+                    var daysUntil = (int)(auth.ExpirationDate.Value.Date - DateTime.UtcNow.Date).TotalDays;
+                    row.DaysUntilExpiration = daysUntil;
+
+                    if (daysUntil < 0)
+                    {
+                        row.AuthorizationStatus = "Expired";
+                        result.ExpiredCount++;
+                    }
+                    else if (daysUntil <= 90)
+                    {
+                        row.AuthorizationStatus = "Authorized";
+                        result.ExpiringCount++;
+                    }
+                    else
+                    {
+                        row.AuthorizationStatus = "Authorized";
+                        result.AuthorizedCount++;
+                    }
+                }
+                else
+                {
+                    row.AuthorizationStatus = auth.DecisionType == AuthorizationDecisionType.Dato
+                        ? "Denied" : "Authorized";
+                    if (auth.DecisionType != AuthorizationDecisionType.Dato)
+                        result.AuthorizedCount++;
+                }
+            }
+            else
+            {
+                row.AuthorizationStatus = system.CurrentRmfStep == RmfPhase.Monitor ? "Expired" : "Pending";
+            }
+
+            // Compliance score from effectiveness records
+            var effectivenessCount = await db.ControlEffectivenessRecords
+                .CountAsync(e => e.RegisteredSystemId == system.Id, cancellationToken);
+            var satisfiedCount = await db.ControlEffectivenessRecords
+                .CountAsync(e => e.RegisteredSystemId == system.Id && e.Determination == EffectivenessDetermination.Satisfied,
+                    cancellationToken);
+            row.ComplianceScore = effectivenessCount > 0
+                ? Math.Round((double)satisfiedCount / effectivenessCount * 100, 2)
+                : null;
+
+            // Open findings count
+            row.OpenFindings = await db.Findings
+                .CountAsync(f =>
+                    db.Assessments.Any(a => a.Id == f.AssessmentId && a.RegisteredSystemId == system.Id) &&
+                    (f.Status == FindingStatus.Open || f.Status == FindingStatus.InProgress),
+                    cancellationToken);
+
+            // Open POA&M count
+            row.OpenPoamItems = await db.PoamItems
+                .CountAsync(p => p.RegisteredSystemId == system.Id &&
+                    (p.Status == PoamStatus.Ongoing || p.Status == PoamStatus.Delayed),
+                    cancellationToken);
+
+            // Alert count
+            var unreviewed = await db.SignificantChanges
+                .CountAsync(c => c.RegisteredSystemId == system.Id && c.ReviewedAt == null,
+                    cancellationToken);
+            row.AlertCount = unreviewed;
+            if (row.DaysUntilExpiration.HasValue && row.DaysUntilExpiration.Value <= 90)
+                row.AlertCount++;
+
+            result.Systems.Add(row);
+        }
+
+        _logger.LogInformation("Generated multi-system dashboard: {Count} systems", result.TotalSystems);
+        return result;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // §4.5 — Reauthorization Workflow
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// <inheritdoc />
+    public async Task<ReauthorizationResult> CheckReauthorizationAsync(
+        string systemId, bool initiateIfTriggered,
+        CancellationToken cancellationToken = default)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+
+        var system = await db.RegisteredSystems
+            .FirstOrDefaultAsync(s => s.Id == systemId, cancellationToken)
+            ?? throw new InvalidOperationException($"System '{systemId}' not found.");
+
+        var result = new ReauthorizationResult { SystemId = systemId };
+
+        // Check trigger 1: ATO expiration
+        var activeAuth = await db.AuthorizationDecisions
+            .Where(d => d.RegisteredSystemId == systemId && d.IsActive)
+            .OrderByDescending(d => d.DecisionDate)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (activeAuth?.ExpirationDate != null)
+        {
+            var daysUntil = (int)(activeAuth.ExpirationDate.Value.Date - DateTime.UtcNow.Date).TotalDays;
+            if (daysUntil <= 0)
+            {
+                result.Triggers.Add($"Authorization expired {Math.Abs(daysUntil)} days ago");
+            }
+            else if (daysUntil <= 90)
+            {
+                result.Triggers.Add($"Authorization expiring in {daysUntil} days");
+            }
+        }
+        else if (activeAuth == null && system.CurrentRmfStep == RmfPhase.Monitor)
+        {
+            result.Triggers.Add("No active authorization — system in Monitor phase");
+        }
+
+        // Check trigger 2: Significant changes requiring reauthorization
+        var unreviewedChanges = await db.SignificantChanges
+            .Where(c => c.RegisteredSystemId == systemId &&
+                c.RequiresReauthorization && !c.ReauthorizationTriggered)
+            .ToListAsync(cancellationToken);
+
+        result.UnreviewedChangeCount = unreviewedChanges.Count;
+        foreach (var change in unreviewedChanges)
+        {
+            result.Triggers.Add($"Significant change: {change.ChangeType} — {change.Description}");
+        }
+
+        // Check trigger 3: ConMon score drift (> 10% below baseline)
+        if (activeAuth != null)
+        {
+            var effectivenessRecords = await db.ControlEffectivenessRecords
+                .Where(e => e.RegisteredSystemId == systemId)
+                .ToListAsync(cancellationToken);
+            var assessed = effectivenessRecords.Count;
+            var satisfied = effectivenessRecords.Count(e => e.Determination == EffectivenessDetermination.Satisfied);
+            var currentScore = assessed > 0 ? Math.Round((double)satisfied / assessed * 100, 2) : 0.0;
+
+            if (activeAuth.ComplianceScoreAtDecision > 0 &&
+                currentScore < activeAuth.ComplianceScoreAtDecision - 10)
+            {
+                result.Triggers.Add(
+                    $"Compliance score drift: {currentScore:F1}% (authorized at {activeAuth.ComplianceScoreAtDecision:F1}%, delta >{10}%)");
+            }
+        }
+
+        result.IsTriggered = result.Triggers.Count > 0;
+
+        // Optionally initiate reauthorization
+        if (result.IsTriggered && initiateIfTriggered)
+        {
+            result.PreviousRmfStep = system.CurrentRmfStep.ToString();
+
+            // Regress to Assess phase (spec §4.5)
+            system.CurrentRmfStep = RmfPhase.Assess;
+            system.RmfStepUpdatedAt = DateTime.UtcNow;
+            system.ModifiedAt = DateTime.UtcNow;
+
+            // Mark significant changes as triggered
+            foreach (var change in unreviewedChanges)
+            {
+                change.ReauthorizationTriggered = true;
+            }
+
+            await db.SaveChangesAsync(cancellationToken);
+
+            result.WasInitiated = true;
+            result.NewRmfStep = RmfPhase.Assess.ToString();
+
+            _logger.LogInformation(
+                "Initiated reauthorization for system '{SystemId}': {Step} → Assess ({TriggerCount} triggers)",
+                systemId, result.PreviousRmfStep, result.Triggers.Count);
+        }
+
+        return result;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Private helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static string GenerateReportContent(
+        string systemName, string reportType, string period,
+        double complianceScore, double? baselineScore,
+        int openFindings, int resolvedFindings,
+        int openPoam, int overduePoam,
+        AuthorizationDecision? activeAuth)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"# Continuous Monitoring Report — {systemName}");
+        sb.AppendLine();
+        sb.AppendLine($"**Report Type**: {reportType}");
+        sb.AppendLine($"**Period**: {period}");
+        sb.AppendLine($"**Generated**: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+        sb.AppendLine();
+
+        // Executive summary
+        sb.AppendLine("## Executive Summary");
+        sb.AppendLine();
+        sb.AppendLine($"- **Current Compliance Score**: {complianceScore:F1}%");
+        if (baselineScore.HasValue)
+        {
+            var delta = complianceScore - baselineScore.Value;
+            var direction = delta >= 0 ? "▲" : "▼";
+            sb.AppendLine($"- **Authorized Baseline Score**: {baselineScore.Value:F1}%");
+            sb.AppendLine($"- **Delta from Authorization**: {direction} {Math.Abs(delta):F1}%");
+        }
+        sb.AppendLine();
+
+        // Authorization status
+        sb.AppendLine("## Authorization Status");
+        sb.AppendLine();
+        if (activeAuth != null)
+        {
+            sb.AppendLine($"- **Decision**: {activeAuth.DecisionType}");
+            sb.AppendLine($"- **Issued**: {activeAuth.DecisionDate:yyyy-MM-dd}");
+            if (activeAuth.ExpirationDate.HasValue)
+            {
+                var daysLeft = (int)(activeAuth.ExpirationDate.Value.Date - DateTime.UtcNow.Date).TotalDays;
+                sb.AppendLine($"- **Expires**: {activeAuth.ExpirationDate.Value:yyyy-MM-dd} ({daysLeft} days remaining)");
+            }
+        }
+        else
+        {
+            sb.AppendLine("- **Status**: No active authorization");
+        }
+        sb.AppendLine();
+
+        // Findings summary
+        sb.AppendLine("## Findings Summary");
+        sb.AppendLine();
+        sb.AppendLine($"| Metric | Count |");
+        sb.AppendLine($"|--------|-------|");
+        sb.AppendLine($"| Open Findings | {openFindings} |");
+        sb.AppendLine($"| Resolved Findings | {resolvedFindings} |");
+        sb.AppendLine();
+
+        // POA&M status
+        sb.AppendLine("## POA&M Status");
+        sb.AppendLine();
+        sb.AppendLine($"| Metric | Count |");
+        sb.AppendLine($"|--------|-------|");
+        sb.AppendLine($"| Open Items | {openPoam} |");
+        sb.AppendLine($"| Overdue Items | {overduePoam} |");
+        sb.AppendLine();
+
+        // Risk trending
+        sb.AppendLine("## Risk Trending");
+        sb.AppendLine();
+        if (overduePoam > 0)
+        {
+            sb.AppendLine("⚠️ **Attention Required**: There are overdue POA&M items that need immediate attention.");
+        }
+        if (baselineScore.HasValue && complianceScore < baselineScore.Value - 5)
+        {
+            sb.AppendLine("⚠️ **Score Drift**: Compliance score has dropped more than 5% below the authorized baseline.");
+        }
+        if (overduePoam == 0 && (!baselineScore.HasValue || complianceScore >= baselineScore.Value - 5))
+        {
+            sb.AppendLine("✅ System compliance is within acceptable parameters.");
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Determine if a change type requires reauthorization.
+    /// Based on NIST SP 800-37 Rev 2 guidance on significant changes.
+    /// </summary>
+    private static bool IsReauthorizationRequired(string changeType)
+    {
+        var reauthTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "New Interconnection",
+            "Major Upgrade",
+            "Data Type Change",
+            "Operating Environment Change",
+            "Security Architecture Change",
+            "Major Software Change",
+            "New System Component",
+            "Authorization Boundary Change",
+            "Migration",
+            "New Deployment Model"
+        };
+
+        return reauthTypes.Contains(changeType);
+    }
+}
