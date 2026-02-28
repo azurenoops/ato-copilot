@@ -114,7 +114,14 @@ public static class ServiceCollectionExtensions
         // ─── Compliance Watch Services ───────────────────────────────────────
         services.AddSingleton<AlertCorrelationService>();
         services.AddSingleton<IAlertCorrelationService>(sp => sp.GetRequiredService<AlertCorrelationService>());
-        services.AddSingleton<AlertManager>();
+        services.AddSingleton<SystemSubscriptionResolver>();
+        services.AddSingleton<ISystemSubscriptionResolver>(sp => sp.GetRequiredService<SystemSubscriptionResolver>());
+        services.AddSingleton<AlertManager>(sp => new AlertManager(
+            sp.GetRequiredService<IDbContextFactory<AtoCopilotContext>>(),
+            sp.GetRequiredService<IOptions<AlertOptions>>(),
+            sp.GetRequiredService<ILogger<AlertManager>>(),
+            sp.GetService<IAlertCorrelationService>(),
+            sp.GetService<IAlertNotificationService>()));
         services.AddSingleton<IAlertManager>(sp => sp.GetRequiredService<AlertManager>());
         services.AddSingleton<ComplianceWatchService>();
         services.AddSingleton<IComplianceWatchService>(sp => sp.GetRequiredService<ComplianceWatchService>());

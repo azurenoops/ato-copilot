@@ -21,12 +21,20 @@ namespace Ato.Copilot.Agents.Compliance.Services;
 public class ConMonService : IConMonService
 {
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IComplianceWatchService? _watchService;
+    private readonly IAlertManager? _alertManager;
     private readonly ILogger<ConMonService> _logger;
 
-    public ConMonService(IServiceScopeFactory scopeFactory, ILogger<ConMonService> logger)
+    public ConMonService(
+        IServiceScopeFactory scopeFactory,
+        ILogger<ConMonService> logger,
+        IComplianceWatchService? watchService = null,
+        IAlertManager? alertManager = null)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _watchService = watchService;
+        _alertManager = alertManager;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -167,6 +175,9 @@ public class ConMonService : IConMonService
             GeneratedBy = generatedBy
         };
 
+        // Phase 17 §9a.3 — Enrich report with ComplianceWatchService data
+        await EnrichReportWithWatchDataAsync(report, systemId, db, cancellationToken);
+
         db.ConMonReports.Add(report);
         await db.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Generated {ReportType} ConMon report for system '{SystemId}', period '{Period}'",
@@ -205,6 +216,12 @@ public class ConMonService : IConMonService
 
         db.SignificantChanges.Add(change);
         await db.SaveChangesAsync(cancellationToken);
+
+        // Phase 17 §9a.4 — Auto-create alert for significant changes requiring reauthorization
+        if (_alertManager != null && requiresReauth)
+        {
+            await CreateSignificantChangeAlertAsync(change, system.Name, cancellationToken);
+        }
 
         _logger.LogInformation(
             "Reported significant change '{ChangeType}' for system '{SystemId}', reauthorization={Reauth}",
@@ -305,6 +322,13 @@ public class ConMonService : IConMonService
         {
             status.AlertLevel = "None";
             status.AlertMessage = $"Authorization valid for {daysUntil} more days (expires {activeAuth.ExpirationDate.Value:yyyy-MM-dd}).";
+        }
+
+        // Phase 17 §9a.4 — Auto-create ComplianceAlert for actionable expiration levels.
+        // Graduated severity: Info@90d, Warning@60d, High@30d, Critical@expired.
+        if (_alertManager != null && status.AlertLevel is "Info" or "Warning" or "Urgent" or "Expired")
+        {
+            await CreateExpirationAlertAsync(status, systemId, cancellationToken);
         }
 
         return status;
@@ -647,5 +671,155 @@ public class ConMonService : IConMonService
         };
 
         return reauthTypes.Contains(changeType);
+    }
+
+    /// <summary>
+    /// Populate <see cref="ConMonReport"/> Watch-data enrichment fields (Phase 17 §9a.3).
+    /// Queries monitoring configurations and drift alerts for the system's subscriptions.
+    /// No-op when <c>_watchService</c> is null (backward-compatible).
+    /// </summary>
+    private async Task EnrichReportWithWatchDataAsync(
+        ConMonReport report,
+        string systemId,
+        AtoCopilotContext db,
+        CancellationToken cancellationToken)
+    {
+        if (_watchService == null)
+            return;
+
+        try
+        {
+            // Discover subscriptions belonging to this system
+            var system = await db.RegisteredSystems
+                .AsNoTracking()
+                .Where(s => s.Id == systemId)
+                .Select(s => new { s.AzureProfile })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            var subscriptionIds = system?.AzureProfile?.SubscriptionIds ?? new List<string>();
+
+            if (subscriptionIds.Count == 0)
+            {
+                report.MonitoringEnabled = false;
+                return;
+            }
+
+            // Check if monitoring is enabled for any subscription
+            var monitoringConfigs = await db.MonitoringConfigurations
+                .AsNoTracking()
+                .Where(mc => subscriptionIds.Contains(mc.SubscriptionId) && mc.IsEnabled)
+                .ToListAsync(cancellationToken);
+
+            report.MonitoringEnabled = monitoringConfigs.Count > 0;
+            report.LastMonitoringCheck = monitoringConfigs
+                .Where(mc => mc.LastRunAt.HasValue)
+                .Select(mc => mc.LastRunAt!.Value.UtcDateTime)
+                .OrderByDescending(d => d)
+                .Cast<DateTime?>()
+                .FirstOrDefault();
+
+            // Count active drift alerts for the system's subscriptions
+            report.DriftAlertCount = await db.ComplianceAlerts
+                .AsNoTracking()
+                .CountAsync(a =>
+                    subscriptionIds.Contains(a.SubscriptionId) &&
+                    a.Type == AlertType.Drift &&
+                    a.Status != AlertStatus.Resolved &&
+                    a.Status != AlertStatus.Dismissed,
+                    cancellationToken);
+
+            // Count auto-remediation rules for the system's subscriptions
+            report.AutoRemediationRuleCount = await db.AutoRemediationRules
+                .AsNoTracking()
+                .CountAsync(r =>
+                    subscriptionIds.Contains(r.SubscriptionId) &&
+                    r.IsEnabled,
+                    cancellationToken);
+
+            _logger.LogDebug(
+                "Enriched ConMon report for system {SystemId}: monitoring={Enabled}, driftAlerts={Drift}, rules={Rules}",
+                systemId, report.MonitoringEnabled, report.DriftAlertCount, report.AutoRemediationRuleCount);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to enrich ConMon report with watch data for system {SystemId}", systemId);
+        }
+    }
+
+    /// <summary>
+    /// Creates a <see cref="ComplianceAlert"/> for ATO expiration events (Phase 17 §9a.4).
+    /// Graduated severity: Info@90d, Warning@60d, High@30d/Urgent, Critical@expired.
+    /// </summary>
+    private async Task CreateExpirationAlertAsync(
+        ExpirationStatus status, string systemId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var severity = status.AlertLevel switch
+            {
+                "Info" => AlertSeverity.Low,
+                "Warning" => AlertSeverity.Medium,
+                "Urgent" => AlertSeverity.High,
+                "Expired" => AlertSeverity.Critical,
+                _ => AlertSeverity.Low
+            };
+
+            var alert = new ComplianceAlert
+            {
+                Type = AlertType.Degradation,
+                Severity = severity,
+                Title = $"ATO {status.AlertLevel}: {status.SystemName}",
+                Description = status.AlertMessage ?? $"ATO alert level {status.AlertLevel} for system {systemId}.",
+                SubscriptionId = systemId, // Use systemId as subscription key for correlation
+                RegisteredSystemId = systemId,
+                RecommendedAction = status.AlertLevel == "Expired"
+                    ? "Initiate emergency reauthorization. System is operating without authorization."
+                    : $"Schedule reauthorization activities. {status.DaysUntilExpiration} days remaining."
+            };
+
+            await _alertManager!.CreateAlertAsync(alert, cancellationToken);
+
+            _logger.LogInformation(
+                "Created expiration alert for system {SystemId}: level={Level}, severity={Severity}",
+                systemId, status.AlertLevel, severity);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to create expiration alert for system {SystemId}", systemId);
+        }
+    }
+
+    /// <summary>
+    /// Creates a <see cref="ComplianceAlert"/> for significant changes requiring reauthorization (Phase 17 §9a.4).
+    /// </summary>
+    private async Task CreateSignificantChangeAlertAsync(
+        SignificantChange change, string systemName, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var alert = new ComplianceAlert
+            {
+                Type = AlertType.Violation, // Significant change requiring action
+                Severity = AlertSeverity.High,
+                Title = $"Significant Change: {change.ChangeType} — {systemName}",
+                Description = $"A significant change ({change.ChangeType}) has been reported for system '{systemName}' " +
+                    $"that requires reauthorization. Details: {change.Description}",
+                SubscriptionId = change.RegisteredSystemId, // Use systemId for correlation
+                RegisteredSystemId = change.RegisteredSystemId,
+                RecommendedAction = "Initiate impact analysis and reauthorization process per NIST SP 800-37 Rev 2."
+            };
+
+            await _alertManager!.CreateAlertAsync(alert, cancellationToken);
+
+            _logger.LogInformation(
+                "Created significant change alert for system {SystemId}: changeType={ChangeType}",
+                change.RegisteredSystemId, change.ChangeType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to create significant change alert for system {SystemId}",
+                change.RegisteredSystemId);
+        }
     }
 }

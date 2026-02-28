@@ -343,17 +343,52 @@ This phase runs **in parallel with Phases 1–5** — each phase ships its docs 
 
 **Estimated scope**: ~15 tasks (5 parallel with implementation + 10 final consolidation), 1–2 weeks
 
+### Phase 7: Monitoring & Alert Pipeline Integration (Spec §9a) — *"Connect the Pipes"*
+
+**Goal**: Bridge the subscription-scoped monitoring services (ComplianceWatchService, AlertManager, AlertNotificationService) with the system-scoped RMF services (ConMonService) so that monitoring data flows into ConMon reports, alerts trigger notifications, and drift auto-creates significant change records.
+
+**Trigger**: Post-Phase 16 analysis identified 3 CRITICAL + 2 HIGH integration gaps. Services built across Features 005 and 015 operate in isolation.
+
+**Modified files**:
+- `src/Ato.Copilot.Core/Models/Compliance/ComplianceModels.cs` — Add nullable `RegisteredSystemId` FK to `ComplianceAlert`
+- `src/Ato.Copilot.Core/Data/Context/AtoCopilotContext.cs` — Add FK relationship configuration
+- `src/Ato.Copilot.Agents/Compliance/Services/AlertManager.cs` — Inject optional `IAlertNotificationService`, call after `CreateAlertAsync`
+- `src/Ato.Copilot.Agents/Compliance/Services/ComplianceWatchService.cs` — Resolve `RegisteredSystemId` when creating alerts for mapped subscriptions
+- `src/Ato.Copilot.Agents/Compliance/Services/ConMonService.cs` — Inject `IComplianceWatchService`, `IComplianceMonitoringService`, `IAlertManager`; enrich reports; auto-create expiration/change alerts
+- `src/Ato.Copilot.Agents/Compliance/Tools/ConMonTools.cs` — Replace stub `compliance_send_notification` with real alert+notification pipeline
+- `src/Ato.Copilot.Agents/Compliance/Configuration/MonitoringOptions.cs` — Add `SignificantDriftThreshold`
+- `src/Ato.Copilot.Agents/Extensions/ServiceCollectionExtensions.cs` — Update DI registrations
+
+**New files**:
+- EF Core migration for ComplianceAlert FK
+- `tests/Ato.Copilot.Tests.Unit/Integration/MonitoringAlertPipelineTests.cs` — Pipeline integration tests
+- `tests/Ato.Copilot.Tests.Unit/Integration/ConMonReportEnrichmentTests.cs` — Report enrichment tests
+- `tests/Ato.Copilot.Tests.Unit/Integration/AlertNotificationPipelineTests.cs` — Alert→notification tests
+- `tests/Ato.Copilot.Tests.Integration/Tools/MonitoringIntegrationTests.cs` — End-to-end integration test
+
+**Key design decisions**:
+- `IAlertNotificationService` is optional on `AlertManager` constructor (backward compatible — null skips notification)
+- `ConMonService` resolves singleton Watch/Monitoring services via `IServiceScopeFactory` (consistent with its existing scoped pattern)
+- `RegisteredSystemId` on `ComplianceAlert` is nullable (backward compatible — existing alerts retain null)
+- Subscription→System resolution uses `AzureEnvironmentProfile.SubscriptionIds` reverse lookup
+- Significant drift threshold defaults to 5 drifted resources; configurable via `MonitoringOptions`
+- ConMon expiration alerts use graduated severity: Info (90d), Warning (60d), High (30d), Critical (expired)
+- Existing `EscalationHostedService` pipeline continues to work unchanged — it is additive to the new immediate notification path
+
+**Estimated scope**: ~20 tasks, 1–2 weeks
+
 ## Total Estimated Scope
 
-| Phase | Tasks | Duration |
+| Phase | Tasks (actual) | Duration |
 |-------|-------|----------|
-| Phase 1: RMF Foundation | ~40 | 3–4 weeks |
-| Phase 2: SSP Authoring | ~35 | 2–3 weeks |
-| Phase 3: Assessment & Authorization | ~45 | 4–5 weeks |
-| Phase 4: ConMon & Lifecycle | ~25 | 2–3 weeks |
-| Phase 5: Interop & Production | ~30 | 3–4 weeks |
-| Phase 6: Documentation | ~15 | 1–2 weeks (parallel) |
-| **Total** | **~190** | **15–21 weeks** |
+| Phase 1: RMF Foundation | 70 | 3–4 weeks |
+| Phase 2: SSP Authoring | 27 | 2–3 weeks |
+| Phase 3: Assessment & Authorization | 44 | 4–5 weeks |
+| Phase 4: ConMon & Lifecycle | 20 | 2–3 weeks |
+| Phase 5: Interop & Production | 27 | 3–4 weeks |
+| Phase 6: Documentation & Polish | 42 | 1–2 weeks (parallel) |
+| Phase 7: Monitoring Integration | 24 | 1–2 weeks |
+| **Total** | **254** | **16–23 weeks** |
 
 ## Complexity Tracking
 

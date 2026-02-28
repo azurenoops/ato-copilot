@@ -167,6 +167,38 @@ System       Categori-   Baseline     Implemen-   Record       Decision       Pl
                     SQLite / SQL Server
 ```
 
+### Monitoring & Alert Pipeline (Phase 17)
+
+```
+ComplianceWatchService                AlertManager             AlertNotificationService
+ │ DetectDriftAsync()                    │                            │
+ │  ├─ Compare baselines                │                            │
+ │  ├─ EnrichAlertWithSystemAsync()     │                            │
+ │  │   └─ SystemSubscriptionResolver   │                            │
+ │  │       .ResolveAsync()             │                            │
+ │  │       (sub → RegisteredSystemId)  │                            │
+ │  └─ CreateAlertAsync(alert) ────────►│                            │
+ │                                       │ Persist + correlate       │
+ │  ┌─ Threshold check ───────┐         │ SendNotificationAsync() ──►│
+ │  │  driftCount >= threshold │         │                            │ Channels:
+ │  │  → IConMonService        │         │                            │  ├─ Chat
+ │  │    .ReportChangeAsync()  │         │                            │  ├─ Email
+ │  └──────────────────────────┘         │                            │  └─ Webhook
+ │                                       │                            │
+ConMonService                            │                            │
+ │ CheckExpirationAsync()                │                            │
+ │  ├─ Graduated alerts (90/60/30/exp)   │                            │
+ │  └─ CreateExpirationAlertAsync() ────►│                            │
+ │ ReportChangeAsync()                   │                            │
+ │  └─ CreateSignificantChangeAlert() ──►│                            │
+ │ GenerateReportAsync()                 │                            │
+ │  └─ EnrichReportWithWatchData()       │                            │
+ │      ├─ MonitoringEnabled             │                            │
+ │      ├─ DriftAlertCount               │                            │
+ │      ├─ AutoRemediationRuleCount      │                            │
+ │      └─ LastMonitoringCheck           │                            │
+```
+
 ---
 
 ## Deployment Topology

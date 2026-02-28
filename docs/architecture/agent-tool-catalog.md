@@ -1487,6 +1487,11 @@ Send continuous monitoring notifications (expiration alerts, significant change 
 | `system_id` | string | yes | RegisteredSystem ID |
 | `notification_type` | string | yes | `expiration` \| `significant_change` \| `conmon_report` |
 
+**Phase 17 Enhancement**: Notifications now route through the AlertManager → AlertNotificationService pipeline.
+Expiration alerts are auto-created by `ConMonService.CheckExpirationAsync()` with graduated severity
+(Low@90d, Medium@60d, High@30d, Critical@expired). Significant change alerts are auto-created when
+`RequiresReauthorization = true`. The tool response includes channel `alert_pipeline` when connected.
+
 ```json
 {
   "status": "success",
@@ -1496,7 +1501,7 @@ Send continuous monitoring notifications (expiration alerts, significant change 
     "alert_level": "Warning",
     "alert_message": "ATO expires in 55 days.",
     "delivered": true,
-    "channels": ["mcp_response"]
+    "channels": ["mcp_response", "alert_pipeline"]
   }
 }
 ```

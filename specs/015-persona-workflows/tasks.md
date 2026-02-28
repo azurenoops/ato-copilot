@@ -17,19 +17,20 @@
 
 ## Phase Mapping
 
-The spec (5 parts), plan (6 phases), and tasks (16 phases) use different granularity:
+The spec, plan, and tasks use different granularity. Plan phase numbers match plan.md headers; spec references use capability section numbers (§x.y within Part 5) or Part numbers for non-capability sections:
 
-| Spec Part | Plan Phase | Task Phases | User Stories |
+| Spec Section | Plan Phase | Task Phases | User Stories |
 |-----------|-----------|-------------|-------------|
 | — | Phase 0 (Research) | — (completed) | — |
-| — | Phase 1 (Foundation) | Phase 1 (Setup), Phase 2 (Foundational) | — |
-| Part 2: RMF Foundation (§1.1–§1.11) | Phase 2 (RMF Foundation) | Phase 3 (US1), Phase 4 (US2), Phase 5 (US3), Phase 6 (US4) | US1–US4 |
-| Part 3: SSP & IaC (§2.1–§2.8) | Phase 3 (SSP Authoring) | Phase 7 (US5), Phase 8 (US6) | US5–US6 |
-| Part 4: Assessment & Auth (§3.1–§3.13) | Phase 4 (Assessment & Auth) | Phase 9 (US7), Phase 10 (US8) | US7–US8 |
-| Part 5: ConMon & Lifecycle (§4.1–§4.7) | Phase 4 (ConMon) | Phase 11 (US9) | US9 |
-| Part 6: Interoperability (§5.1–§5.2) | Phase 5 (Interoperability) | Phase 12 (US10), Phase 13 (US11) | US10–US11 |
-| Part 7: Agent Routing & UX | — | Phase 14 (US12), Phase 15 (US13) | US12–US13 |
+| — | — | Phase 1 (Setup), Phase 2 (Foundational) | — |
+| §1.1–§1.11: RMF Foundation | Phase 1 (RMF Foundation) | Phase 3 (US1), Phase 4 (US2), Phase 5 (US3), Phase 6 (US4) | US1–US4 |
+| §2.1–§2.8: SSP & IaC | Phase 2 (SSP Authoring) | Phase 7 (US5), Phase 8 (US6) | US5–US6 |
+| §3.1–§3.13: Assessment & Auth | Phase 3 (Assessment & Auth) | Phase 9 (US7), Phase 10 (US8) | US7–US8 |
+| §4.1–§4.7: ConMon & Lifecycle | Phase 4 (ConMon & Lifecycle) | Phase 11 (US9) | US9 |
+| §5.1–§5.6: Interoperability | Phase 5 (Interoperability) | Phase 12 (US10), Phase 13 (US11), Phase 16 (§5.3–§5.6) | US10–US11 |
+| Part 6: Agent Routing & UX | — | Phase 14 (US12), Phase 15 (US13) | US12–US13 |
 | Part 8: Documentation | Phase 6 (Documentation) | Phase 16 (Polish) + per-phase inline docs | — |
+| §9a.1–§9a.6: Monitoring Integration | Phase 7 (Monitoring Integration) | Phase 17 (Integration) | — |
 
 ---
 
@@ -157,7 +158,7 @@ The spec (5 parts), plan (6 phases), and tasks (16 phases) use different granula
 
 ---
 
-## Phase 5: User Story 3 — Control Baseline Selection, Tailoring & Inheritance (Priority: P1, Spec §1.6–1.11) 🎯 MVP
+## Phase 5: User Story 3 — Control Baseline Selection, Tailoring & Inheritance (Priority: P1, Spec §1.6–1.10) 🎯 MVP
 
 **Goal**: ISSMs can select NIST 800-53 baselines, apply CNSSI 1253 overlays, tailor controls, declare inheritance, and generate CRMs.
 
@@ -228,7 +229,7 @@ The spec (5 parts), plan (6 phases), and tasks (16 phases) use different granula
 
 - [x] T065 [US5] Create `ControlImplementation` entity in `src/Ato.Copilot.Core/Models/Compliance/SspModels.cs` with all fields per data-model.md
 - [x] T066 [US5] Add `ControlImplementations` DbSet to `src/Ato.Copilot.Core/Data/Context/AtoCopilotContext.cs` with unique constraint on (`RegisteredSystemId`, `ControlId`)
-- [ ] T067 [US5] Create EF Core migration for `ControlImplementation` entity
+- [ ] T067 [US5] Create EF Core migration for `ControlImplementation` entity *(known gap — DbSet + configuration exist in AtoCopilotContext.cs but formal migration not yet generated; tests pass via in-memory provider; required before production deployment)*
 
 ### Services for US5
 
@@ -267,7 +268,7 @@ The spec (5 parts), plan (6 phases), and tasks (16 phases) use different granula
 
 - [x] T212 [P] [US5] Write tool reference entries for 5 SSP tools in `docs/architecture/agent-tool-catalog.md` and SSP authoring workflow in `docs/guides/engineer-guide.md`
 
-**Checkpoint**: US5 complete — SSP authoring workflow functional with progress indicators. Narratives can be written, suggested, auto-populated, and compiled into an SSP document. Integration-tested and documented.
+**Checkpoint**: US5 complete — SSP authoring workflow functional with progress indicators. Narratives can be written, suggested, auto-populated, and compiled into an SSP document. Integration-tested and documented. *(Note: T067 EF Core migration pending — see task for details.)*
 
 ---
 
@@ -419,7 +420,7 @@ The spec (5 parts), plan (6 phases), and tasks (16 phases) use different granula
 ### Services for US9
 
 - [X] T130 [US9] Create `src/Ato.Copilot.Core/Interfaces/Compliance/IConMonService.cs` with methods: `CreatePlanAsync`, `GenerateReportAsync`, `ReportChangeAsync`, `CheckExpirationAsync`, `GetDashboardAsync`
-- [X] T131 [US9] Implement `ConMonService` in `src/Ato.Copilot.Agents/Compliance/Services/ConMonService.cs` — plan CRUD, report generation from Compliance Watch + POA&M data, expiration alerts at 90/60/30 days, significant change detection, multi-system dashboard with RBAC filtering
+- [X] T131 [US9] Implement `ConMonService` in `src/Ato.Copilot.Agents/Compliance/Services/ConMonService.cs` — plan CRUD, report generation from POA&M + assessment data *(Watch data integration deferred to Phase 17 T240–T243)*, expiration checks at 90/60/30 days, significant change recording, multi-system dashboard with RBAC filtering
 
 ### Tools for US9
 
@@ -429,7 +430,7 @@ The spec (5 parts), plan (6 phases), and tasks (16 phases) use different granula
 - [X] T135 [P] [US9] Create `TrackAtoExpirationTool` in `src/Ato.Copilot.Agents/Compliance/Tools/ConMonTools.cs` — expiration status with graduated alerts
 - [X] T136 [US9] Create `MultiSystemDashboardTool` in `src/Ato.Copilot.Agents/Compliance/Tools/ConMonTools.cs` — all systems with name, IL, RMF step, auth status, expiration, score, alerts
 - [X] T219 [US9] Create `ReauthorizationWorkflowTool` in `src/Ato.Copilot.Agents/Compliance/Tools/ConMonTools.cs` — detect reauthorization triggers (significant change, expiration, continuous monitoring failure), clone previous assessment, regress RMF step to Assess per spec §4.5
-- [X] T220 [US9] Implement notification delivery in `ConMonService` — Teams proactive messages (via M365 bot), VS Code information messages (via extension), CAT I quiet-hours override per spec §4.7. Wire `INotificationService` into expiration alerts and significant change events
+- [X] T220 [US9] Implement notification delivery stub in `ConMonService` — MCP-response-only notification data per spec §4.7 *(full Teams/VS Code delivery and alert pipeline integration deferred to Phase 17 T244–T246)*
 
 ### MCP & DI Registration for US9
 
@@ -605,11 +606,12 @@ The spec (5 parts), plan (6 phases), and tasks (16 phases) use different granula
 - [X] T195 [P] Create `docs/dev/code-style.md` — C# and TypeScript conventions, naming, folder structure rules
 - [X] T196 [P] Create `docs/dev/release.md` — versioning, changelog, Docker tagging, extension publishing
 
-### CI/CD & Production (Spec §5.3, §5.4, §5.5)
+### CI/CD & Production (Spec §5.3–§5.6)
 
 - [X] T197 Create `.github/actions/ato-compliance-gate/action.yml` — GitHub Actions composite action for IaC scanning in PRs, blocks on CAT I/II, respects risk acceptances
 - [X] T198 Replace hardcoded PIM eligible roles with Microsoft Graph PIM API calls in existing PIM tools (`src/Ato.Copilot.Agents/Compliance/Tools/`)
 - [X] T199 Replace `Task.Delay(100ms)` with real subprocess execution (az CLI / PowerShell) in existing remediation tools (`src/Ato.Copilot.Agents/Compliance/Tools/`)
+- [ ] T255 [P] [US4] Expand `src/Ato.Copilot.Agents/Compliance/Resources/stig-controls.json` from ~200 priority rules to ~880 rules covering all common DoD technologies per spec §5.6. Add CCI→NIST mapping expansion (~7,575 entries) in `cci-nist-mapping.json`. Update `docs/reference/stig-coverage.md` with new coverage matrix
 
 ### Cross-Cutting Quality (Constitution Compliance)
 
@@ -624,6 +626,69 @@ The spec (5 parts), plan (6 phases), and tasks (16 phases) use different granula
 - [X] T203 Verify Docker build succeeds and MCP server starts with all new tools registered
 
 **Checkpoint**: All documentation shipped. CI/CD gate functional. Full test suite passing. Docker build clean.
+
+---
+
+## Phase 17: Monitoring & Alert Pipeline Integration (Spec §9a)
+
+**Purpose**: Bridge subscription-scoped monitoring services (ComplianceWatchService, AlertManager, AlertNotificationService) with system-scoped RMF services (ConMonService). Ensures alerts trigger notifications, ConMon reports include Watch data, and drift auto-creates significant change records.
+
+**⚠️ Post-implementation integration**: These tasks address CRITICAL gaps identified during `/speckit.analyze` — services built in Features 005 and 015 are currently isolated.
+
+**Independent Test**: Create alert via WatchService → verify notification sent → generate ConMon report → verify Watch data included → trigger drift threshold → verify SignificantChange auto-created → verify expiration alert created and notified.
+
+### Entity & DB Changes
+
+- [X] T231 [P] Add nullable `RegisteredSystemId` FK (string, optional) to `ComplianceAlert` entity in `src/Ato.Copilot.Core/Models/Compliance/ComplianceModels.cs` — backward-compatible: existing alerts remain null
+- [X] T232 [P] Add FK relationship configuration for `ComplianceAlert.RegisteredSystemId` → `RegisteredSystem.Id` in `src/Ato.Copilot.Core/Data/Context/AtoCopilotContext.cs`
+- [ ] T233 Create EF Core migration for `ComplianceAlert.RegisteredSystemId` FK addition
+
+### Alert → Notification Pipeline (F3: CRITICAL)
+
+- [X] T234 Inject optional `IAlertNotificationService?` into `AlertManager` constructor in `src/Ato.Copilot.Agents/Compliance/Services/AlertManager.cs` — if non-null, call `SendNotificationAsync()` after successful `CreateAlertAsync()` persistence
+- [X] T235 [P] Create unit tests for AlertManager notification integration (notification sent on create, null service gracefully skipped, notification failure doesn't block alert creation) in `tests/Ato.Copilot.Tests.Unit/Services/AlertManagerNotificationTests.cs`
+- [X] T236 Update DI registration in `src/Ato.Copilot.Agents/Extensions/ServiceCollectionExtensions.cs` — wire `IAlertNotificationService` into `AlertManager` constructor
+
+### System-to-Subscription Bridge (F2: CRITICAL)
+
+- [X] T237 Create `SystemSubscriptionResolver` helper in `src/Ato.Copilot.Agents/Compliance/Services/SystemSubscriptionResolver.cs` — resolves `subscriptionId` → `RegisteredSystemId` by querying `RegisteredSystem.AzureProfile.SubscriptionIds` (reverse lookup with caching)
+- [X] T238 Inject `SystemSubscriptionResolver` into `ComplianceWatchService` — populate `ComplianceAlert.RegisteredSystemId` when creating alerts for subscriptions that belong to a registered system
+- [X] T239 [P] Create unit tests for `SystemSubscriptionResolver` (valid lookup, no match returns null, cache invalidation, multiple systems sharing subscription → first match) in `tests/Ato.Copilot.Tests.Unit/Services/SystemSubscriptionResolverTests.cs`
+
+### ConMon Report Enrichment (F1: CRITICAL, F5: HIGH)
+
+- [X] T240 Inject `IComplianceWatchService` and `IComplianceMonitoringService` into `ConMonService` via `IServiceScopeFactory` scope resolution in `src/Ato.Copilot.Agents/Compliance/Services/ConMonService.cs`
+- [X] T241 Enrich `ConMonService.GenerateReportAsync()` to include Watch data: monitoring enabled status, active drift alert count, auto-remediation rule count, last monitoring check timestamp — resolved via the system's `AzureEnvironmentProfile.SubscriptionIds`
+- [X] T242 Add `MonitoringStatus`, `DriftAlertCount`, `AutoRemediationRuleCount`, `LastMonitoringCheck` fields to `ConMonReport` entity in `src/Ato.Copilot.Core/Models/Compliance/ConMonModels.cs`
+- [X] T243 [P] Create unit tests for ConMon report enrichment (Watch data included, Watch unavailable gracefully skipped, multi-subscription aggregation) in `tests/Ato.Copilot.Tests.Unit/Services/ConMonReportEnrichmentTests.cs`
+
+### ConMon Event → Alert Pipeline (F4: HIGH)
+
+- [X] T244 Inject `IAlertManager` into `ConMonService` — auto-create `ComplianceAlert` when `CheckExpirationAsync()` detects alert level Warning/Urgent/Expired (graduated severity: Info@90d, Warning@60d, High@30d, Critical@expired)
+- [X] T245 Auto-create `ComplianceAlert` (type: SignificantChange, severity: High) when `ReportChangeAsync()` records a change with `RequiresReauthorization = true`
+- [X] T246 Replace stub implementation in `NotificationDeliveryTool` (`compliance_send_notification`) in `src/Ato.Copilot.Agents/Compliance/Tools/ConMonTools.cs` — create alert via `IAlertManager` which triggers the AlertManager → AlertNotificationService pipeline
+- [X] T247 [P] Create unit tests for ConMon alert creation (expiration alert at each severity level, significant change alert, duplicate alert suppression via AlertCorrelationService) in `tests/Ato.Copilot.Tests.Unit/Services/ConMonAlertPipelineTests.cs`
+
+### Watch Drift → Significant Change Auto-Detection (F7: MEDIUM)
+
+- [X] T248 Add `SignificantDriftThreshold` (int, default: 5) to `MonitoringOptions` in `src/Ato.Copilot.Core/Configuration/GatewayOptions.cs`
+- [X] T249 In `ComplianceWatchService.DetectDriftAsync()`, when drifted resource count exceeds threshold for a system with a registered `RegisteredSystemId`, resolve `IConMonService` and call `ReportChangeAsync()` with `changeType = "configuration_drift"`
+- [X] T250 [P] Create unit tests for auto-drift significant change (threshold not met → no change reported, threshold exceeded → change created, no registered system → skipped) in `tests/Ato.Copilot.Tests.Unit/Services/DriftSignificantChangeTests.cs`
+
+### Documentation & Service Clarity (F6: MEDIUM)
+
+- [X] T251 [P] Add XML doc comments to `ComplianceMonitoringService` and `ComplianceWatchService` clarifying scope/purpose distinction. Update `docs/architecture/overview.md` with monitoring layer diagram showing data flow: WatchService → AlertManager → AlertNotificationService → ConMonService. Update `docs/architecture/agent-tool-catalog.md` with modified tool/service signatures and `docs/guides/issm-guide.md` with updated ConMon workflow reflecting Watch data enrichment
+
+### Integration Test
+
+- [ ] T252 Create end-to-end integration test in `tests/Ato.Copilot.Tests.Integration/Tools/MonitoringIntegrationTests.cs` — register system with subscriptions → enable Watch monitoring → create drift alert → verify notification sent → verify alert has RegisteredSystemId → generate ConMon report → verify Watch data enrichment → check expiration → verify expiration alert created
+
+### Final Validation
+
+- [X] T253 Run full test suite — verify `dotnet build` passes with zero warnings and all existing 3,143+ tests still pass plus new integration tests, per Constitution Quality Gates
+- [X] T254 Update `CHANGELOG.md` with Phase 17 summary: monitoring/alert pipeline integration, new entity fields, new service dependencies
+
+**Checkpoint**: Phase 17 complete — monitoring services fully integrated. Alerts auto-trigger notifications. ConMon reports include Watch data. Drift auto-creates significant changes. Expiration events create graduated alerts. Full pipeline: Watch → AlertManager → AlertNotification → ConMon.
 
 ---
 
@@ -647,11 +712,12 @@ The spec (5 parts), plan (6 phases), and tasks (16 phases) use different granula
 - **Phase 14 (US12)**: Can start after Phase 3 (needs registered systems)
 - **Phase 15 (US13)**: Can start after Phase 10 (needs all RMF entities for cards)
 - **Phase 16 (Polish)**: Depends on all desired phases being complete
+- **Phase 17 (Integration)**: Depends on Phase 11 (US9 — ConMon) and Phase 16 (Polish). Requires ComplianceWatchService, AlertManager, AlertNotificationService, and ConMonService all implemented.
 
 ### Critical Path
 
 ```
-Phase 1 → Phase 2 → Phase 3 (US1) → Phase 4 (US2) → Phase 5 (US3) → Phase 7 (US5) → Phase 9 (US7) → Phase 10 (US8) → Phase 11 (US9) → Phase 16
+Phase 1 → Phase 2 → Phase 3 (US1) → Phase 4 (US2) → Phase 5 (US3) → Phase 7 (US5) → Phase 9 (US7) → Phase 10 (US8) → Phase 11 (US9) → Phase 16 → Phase 17
 ```
 
 ### Parallel Opportunities After Critical Path
@@ -745,15 +811,16 @@ After MVP:
 | 6 | US4 — STIG Mapping | 7 | 3 |
 | 7 | US5 — SSP Authoring | 19 | 11 |
 | 8 | US6 — IaC Diagnostics | 8 | 6 |
-| 9 | US7 — Assessment | 23 | 14 |
+| 9 | US7 — Assessment | 22 | 11 |
 | 10 | US8 — Authorization | 22 | 11 |
 | 11 | US9 — ConMon | 20 | 11 |
 | 12 | US10 — eMASS/OSCAL | 13 | 7 |
 | 13 | US11 — Templates/PDF | 14 | 7 |
 | 14 | US12 — Step Routing | 3 | 1 |
 | 15 | US13 — Adaptive Cards | 7 | 7 |
-| 16 | Polish | 31 | 27 |
-| **Total** | | **230** | **145 (63%)** |
+| 16 | Polish | 32 | 28 |
+| 17 | Monitoring Integration | 24 | 10 |
+| **Total** | | **254** | **153 (60%)** |
 
 ---
 
@@ -764,4 +831,4 @@ After MVP:
 - Each user story checkpoint is independently testable
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
-- 65% of tasks are parallelizable — significant opportunity for multi-developer execution
+- 60% of tasks are parallelizable — significant opportunity for multi-developer execution

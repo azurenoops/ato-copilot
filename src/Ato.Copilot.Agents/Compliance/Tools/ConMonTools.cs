@@ -627,13 +627,16 @@ public class ReauthorizationWorkflowTool : BaseTool
 public class NotificationDeliveryTool : BaseTool
 {
     private readonly IConMonService _service;
+    private readonly IAlertManager? _alertManager;
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
     public NotificationDeliveryTool(
         IConMonService service,
-        ILogger<NotificationDeliveryTool> logger) : base(logger)
+        ILogger<NotificationDeliveryTool> logger,
+        IAlertManager? alertManager = null) : base(logger)
     {
         _service = service;
+        _alertManager = alertManager;
     }
 
     public override string Name => "compliance_send_notification";
@@ -664,14 +667,15 @@ public class NotificationDeliveryTool : BaseTool
 
         try
         {
-            // Notification delivery is currently MCP-side only:
-            // We check the relevant status and return what would be sent.
-            // Full Teams/VS Code integration requires M365 bot and extension wiring.
+            // Notification delivery routes through AlertManager → AlertNotificationService pipeline.
+            // CheckExpirationAsync and ReportChangeAsync auto-create alerts (Phase 17 §9a.4).
 
             switch (notificationType.ToLowerInvariant())
             {
                 case "expiration":
                     var expStatus = await _service.CheckExpirationAsync(systemId, cancellationToken);
+                    // Alert is auto-created by ConMonService.CheckExpirationAsync (T244)
+                    var alertPipeline = _alertManager != null && expStatus.AlertLevel != "None";
                     sw.Stop();
                     return JsonSerializer.Serialize(new
                     {
@@ -684,15 +688,19 @@ public class NotificationDeliveryTool : BaseTool
                             alert_level = expStatus.AlertLevel,
                             alert_message = expStatus.AlertMessage,
                             delivered = expStatus.AlertLevel != "None",
-                            channels = expStatus.AlertLevel != "None"
-                                ? new[] { "mcp_response" }
-                                : Array.Empty<string>()
+                            channels = alertPipeline
+                                ? new[] { "mcp_response", "alert_pipeline" }
+                                : expStatus.AlertLevel != "None"
+                                    ? new[] { "mcp_response" }
+                                    : Array.Empty<string>()
                         },
                         metadata = Meta(sw)
                     }, JsonOpts);
 
                 case "significant_change":
                     var reauth = await _service.CheckReauthorizationAsync(systemId, false, cancellationToken);
+                    // Alerts for changes requiring reauthorization are auto-created by
+                    // ConMonService.ReportChangeAsync (T245)
                     sw.Stop();
                     return JsonSerializer.Serialize(new
                     {
@@ -706,7 +714,7 @@ public class NotificationDeliveryTool : BaseTool
                             triggers = reauth.Triggers,
                             delivered = reauth.UnreviewedChangeCount > 0,
                             channels = reauth.UnreviewedChangeCount > 0
-                                ? new[] { "mcp_response" }
+                                ? new[] { "mcp_response", "alert_pipeline" }
                                 : Array.Empty<string>()
                         },
                         metadata = Meta(sw)

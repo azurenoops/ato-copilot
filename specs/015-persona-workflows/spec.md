@@ -304,7 +304,7 @@ Step 6 (Monitor):     ████████░░ 80% — Watch + Kanban stro
 - Q: Do all controls in the tailored baseline require SSP implementation narratives, or only customer-responsible controls? → A: All controls require a narrative. Inherited controls get a standard inherited-control narrative auto-populated (referencing the CRM). Customer and Shared controls require human-authored narratives (AI can suggest drafts).
 - Q: Can the copilot function without live Azure connectivity (air-gapped, disconnected)? → A: Azure is required for assessments. Air-gapped environments still have Azure (e.g., Azure Government IL5/IL6 isolated regions). The copilot needs configurable Azure environment profiles (endpoints, auth, proxy) to support air-gapped Azure deployments.
 - Q: Should the AO (Authorizing Official) share the Administrator role, or get a dedicated role for separation of duties? → A: Add a dedicated `Compliance.AuthorizingOfficial` RBAC role. AO gets authorization-decision-only permissions (issue ATO, accept risk, set terms). `Administrator` retains copilot infrastructure management only. Enforces DoD separation of duties.
-- Q: Should generated documents (SSP, SAR, etc.) follow exact DISA templates, ATO Copilot's own format, or support pluggable templates? → A: Both B and C. ATO Copilot ships a built-in professional format covering all DoDI 8510.01 / NIST required sections as the default. Additionally, a pluggable template engine allows organizations to upload their own DOCX templates. At generation time, users choose: "ATO Copilot format" or a named custom template.
+- Q: Should generated documents (SSP, SAR, etc.) follow exact DISA templates, ATO Copilot's own format, or support pluggable templates? → A: Both B and C. ATO Copilot ships a built-in compliant format covering all DoDI 8510.01 / NIST required sections as the default. Additionally, a pluggable template engine allows organizations to upload their own DOCX templates. At generation time, users choose: "ATO Copilot format" or a named custom template.
 
 ---
 
@@ -418,7 +418,7 @@ All Azure SDK calls use the registered system's environment profile rather than 
 
 | # | Capability | Persona | Description |
 |---|-----------|---------|-------------|
-| 5.1 | **Formatted Document Export (PDF/DOCX)** | ISSM, SCA | Export all artifacts as formatted PDF/DOCX. Two template modes: **(1) ATO Copilot format** — built-in professional format covering all DoDI 8510.01 required sections (per NIST SP 800-18 for SSP, NIST SP 800-53A for SAR, etc.); not locked to a specific DISA template revision. **(2) Custom organizational template** — organizations upload their own DOCX templates with merge fields (mail-merge style); the template engine injects data into placeholders. Templates are managed per-organization via the Configuration Agent. Users choose template at generation time. |
+| 5.1 | **Formatted Document Export (PDF/DOCX)** | ISSM, SCA | Export all artifacts as formatted PDF/DOCX. Two template modes: **(1) ATO Copilot format** — built-in compliant format covering all DoDI 8510.01 required sections (per NIST SP 800-18 for SSP, NIST SP 800-53A for SAR, etc.); not locked to a specific DISA template revision. **(2) Custom organizational template** — organizations upload their own DOCX templates with merge fields (mail-merge style); the template engine injects data into placeholders. Templates are managed per-organization via the Configuration Agent. Users choose template at generation time. |
 | 5.1a | **Template Management** | Administrator | Upload, list, update, and delete custom DOCX templates. Each template declares which document type it applies to (SSP, SAR, RAR, POA&M, CRM, ConMon Report, ATO Letter). Validate merge fields on upload. |
 | 5.2 | **eMASS Data Exchange** | ISSM | Export to eMASS-compatible Excel (xlsx) via ClosedXML. Import eMASS Excel data with conflict resolution (skip/overwrite/merge). Dry-run mode for preview. |
 | 5.3 | **CI/CD Compliance Gate** | Engineer | GitHub Actions action that scans IaC in PRs. Blocks on CAT I/II. Respects risk acceptances. |
@@ -601,6 +601,95 @@ To keep scope focused, the following are explicitly out of scope (documentation 
 | **CAC hardware integration** | Smart card readers require OS-level drivers; out of scope for a chat copilot. |
 | **Multi-tenant SaaS** | Single-tenant deployment model. Multi-tenant is a separate product decision. |
 | **Real-time SIEM integration** | We monitor compliance, not security events. Defender for Cloud is our data source. |
+
+---
+
+## Part 9a: Post-Implementation Integration — Monitoring & Alert Pipeline
+
+**Added**: 2026-02-28 | **Trigger**: Post-Phase 16 analysis identified 3 CRITICAL + 2 HIGH integration gaps between services built across Features 005 and 015.
+
+### Background
+
+Three monitoring services and two alert services were built in separate features and operate in isolation despite overlapping responsibilities:
+
+| Service | Scope Unit | Feature | Lifetime | Purpose |
+|---------|-----------|---------|----------|---------|
+| `ComplianceMonitoringService` | Subscription | Pre-015 | Singleton | Ad-hoc compliance status, trends, history, audit |
+| `ComplianceWatchService` | Subscription | 005 | Singleton | Automated monitoring, drift baselines, alert creation, auto-remediation |
+| `ConMonService` | System (RMF) | 015 | Scoped | ConMon plans, formal reports, expiration, significant changes |
+| `AlertManager` | Subscription | 005 | Singleton | Alert CRUD, status transitions, SLA deadlines |
+| `AlertNotificationService` | Alert | 005 | Singleton | Notification dispatch (chat/email/webhook), rate limiting, digests |
+
+### Problem Statement
+
+1. **ConMon reports are incomplete**: `ConMonService.GenerateReportAsync()` queries `ControlEffectivenessRecords`, `AuthorizationDecisions`, and `PoamItems` directly from the database but never consults `IComplianceWatchService` or `IComplianceMonitoringService`. This means ConMon reports exclude: monitoring status, drift alerts, auto-remediation activity, and live Azure scan results.
+
+2. **Scope mismatch**: Watch/Alert services operate on `subscriptionId`. ConMon operates on `systemId`. `ComplianceAlert` has no `RegisteredSystemId` FK. The `RegisteredSystem.AzureEnvironmentProfile.SubscriptionIds` field exists but no service bridges system IDs to subscription IDs for alert filtering.
+
+3. **Silent alert creation**: `AlertManager.CreateAlertAsync()` persists alerts but does NOT call `AlertNotificationService`. `ComplianceWatchService` calls `CreateAlertAsync()` 4 times (drift, violations, auto-remediation, manual) but has no `IAlertNotificationService` dependency. Result: alerts are created silently — users only learn about them when they proactively query, or after SLA violation triggers `EscalationHostedService`.
+
+4. **ConMon notifications are stub-only**: The `compliance_send_notification` tool returns status data via MCP response with an explicit TODO comment: *"Notification delivery is currently MCP-side only."* Spec §4.7 requires actual delivery via Teams/VS Code. Expiration warnings and significant change events are not pushed to users.
+
+5. **No automatic significant change detection**: `ConMonService.ReportChangeAsync()` requires manual invocation. `ComplianceWatchService` has drift detection that discovers configuration changes, but drift alerts are never forwarded to the ConMon significant change pipeline.
+
+### Requirements
+
+#### 9a.1 System-to-Subscription Bridge
+
+- Add nullable `RegisteredSystemId` FK to `ComplianceAlert` entity (backward-compatible: null for pre-Feature 015 alerts).
+- When `ComplianceWatchService` creates alerts for a subscription, resolve the subscription's owning `RegisteredSystem` (lookup via `AzureEnvironmentProfile.SubscriptionIds`) and populate the FK.
+- `ConMonService` report generation and dashboard queries should filter Watch/Alert data using this FK.
+
+#### 9a.2 Alert → Notification Pipeline
+
+- After `AlertManager.CreateAlertAsync()` persists a new alert, call `IAlertNotificationService.SendNotificationAsync()` to deliver immediate notifications. The notification service's existing quiet-hours suppression and rate limiting apply.
+- This makes notification delivery automatic for ALL alert sources (Watch drift, Watch violations, Watch auto-remediation, manual alerts).
+- `IAlertNotificationService` is injected as an optional dependency on `AlertManager` (backward-compatible — null skips notification).
+
+#### 9a.3 ConMon Report Enrichment
+
+- Inject `IComplianceWatchService` into `ConMonService`.
+- `GenerateReportAsync()` enriches reports with:
+  - Whether continuous monitoring is enabled for the system's subscriptions
+  - Count of active drift alerts
+  - Auto-remediation rule count and activity summary
+  - Monitoring frequency and last check timestamp
+- Inject `IComplianceMonitoringService` into `ConMonService` to include live Azure scan status (compliance score from Azure Policy, Defender findings) alongside assessment-derived scores.
+
+#### 9a.4 ConMon Event → Alert Pipeline
+
+- When `ConMonService.CheckExpirationAsync()` detects an alert level of "Warning", "Urgent", or "Expired", auto-create a `ComplianceAlert` via `IAlertManager`:
+  - Type: `ComplianceExpiration`
+  - Severity: Info (90 days), Warning (60 days), High (30 days), Critical (expired)
+  - The AlertManager → AlertNotificationService pipeline handles delivery.
+- When `ConMonService.ReportChangeAsync()` records a significant change that `RequiresReauthorization`, auto-create a `ComplianceAlert`:
+  - Type: `SignificantChange`
+  - Severity: High
+  - Includes change description and reauthorization flag.
+
+#### 9a.5 Watch Drift → Significant Change Auto-Detection
+
+- When `ComplianceWatchService.DetectDriftAsync()` detects drift on resources belonging to a registered system, AND the number of drifted resources exceeds a configurable threshold (default: 5), automatically call `IConMonService.ReportChangeAsync()` with `changeType = "configuration_drift"`.
+- This creates a `SignificantChange` record and triggers the reauthorization evaluation.
+- Threshold is configurable via `MonitoringOptions.SignificantDriftThreshold`.
+
+#### 9a.6 Service Responsibility Clarification
+
+- Document the distinction between `ComplianceMonitoringService` (ad-hoc status API) and `ComplianceWatchService` (automated continuous monitoring engine). Both are valid but serve different use cases.
+- Add XML doc comments to each service class clarifying scope and relationship.
+
+### What This Changes
+
+| Component | Change |
+|-----------|--------|
+| `ComplianceAlert` entity | Add nullable `RegisteredSystemId` FK |
+| `AlertManager` | Add optional `IAlertNotificationService` constructor dependency; call after `CreateAlertAsync` |
+| `ComplianceWatchService` | Resolve `RegisteredSystemId` when creating alerts for mapped subscriptions |
+| `ConMonService` | Inject `IComplianceWatchService`, `IComplianceMonitoringService`, `IAlertManager`; enrich reports; auto-create alerts for expiration/changes |
+| `ConMonTools` (`compliance_send_notification`) | Replace stub with real alert creation + notification pipeline |
+| `MonitoringOptions` | Add `SignificantDriftThreshold` (default: 5) |
+| DI registration | Update constructor wirings in `ServiceCollectionExtensions.cs` |
+| EF Core migration | Add FK to `ComplianceAlert` |
 
 ---
 

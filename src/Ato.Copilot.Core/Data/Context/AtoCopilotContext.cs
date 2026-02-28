@@ -583,6 +583,16 @@ public class AtoCopilotContext : DbContext
             entity.HasIndex(e => new { e.AssignedTo, e.Status }).HasDatabaseName("IX_ComplianceAlert_Assignee_Status");
             entity.HasIndex(e => e.GroupedAlertId).HasDatabaseName("IX_ComplianceAlert_GroupedAlertId");
             entity.HasIndex(e => new { e.SlaDeadline, e.Status }).HasDatabaseName("IX_ComplianceAlert_Sla_Status");
+
+            // Optional FK: RegisteredSystemId → RegisteredSystem.Id (Phase 17 §9a.1)
+            // Set null on delete so alerts survive system de-registration.
+            entity.Property(e => e.RegisteredSystemId).HasMaxLength(100);
+            entity.HasOne(e => e.RegisteredSystem)
+                .WithMany()
+                .HasForeignKey(e => e.RegisteredSystemId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .IsRequired(false);
+            entity.HasIndex(e => e.RegisteredSystemId).HasDatabaseName("IX_ComplianceAlert_RegisteredSystemId");
         });
 
         // ─── AlertIdCounter ─────────────────────────────────────────────────

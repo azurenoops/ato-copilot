@@ -127,6 +127,20 @@ public class ConMonReport
     [MaxLength(200)]
     public string GeneratedBy { get; set; } = string.Empty;
 
+    // ─── Watch Data Enrichment (Phase 17 §9a.3) ─────────────────────────────
+
+    /// <summary>Whether continuous monitoring is enabled for the system's subscriptions.</summary>
+    public bool? MonitoringEnabled { get; set; }
+
+    /// <summary>Count of active drift alerts from ComplianceWatchService.</summary>
+    public int? DriftAlertCount { get; set; }
+
+    /// <summary>Count of auto-remediation rules configured for the system's subscriptions.</summary>
+    public int? AutoRemediationRuleCount { get; set; }
+
+    /// <summary>Timestamp of the last monitoring check from ComplianceWatchService (UTC).</summary>
+    public DateTime? LastMonitoringCheck { get; set; }
+
     // ─── Navigation ──────────────────────────────────────────────────────────
     /// <summary>The ConMon plan this report belongs to.</summary>
     [ForeignKey(nameof(ConMonPlanId))]

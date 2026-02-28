@@ -534,6 +534,7 @@ The `compliance_generate_conmon_report` tool produces:
 - New and resolved findings since last report
 - Open and overdue POA&M items
 - Markdown report content suitable for distribution
+- **Watch data enrichment** (Phase 17): Monitoring enabled status, active drift alert count, auto-remediation rule count, and last monitoring check timestamp — automatically populated from ComplianceWatchService data when monitoring is configured for the system's subscriptions
 
 ### Tracking ATO Expiration
 
@@ -549,6 +550,8 @@ The `compliance_track_ato_expiration` tool provides alerts at:
 - **30 days** (Urgent): Escalate to AO immediately
 - **Expired**: System operating without authorization
 
+**Phase 17 Enhancement**: Each alert level above "None" automatically creates a `ComplianceAlert` through the alert pipeline, triggering notifications via `AlertNotificationService`. Graduated severity: Low@90d, Medium@60d, High@30d, Critical@expired.
+
 ### Reporting Significant Changes
 
 Report changes that may trigger reauthorization:
@@ -558,6 +561,8 @@ Report a significant change for system {system_id}: New Interconnection — "Add
 ```
 
 The `compliance_report_significant_change` tool automatically classifies whether the change requires reauthorization based on 10 built-in trigger types (New Interconnection, Major Upgrade, Data Type Change, etc.).
+
+**Phase 17 Enhancement**: When a significant change requires reauthorization, a `ComplianceAlert` (type: Violation, severity: High) is automatically created and routed through the notification pipeline. Additionally, when ComplianceWatchService detects drift exceeding the configured threshold (default: 5 resources), it automatically reports a significant change of type `configuration_drift`.
 
 ### Reauthorization Workflow
 

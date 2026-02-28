@@ -1734,6 +1734,14 @@ public class ComplianceAlert
     /// <summary>Identity of user who dismissed the alert.</summary>
     public string? DismissedBy { get; set; }
 
+    /// <summary>
+    /// Optional FK to the registered system this alert is associated with.
+    /// Nullable for backward compatibility — pre-Feature 015 alerts remain null.
+    /// Populated by ComplianceWatchService when creating alerts for subscriptions
+    /// that belong to a registered system (resolved via AzureEnvironmentProfile.SubscriptionIds).
+    /// </summary>
+    public string? RegisteredSystemId { get; set; }
+
     /// <summary>FK to parent alert if this is part of a correlated group.</summary>
     public Guid? GroupedAlertId { get; set; }
 
@@ -1774,6 +1782,9 @@ public class ComplianceAlert
 
     /// <summary>Notifications sent for this alert.</summary>
     public ICollection<AlertNotification> Notifications { get; set; } = new List<AlertNotification>();
+
+    /// <summary>Navigation to the registered system (if linked).</summary>
+    public RegisteredSystem? RegisteredSystem { get; set; }
 }
 
 /// <summary>

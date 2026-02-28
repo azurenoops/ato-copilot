@@ -4,7 +4,23 @@ All notable changes to ATO Copilot are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.16.0] - 2025-01-15
+
+### Added
+
+#### Feature 015 Phase 17: Monitoring & Alert Pipeline Integration
+
+- **ComplianceAlert → RegisteredSystem FK** — nullable `RegisteredSystemId` FK on `ComplianceAlert` with `SetNull` delete behavior and indexed lookup (T231, T232)
+- **AlertManager → Notification Pipeline** — optional `IAlertNotificationService` injection; sends notification after alert persistence with graceful failure handling (T234, T236)
+- **SystemSubscriptionResolver** — new service resolving `subscriptionId` → `RegisteredSystemId` via `AzureProfile.SubscriptionIds` reverse lookup with 5-minute in-memory cache (T237)
+- **Watch → Alert Enrichment** — `ComplianceWatchService` populates `ComplianceAlert.RegisteredSystemId` before all alert creation using `ISystemSubscriptionResolver` (T238)
+- **ConMon Report Watch Data Enrichment** — `GenerateReportAsync()` now includes monitoring enabled status, active drift alert count, auto-remediation rule count, and last monitoring check timestamp (T240, T241, T242)
+- **ConMon → Alert Pipeline** — `CheckExpirationAsync()` auto-creates graduated alerts (Info@90d→Low, Warning@60d→Medium, Urgent@30d→High, Expired→Critical); `ReportChangeAsync()` auto-creates High severity alert when `RequiresReauthorization = true` (T244, T245)
+- **NotificationDeliveryTool Enhancement** — `compliance_send_notification` now routes through `IAlertManager` for alert pipeline integration with `alert_pipeline` channel (T246)
+- **Drift → Significant Change** — `DetectDriftAsync()` auto-creates ConMon significant change when drifted resource count exceeds configurable `SignificantDriftThreshold` (default: 5) via `IServiceScopeFactory` scoped resolution (T248, T249)
+- **MonitoringOptions Expansion** — added `SignificantDriftThreshold`, `AutoCreateSignificantChanges`, `MaxDriftAlertsPerReport` configuration properties (T248)
+- **27 New Unit Tests** — AlertManager notification (4), SystemSubscriptionResolver (7), ConMon report enrichment (4), ConMon alert pipeline (7), drift significant change (3), plus integration test coverage (T235, T239, T243, T247, T250)
+- **Documentation Updates** — monitoring pipeline ASCII diagram in `overview.md`, Phase 17 enhancement notes in `agent-tool-catalog.md` and `issm-guide.md` (T251)
 
 ## [1.15.0] - 2025-01-15
 
