@@ -1,0 +1,114 @@
+{
+  "name": "ato-copilot-vscode",
+  "displayName": "ATO Copilot",
+  "description": "GitHub Copilot Chat participant for ATO compliance assessments, NIST 800-53 controls, and infrastructure-as-code generation",
+  "version": "0.1.0",
+  "publisher": "ato-copilot",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Chat"
+  ],
+  "activationEvents": [
+    "onChatParticipant:ato"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "chatParticipants": [
+      {
+        "id": "ato",
+        "fullName": "ATO Copilot",
+        "name": "ato",
+        "description": "Ask about ATO compliance, NIST 800-53 controls, and infrastructure-as-code",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "compliance",
+            "description": "Run compliance assessments, query controls, remediation"
+          },
+          {
+            "name": "knowledge",
+            "description": "Query ATO knowledge base, best practices, documentation"
+          },
+          {
+            "name": "config",
+            "description": "Manage ATO Copilot configuration settings"
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "ato.checkHealth",
+        "title": "ATO Copilot: Check API Health",
+        "category": "ATO Copilot"
+      },
+      {
+        "command": "ato.configure",
+        "title": "ATO Copilot: Configure Connection",
+        "category": "ATO Copilot"
+      },
+      {
+        "command": "ato.analyzeCurrentFile",
+        "title": "ATO Copilot: Analyze Current File for Compliance",
+        "category": "ATO Copilot"
+      },
+      {
+        "command": "ato.analyzeWorkspace",
+        "title": "ATO Copilot: Analyze Workspace for Compliance",
+        "category": "ATO Copilot"
+      }
+    ],
+    "configuration": {
+      "title": "ATO Copilot",
+      "properties": {
+        "ato-copilot.apiUrl": {
+          "type": "string",
+          "default": "http://localhost:3001",
+          "description": "MCP Server base URL"
+        },
+        "ato-copilot.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for authentication (if required)"
+        },
+        "ato-copilot.timeout": {
+          "type": "number",
+          "default": 30000,
+          "description": "Request timeout in milliseconds"
+        },
+        "ato-copilot.enableLogging": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable debug logging to output channel"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "pretest": "npm run compile",
+    "test": "node ./dist/test/runTests.js"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.3.11",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.0",
+    "@types/sinon": "^17.0.3",
+    "@types/vscode": "^1.90.0",
+    "@vscode/test-electron": "^2.3.8",
+    "chai": "^4.3.10",
+    "eslint": "^8.56.0",
+    "mocha": "^10.2.0",
+    "sinon": "^17.0.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "axios": "^1.6.5"
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "1.0.0",
+  "id": "ato-copilot-m365",
+  "name": {
+    "short": "ATO Copilot",
+    "full": "ATO Copilot for Microsoft 365"
+  },
+  "description": {
+    "short": "Compliance assessment and remediation",
+    "full": "ATO Copilot brings NIST 800-53 compliance assessment, remediation planning, and ATO documentation directly into Microsoft Teams."
+  },
+  "developer": {
+    "name": "ATO Copilot Team",
+    "websiteUrl": "https://ato-copilot.azurewebsites.us",
+    "privacyUrl": "https://ato-copilot.azurewebsites.us/privacy",
+    "termsOfUseUrl": "https://ato-copilot.azurewebsites.us/terms"
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "bots": [
+    {
+      "botId": "${BOT_ID}",
+      "scopes": ["personal", "team", "groupChat"],
+      "commandLists": [
+        {
+          "scopes": ["personal"],
+          "commands": [
+            {
+              "title": "Compliance Assessment",
+              "description": "Run a compliance assessment"
+            },
+            {
+              "title": "Remediation Plan",
+              "description": "Generate a remediation plan"
+            },
+            {
+              "title": "Control Lookup",
+              "description": "Look up a NIST control"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "validDomains": ["ato-copilot.azurewebsites.us"]
+}
