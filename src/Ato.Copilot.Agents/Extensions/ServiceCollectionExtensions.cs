@@ -251,6 +251,7 @@ public static class ServiceCollectionExtensions
 
         // ─── Kanban Services ─────────────────────────────────────────────────
         services.AddScoped<IKanbanService, KanbanService>();
+        services.AddScoped<ITaskEnrichmentService, TaskEnrichmentService>();
         services.AddSingleton<INotificationService, NotificationService>();
         services.AddHostedService<OverdueScanHostedService>();
         services.AddHostedService<SessionCleanupHostedService>();
@@ -274,6 +275,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<KanbanBulkUpdateTool>();
         services.AddSingleton<KanbanExportTool>();
         services.AddSingleton<KanbanArchiveBoardTool>();
+        services.AddSingleton<KanbanGenerateScriptTool>();
+        services.AddSingleton<KanbanGenerateValidationTool>();
 
         // Register Kanban tools as BaseTool collection
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanCreateBoardTool>());
@@ -294,6 +297,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanBulkUpdateTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanExportTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanArchiveBoardTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanGenerateScriptTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<KanbanGenerateValidationTool>());
 
         // ─── CAC/Auth Services ───────────────────────────────────────────────
         services.AddScoped<ICacSessionService, CacSessionService>();

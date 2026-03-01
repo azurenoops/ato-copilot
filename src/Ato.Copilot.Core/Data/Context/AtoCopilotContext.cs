@@ -338,6 +338,7 @@ public class AtoCopilotContext : DbContext
             entity.Property(e => e.AssigneeId).HasMaxLength(200);
             entity.Property(e => e.AssigneeName).HasMaxLength(200);
             entity.Property(e => e.RemediationScript).HasMaxLength(8000);
+            entity.Property(e => e.RemediationScriptType).HasMaxLength(20);
             entity.Property(e => e.ValidationCriteria).HasMaxLength(2000);
             entity.Property(e => e.FindingId).HasMaxLength(100);
             entity.Property(e => e.CreatedBy).HasMaxLength(200).IsRequired();

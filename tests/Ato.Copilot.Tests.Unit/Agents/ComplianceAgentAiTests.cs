@@ -145,6 +145,8 @@ public class ComplianceAgentAiTests
             kanbanValidateTask, kanbanAddComment, kanbanTaskComments, kanbanEditComment,
             kanbanDeleteComment, kanbanRemediateTask, kanbanCollectEvidence, kanbanBulkUpdate,
             kanbanExport, kanbanArchiveBoard,
+            new KanbanGenerateScriptTool(_scopeFactory, Mock.Of<ILogger<KanbanGenerateScriptTool>>()),
+            new KanbanGenerateValidationTool(_scopeFactory, Mock.Of<ILogger<KanbanGenerateValidationTool>>()),
             cacStatus, cacSignOut, cacSetTimeout, cacMapCertificate,
             pimListEligible, pimActivateRole, pimDeactivateRole, pimListActive,
             pimExtendRole, pimApproveRequest, pimDenyRequest,

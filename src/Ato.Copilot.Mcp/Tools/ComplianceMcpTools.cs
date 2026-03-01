@@ -40,6 +40,8 @@ public class ComplianceMcpTools
     private readonly KanbanBulkUpdateTool _kanbanBulkUpdate;
     private readonly KanbanExportTool _kanbanExport;
     private readonly KanbanArchiveBoardTool _kanbanArchiveBoard;
+    private readonly KanbanGenerateScriptTool _kanbanGenerateScript;
+    private readonly KanbanGenerateValidationTool _kanbanGenerateValidation;
 
     // Auth/PIM tools
     private readonly CacStatusTool _cacStatus;
@@ -143,6 +145,8 @@ public class ComplianceMcpTools
         KanbanBulkUpdateTool kanbanBulkUpdate,
         KanbanExportTool kanbanExport,
         KanbanArchiveBoardTool kanbanArchiveBoard,
+        KanbanGenerateScriptTool kanbanGenerateScript,
+        KanbanGenerateValidationTool kanbanGenerateValidation,
         CacStatusTool cacStatus,
         CacSignOutTool cacSignOut,
         CacSetTimeoutTool cacSetTimeout,
@@ -213,6 +217,8 @@ public class ComplianceMcpTools
         _kanbanBulkUpdate = kanbanBulkUpdate;
         _kanbanExport = kanbanExport;
         _kanbanArchiveBoard = kanbanArchiveBoard;
+        _kanbanGenerateScript = kanbanGenerateScript;
+        _kanbanGenerateValidation = kanbanGenerateValidation;
         _cacStatus = cacStatus;
         _cacSignOut = cacSignOut;
         _cacSetTimeout = cacSetTimeout;
@@ -638,6 +644,30 @@ public class ComplianceMcpTools
             ["board_id"] = boardId, ["confirm"] = confirm
         };
         return await _kanbanArchiveBoard.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Generate or regenerate a remediation script for a Kanban task using AI or template fallback.")]
+    public async Task<string> KanbanGenerateScriptAsync(
+        string taskId, string scriptType = "AzureCli", bool force = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["task_id"] = taskId, ["script_type"] = scriptType, ["force"] = force
+        };
+        return await _kanbanGenerateScript.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Generate or regenerate validation criteria for a Kanban task using AI or template fallback.")]
+    public async Task<string> KanbanGenerateValidationAsync(
+        string taskId, bool force = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["task_id"] = taskId, ["force"] = force
+        };
+        return await _kanbanGenerateValidation.ExecuteAsync(args, cancellationToken);
     }
 
     // ─── Auth/PIM MCP Wrappers ───────────────────────────────────────────

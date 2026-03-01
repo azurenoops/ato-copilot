@@ -55,6 +55,8 @@ public class ComplianceAgent : BaseAgent
     private readonly KanbanBulkUpdateTool _kanbanBulkUpdate;
     private readonly KanbanExportTool _kanbanExport;
     private readonly KanbanArchiveBoardTool _kanbanArchiveBoard;
+    private readonly KanbanGenerateScriptTool _kanbanGenerateScript;
+    private readonly KanbanGenerateValidationTool _kanbanGenerateValidation;
 
     // Auth/PIM tools (Phase 3 — US1)
     private readonly CacStatusTool _cacStatus;
@@ -161,6 +163,8 @@ public class ComplianceAgent : BaseAgent
         KanbanBulkUpdateTool kanbanBulkUpdate,
         KanbanExportTool kanbanExport,
         KanbanArchiveBoardTool kanbanArchiveBoard,
+        KanbanGenerateScriptTool kanbanGenerateScript,
+        KanbanGenerateValidationTool kanbanGenerateValidation,
         CacStatusTool cacStatus,
         CacSignOutTool cacSignOut,
         CacSetTimeoutTool cacSetTimeout,
@@ -237,6 +241,8 @@ public class ComplianceAgent : BaseAgent
         _kanbanBulkUpdate = kanbanBulkUpdate;
         _kanbanExport = kanbanExport;
         _kanbanArchiveBoard = kanbanArchiveBoard;
+        _kanbanGenerateScript = kanbanGenerateScript;
+        _kanbanGenerateValidation = kanbanGenerateValidation;
         _cacStatus = cacStatus;
         _cacSignOut = cacSignOut;
         _cacSetTimeout = cacSetTimeout;
@@ -312,6 +318,10 @@ public class ComplianceAgent : BaseAgent
         RegisterTool(_kanbanBulkUpdate);
         RegisterTool(_kanbanExport);
         RegisterTool(_kanbanArchiveBoard);
+
+        // Register Task Enrichment tools (Feature 012)
+        RegisterTool(_kanbanGenerateScript);
+        RegisterTool(_kanbanGenerateValidation);
 
         // Register Auth/PIM tools
         RegisterTool(_cacStatus);

@@ -24,6 +24,7 @@ public class KanbanService : IKanbanService
     private readonly IAgentStateManager _stateManager;
     private readonly IAtoComplianceEngine _complianceEngine;
     private readonly IRemediationEngine _remediationEngine;
+    private readonly ITaskEnrichmentService? _taskEnrichmentService;
 
     /// <summary>
     /// Initializes a new instance of <see cref="KanbanService"/>.
@@ -34,7 +35,8 @@ public class KanbanService : IKanbanService
         INotificationService notificationService,
         IAgentStateManager stateManager,
         IAtoComplianceEngine complianceEngine,
-        IRemediationEngine remediationEngine)
+        IRemediationEngine remediationEngine,
+        ITaskEnrichmentService? taskEnrichmentService = null)
     {
         _context = context;
         _logger = logger;
@@ -42,6 +44,7 @@ public class KanbanService : IKanbanService
         _stateManager = stateManager;
         _complianceEngine = complianceEngine;
         _remediationEngine = remediationEngine;
+        _taskEnrichmentService = taskEnrichmentService;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -125,6 +128,26 @@ public class KanbanService : IKanbanService
 
         _context.RemediationBoards.Add(board);
         await _context.SaveChangesAsync(cancellationToken);
+
+        // T026: Auto-enrich tasks with remediation scripts and validation criteria (Feature 012)
+        if (_taskEnrichmentService != null && board.Tasks.Count > 0)
+        {
+            try
+            {
+                var enrichResult = await _taskEnrichmentService.EnrichBoardTasksAsync(
+                    board, findings, progress: null, ct: cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                _logger.LogInformation(
+                    "Board {BoardId} enrichment: {Enriched} enriched, {Skipped} skipped, {Failed} failed ({Duration}ms)",
+                    board.Id, enrichResult.TasksEnriched, enrichResult.TasksSkipped,
+                    enrichResult.TasksFailed, (int)enrichResult.Duration.TotalMilliseconds);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Board enrichment failed for {BoardId} — tasks created without enrichment", board.Id);
+            }
+        }
 
         _logger.LogInformation("Board created from assessment: {BoardId} with {TaskCount} tasks",
             board.Id, board.Tasks.Count);
@@ -218,6 +241,33 @@ public class KanbanService : IKanbanService
         board.AssessmentId = assessmentId;
         board.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
+
+        // T049: Enrich newly created tasks during board update (Feature 012)
+        if (_taskEnrichmentService != null && result.TasksAdded > 0)
+        {
+            try
+            {
+                var newTasks = board.Tasks
+                    .Where(t => string.IsNullOrEmpty(t.RemediationScript))
+                    .ToList();
+                var newBoard = new RemediationBoard
+                {
+                    Id = board.Id,
+                    Tasks = newTasks
+                };
+                var enrichResult = await _taskEnrichmentService.EnrichBoardTasksAsync(
+                    newBoard, openFindings, progress: null, ct: cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                _logger.LogInformation(
+                    "Board update enrichment for {BoardId}: {Enriched} enriched, {Skipped} skipped, {Failed} failed",
+                    board.Id, enrichResult.TasksEnriched, enrichResult.TasksSkipped, enrichResult.TasksFailed);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Board update enrichment failed for {BoardId}", board.Id);
+            }
+        }
 
         _logger.LogInformation("Board updated: +{Added} -{Closed} ={Unchanged}",
             result.TasksAdded, result.TasksClosed, result.TasksUnchanged);
