@@ -222,7 +222,15 @@ public class McpHttpBridge
             new { name = "kanban_add_task_comment", description = "Add a comment to a task" },
             new { name = "kanban_search_tasks", description = "Search tasks" },
             new { name = "kanban_list_boards", description = "List all boards" },
-            new { name = "kanban_overdue_tasks", description = "List overdue tasks" }
+            new { name = "kanban_overdue_tasks", description = "List overdue tasks" },
+            // KnowledgeBase tools (Feature 010)
+            new { name = "kb_explain_nist_control", description = "Explain a NIST 800-53 control with Azure implementation guidance" },
+            new { name = "kb_search_nist_controls", description = "Search NIST 800-53 controls by keyword" },
+            new { name = "kb_explain_stig", description = "Explain a STIG rule with fix/check guidance" },
+            new { name = "kb_search_stigs", description = "Search STIG rules by keyword or severity" },
+            new { name = "kb_explain_rmf", description = "Explain the RMF process, steps, or DoD instructions" },
+            new { name = "kb_explain_impact_level", description = "Explain DoD impact levels (IL2-IL6) or FedRAMP baselines" },
+            new { name = "kb_get_fedramp_template_guidance", description = "Get FedRAMP authorization package template guidance" }
         };
 
         return Task.FromResult(Results.Json(new { tools, count = tools.Length }, _jsonOptions));

@@ -1,0 +1,94 @@
+{
+  "version": "1.0.0",
+  "instructions": [
+    {
+      "instructionId": "DoDI-8510.01",
+      "title": "Risk Management Framework for DoD Systems",
+      "description": "Establishes the RMF as the unified cybersecurity framework for all DoD IT, replacing DIACAP. Defines the six-step process for authorizing systems to operate.",
+      "publicationDate": "2022-07-19",
+      "applicability": "All DoD information systems and platform IT",
+      "url": "https://www.esd.whs.mil/Portals/54/Documents/DD/issuances/dodi/851001p.pdf",
+      "relatedNistControls": ["AC-1", "AU-1", "CA-1", "CM-1", "IA-1", "PL-1", "RA-1", "SA-1", "SC-1", "SI-1"],
+      "relatedStigIds": [],
+      "controlMappings": [
+        { "controlId": "CA-1", "requirement": "Security Assessment Policy", "guidance": "Implement organizational security assessment and authorization policies per DoDI 8510.01." },
+        { "controlId": "CA-2", "requirement": "Security Assessments", "guidance": "Conduct security control assessments using NIST SP 800-53A assessment procedures." },
+        { "controlId": "CA-6", "requirement": "Authorization", "guidance": "Obtain ATO from the designated Authorizing Official before system operation." },
+        { "controlId": "PL-2", "requirement": "System Security Plan", "guidance": "Develop and maintain a System Security Plan (SSP) documenting all security controls." }
+      ]
+    },
+    {
+      "instructionId": "DoDI-8500.01",
+      "title": "Cybersecurity",
+      "description": "Establishes cybersecurity policy and assigns responsibilities to protect DoD information and IT. Defines the overall cybersecurity program framework.",
+      "publicationDate": "2019-10-07",
+      "applicability": "All DoD components",
+      "url": "https://www.esd.whs.mil/Portals/54/Documents/DD/issuances/dodi/850001_2014.pdf",
+      "relatedNistControls": ["AC-1", "AT-1", "AU-1", "CM-1", "IA-1", "IR-1", "PM-1"],
+      "relatedStigIds": [],
+      "controlMappings": [
+        { "controlId": "PM-1", "requirement": "Information Security Program", "guidance": "Establish and maintain an organization-wide information security program per DoDI 8500.01." },
+        { "controlId": "AT-1", "requirement": "Security Awareness Training", "guidance": "Implement mandatory cybersecurity awareness training for all personnel." },
+        { "controlId": "IR-1", "requirement": "Incident Response Policy", "guidance": "Establish incident response capabilities and reporting procedures." }
+      ]
+    },
+    {
+      "instructionId": "DoDI-8551.01",
+      "title": "Ports, Protocols, and Services Management",
+      "description": "Establishes policy for the management and approval of ports, protocols, and services (PPS) within the DoD Global Information Grid (GIG).",
+      "publicationDate": "2014-05-28",
+      "applicability": "All DoD information systems connected to the DODIN",
+      "url": "https://www.esd.whs.mil/Portals/54/Documents/DD/issuances/dodi/855101p.pdf",
+      "relatedNistControls": ["SC-7", "CM-7", "AC-4"],
+      "relatedStigIds": ["SV-86479r2"],
+      "controlMappings": [
+        { "controlId": "SC-7", "requirement": "Boundary Protection", "guidance": "Register all ports, protocols, and services with the DoD PPS CAL." },
+        { "controlId": "CM-7", "requirement": "Least Functionality", "guidance": "Disable unnecessary ports, protocols, and services per PPS guidance." },
+        { "controlId": "AC-4", "requirement": "Information Flow Enforcement", "guidance": "Enforce approved information flow policies at system boundaries." }
+      ]
+    },
+    {
+      "instructionId": "DoDI-8520.02",
+      "title": "Public Key Infrastructure and Public Key Enabling",
+      "description": "Establishes policy and assigns responsibilities for DoD PKI and PK-enabling of IT systems. Requires CAC-based authentication for all DoD systems.",
+      "publicationDate": "2019-05-24",
+      "applicability": "All DoD information systems requiring authentication",
+      "url": "https://www.esd.whs.mil/Portals/54/Documents/DD/issuances/dodi/852002p.pdf",
+      "relatedNistControls": ["IA-2", "IA-5", "IA-8", "SC-12", "SC-13"],
+      "relatedStigIds": ["SV-86857r2", "SV-86861r1"],
+      "controlMappings": [
+        { "controlId": "IA-2", "requirement": "Identification and Authentication", "guidance": "Implement CAC/PKI-based multi-factor authentication per DoD PKI policy." },
+        { "controlId": "SC-12", "requirement": "Cryptographic Key Management", "guidance": "Use DoD PKI for all cryptographic key establishment and management." }
+      ]
+    },
+    {
+      "instructionId": "DoDI-8530.01",
+      "title": "Cybersecurity Activities Support to DoD Information Network Operations",
+      "description": "Assigns responsibilities for cybersecurity activities supporting DODIN operations, including vulnerability management and incident response.",
+      "publicationDate": "2016-03-07",
+      "applicability": "All DoD components connected to DODIN",
+      "url": "https://www.esd.whs.mil/Portals/54/Documents/DD/issuances/dodi/853001p.pdf",
+      "relatedNistControls": ["IR-1", "IR-4", "IR-6", "RA-5", "SI-4"],
+      "relatedStigIds": [],
+      "controlMappings": [
+        { "controlId": "IR-4", "requirement": "Incident Handling", "guidance": "Report and handle cybersecurity incidents per CJCSM 6510.01B." },
+        { "controlId": "RA-5", "requirement": "Vulnerability Scanning", "guidance": "Conduct ACAS vulnerability scanning per IAVM compliance requirements." },
+        { "controlId": "SI-4", "requirement": "Information System Monitoring", "guidance": "Implement HBSS and network monitoring capabilities." }
+      ]
+    },
+    {
+      "instructionId": "CNSSI-1253",
+      "title": "Security Categorization and Control Selection for NSS",
+      "description": "Provides security categorization guidance and control selection for National Security Systems (NSS), augmenting FIPS 199 and NIST SP 800-53.",
+      "publicationDate": "2014-03-27",
+      "applicability": "National Security Systems (NSS)",
+      "url": "https://www.cnss.gov/CNSS/issuances/Instructions.cfm",
+      "relatedNistControls": ["RA-2", "PL-2", "CA-1"],
+      "relatedStigIds": [],
+      "controlMappings": [
+        { "controlId": "RA-2", "requirement": "Security Categorization", "guidance": "Apply CNSSI 1253 categorization methodology for NSS using CIA impact levels." },
+        { "controlId": "PL-2", "requirement": "Security Plan", "guidance": "Document NSS-specific control selections and rationale per CNSSI 1253." }
+      ]
+    }
+  ]
+}

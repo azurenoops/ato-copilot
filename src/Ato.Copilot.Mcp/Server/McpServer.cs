@@ -19,25 +19,31 @@ namespace Ato.Copilot.Mcp.Server;
 public class McpServer
 {
     private readonly ComplianceMcpTools _complianceTools;
+    private readonly KnowledgeBaseMcpTools _knowledgeBaseTools;
     private readonly ComplianceAgent _complianceAgent;
     private readonly ConfigurationAgent _configurationAgent;
     private readonly ConfigurationTool _configurationTool;
+    private readonly AgentOrchestrator _orchestrator;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<McpServer> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
 
     public McpServer(
         ComplianceMcpTools complianceTools,
+        KnowledgeBaseMcpTools knowledgeBaseTools,
         ComplianceAgent complianceAgent,
         ConfigurationAgent configurationAgent,
         ConfigurationTool configurationTool,
+        AgentOrchestrator orchestrator,
         IHttpContextAccessor httpContextAccessor,
         ILogger<McpServer> logger)
     {
         _complianceTools = complianceTools;
+        _knowledgeBaseTools = knowledgeBaseTools;
         _complianceAgent = complianceAgent;
         _configurationAgent = configurationAgent;
         _configurationTool = configurationTool;
+        _orchestrator = orchestrator;
         _httpContextAccessor = httpContextAccessor;
         _logger = logger;
         _jsonOptions = new JsonSerializerOptions
@@ -100,8 +106,8 @@ public class McpServer
                     agentContext.WorkflowState[kvp.Key] = kvp.Value;
             }
 
-            // Route to appropriate agent based on intent classification
-            var targetAgent = ClassifyAndRouteAgent(message);
+            // Route to appropriate agent via confidence-scored orchestrator
+            var targetAgent = _orchestrator.SelectAgent(message) ?? _complianceAgent;
             var response = await targetAgent.ProcessAsync(message, agentContext, cancellationToken);
             stopwatch.Stop();
 
@@ -395,6 +401,83 @@ public class McpServer
             required = new[] { "message" }
         }));
 
+        // KnowledgeBase Tools
+        tools.Add(CreateTool("kb_explain_nist_control", "Explain a NIST 800-53 control with description, supplemental guidance, Azure implementation advice, and related controls. Educational/informational only.", new
+        {
+            type = "object",
+            properties = new
+            {
+                control_id = new { type = "string", description = "NIST 800-53 control ID (e.g., AC-2, SI-3, AU-6(1))" }
+            },
+            required = new[] { "control_id" }
+        }));
+
+        tools.Add(CreateTool("kb_search_nist_controls", "Search NIST 800-53 controls by keyword or topic with optional family filtering. Returns matching control IDs, titles, and descriptions.", new
+        {
+            type = "object",
+            properties = new
+            {
+                search_term = new { type = "string", description = "Search term or keyword (e.g., 'encryption', 'access control')" },
+                family = new { type = "string", description = "Optional control family filter (e.g., AC, AU, SC)" },
+                max_results = new { type = "integer", description = "Maximum number of results to return (default: 10)" }
+            },
+            required = new[] { "search_term" }
+        }));
+
+        tools.Add(CreateTool("kb_explain_stig", "Explain a DISA STIG finding with severity, check/fix text, NIST 800-53 control mappings, CCI references, and Azure implementation guidance. Educational/informational only.", new
+        {
+            type = "object",
+            properties = new
+            {
+                stig_id = new { type = "string", description = "STIG identifier (e.g., V-12345, SV-12345r1)" }
+            },
+            required = new[] { "stig_id" }
+        }));
+
+        tools.Add(CreateTool("kb_search_stigs", "Search DISA STIG findings by keyword and/or severity. Severity accepts: high/cat1/cati, medium/cat2/catii, low/cat3/catiii.", new
+        {
+            type = "object",
+            properties = new
+            {
+                search_term = new { type = "string", description = "Search keyword or topic" },
+                severity = new { type = "string", description = "Optional severity filter: high/cat1, medium/cat2, low/cat3" },
+                max_results = new { type = "integer", description = "Maximum number of results (default: 10)" }
+            },
+            required = new[] { "search_term" }
+        }));
+
+        tools.Add(CreateTool("kb_explain_rmf", "Explain the Risk Management Framework (RMF) process, individual steps, service-specific guidance, DoD instructions, and authorization workflows.", new
+        {
+            type = "object",
+            properties = new
+            {
+                topic = new { type = "string", description = "Topic: 'overview', 'step', 'service', 'deliverables', 'instruction', 'workflow'" },
+                step_number = new { type = "integer", description = "RMF step number (1-6) when topic is 'step'" },
+                organization = new { type = "string", description = "Service branch (Navy, Army, Air Force) for 'service' or 'workflow' topics" },
+                instruction_id = new { type = "string", description = "DoD instruction ID (e.g., 'DoDI 8510.01') for 'instruction' topic" }
+            }
+        }));
+
+        tools.Add(CreateTool("kb_explain_impact_level", "Explain DoD Impact Levels (IL2-IL6) and FedRAMP baselines with data classification, security requirements, Azure guidance, and comparison tables.", new
+        {
+            type = "object",
+            properties = new
+            {
+                level = new { type = "string", description = "Impact level (e.g., 'IL5', 'IL-5', '5') or FedRAMP baseline (e.g., 'FedRAMP-High', 'High'). Use 'compare' or 'all' for comparison table." }
+            },
+            required = new[] { "level" }
+        }));
+
+        tools.Add(CreateTool("kb_get_fedramp_template_guidance", "Get FedRAMP authorization package template guidance including SSP sections, POA&M field definitions, CRM/ConMon requirements, and Azure integration mappings.", new
+        {
+            type = "object",
+            properties = new
+            {
+                template_type = new { type = "string", description = "Template type: 'SSP', 'POAM' (or 'POA&M'), 'CRM' (or 'CONMON'). Omit for package overview." },
+                baseline = new { type = "string", description = "FedRAMP baseline: 'Low', 'Moderate', 'High' (default: 'High')." }
+            }
+        }));
+
         return new McpResponse { Id = request.Id, Result = new { tools } };
     }
 
@@ -490,6 +573,36 @@ public class McpServer
                 "configuration_chat" => await ExecuteConfigurationChatAsync(
                     GetArg<string>(args, "message") ?? "",
                     GetArg<string>(args, "conversation_id")),
+
+                // KnowledgeBase tools
+                "kb_explain_nist_control" => await _knowledgeBaseTools.ExplainNistControlAsync(
+                    GetArg<string>(args, "control_id") ?? ""),
+
+                "kb_search_nist_controls" => await _knowledgeBaseTools.SearchNistControlsAsync(
+                    GetArg<string>(args, "search_term") ?? "",
+                    GetArg<string>(args, "family"),
+                    GetArg<int?>(args, "max_results")),
+
+                "kb_explain_stig" => await _knowledgeBaseTools.ExplainStigAsync(
+                    GetArg<string>(args, "stig_id") ?? ""),
+
+                "kb_search_stigs" => await _knowledgeBaseTools.SearchStigsAsync(
+                    GetArg<string>(args, "search_term") ?? "",
+                    GetArg<string>(args, "severity"),
+                    GetArg<int?>(args, "max_results")),
+
+                "kb_explain_rmf" => await _knowledgeBaseTools.ExplainRmfAsync(
+                    GetArg<string>(args, "topic"),
+                    GetArg<int?>(args, "step_number"),
+                    GetArg<string>(args, "organization"),
+                    GetArg<string>(args, "instruction_id")),
+
+                "kb_explain_impact_level" => await _knowledgeBaseTools.ExplainImpactLevelAsync(
+                    GetArg<string>(args, "level") ?? "compare"),
+
+                "kb_get_fedramp_template_guidance" => await _knowledgeBaseTools.GetFedRampTemplateGuidanceAsync(
+                    GetArg<string>(args, "template_type"),
+                    GetArg<string>(args, "baseline")),
 
                 _ => $"Unknown tool: {toolName}"
             };
@@ -589,27 +702,6 @@ public class McpServer
         }
         try { return (T)Convert.ChangeType(value, typeof(T)); }
         catch { return default; }
-    }
-
-    /// <summary>
-    /// Classifies the user message and routes to the appropriate agent.
-    /// Configuration intents go to ConfigurationAgent; everything else goes to ComplianceAgent.
-    /// </summary>
-    private BaseAgent ClassifyAndRouteAgent(string message)
-    {
-        var lower = message.ToLowerInvariant();
-
-        // Configuration-related intents → ConfigurationAgent
-        if (ContainsAny(lower,
-            "configure", "subscription", "set framework", "set baseline",
-            "set cloud", "get config", "show config", "configuration",
-            "settings", "setup", "set dry", "set scan"))
-        {
-            return _configurationAgent;
-        }
-
-        // Everything else → ComplianceAgent (assessment, remediation, evidence, documents, monitoring, etc.)
-        return _complianceAgent;
     }
 
     private static bool ContainsAny(string text, params string[] keywords) =>

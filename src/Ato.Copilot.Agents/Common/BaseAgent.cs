@@ -36,6 +36,16 @@ public abstract class BaseAgent
     public abstract string GetSystemPrompt();
 
     /// <summary>
+    /// Evaluate confidence that this agent can handle the given message.
+    /// Returns a score between 0.0 (cannot handle) and 1.0 (perfect match).
+    /// The orchestrator routes to the agent with the highest score above the
+    /// configurable minimum threshold (default: 0.3).
+    /// </summary>
+    /// <param name="message">The user's input message.</param>
+    /// <returns>Confidence score from 0.0 to 1.0.</returns>
+    public abstract double CanHandle(string message);
+
+    /// <summary>
     /// Process a user message through this agent
     /// </summary>
     public abstract Task<AgentResponse> ProcessAsync(

@@ -1,0 +1,174 @@
+{
+  "version": "1.0.0",
+  "source": "DISA STIG Library (curated subset for ATO Copilot)",
+  "controls": [
+    {
+      "stigId": "V-12345",
+      "vulnId": "V-12345",
+      "ruleId": "SV-12345r1_rule",
+      "title": "Windows Server must have audit policy enabled for logon events",
+      "description": "Without generating audit records that are specific to the security and mission needs of the organization, it would be difficult to establish, correlate, and investigate the events relating to an incident or identify those responsible for one.",
+      "severity": "High",
+      "category": "Windows Server",
+      "stigFamily": "Audit and Accountability",
+      "nistControls": ["AU-2", "AU-3", "AU-12"],
+      "cciRefs": ["CCI-000130", "CCI-000131", "CCI-000132"],
+      "checkText": "Open the local Group Policy Editor (gpedit.msc). Navigate to Computer Configuration >> Windows Settings >> Security Settings >> Advanced Audit Policy Configuration >> System Audit Policies >> Logon/Logoff. Verify 'Audit Logon' is set to include 'Success and Failure'.",
+      "fixText": "Configure the policy value for Computer Configuration >> Windows Settings >> Security Settings >> Advanced Audit Policy Configuration >> System Audit Policies >> Logon/Logoff >> 'Audit Logon' to include 'Success and Failure'.",
+      "azureImplementation": {
+        "Service": "Azure Monitor, Microsoft Defender for Cloud",
+        "Configuration": "Enable diagnostic settings to stream Windows Security logs to Log Analytics workspace. Use Azure Policy to enforce audit policy configurations.",
+        "Policy": "Azure Policy: 'Audit Windows machines that do not have the specified Windows audit policies in the System Audit Policies - Logon/Logoff category'",
+        "Automation": "Use Azure Automation DSC or Azure Arc to enforce Group Policy settings across Azure VMs and hybrid environments."
+      },
+      "serviceType": "Azure Virtual Machines"
+    },
+    {
+      "stigId": "V-23456",
+      "vulnId": "V-23456",
+      "ruleId": "SV-23456r2_rule",
+      "title": "Windows Server must enforce password complexity requirements",
+      "description": "Use of a complex password helps to increase the time and resources required to compromise the password. Password complexity or strength is a measure of the effectiveness of a password in resisting attempts at guessing and brute-force attacks.",
+      "severity": "Medium",
+      "category": "Windows Server",
+      "stigFamily": "Identification and Authentication",
+      "nistControls": ["IA-5", "IA-5(1)"],
+      "cciRefs": ["CCI-000192", "CCI-000193", "CCI-000194"],
+      "checkText": "Review the password complexity policy. Open 'gpedit.msc'. Navigate to Computer Configuration >> Windows Settings >> Security Settings >> Account Policies >> Password Policy. Verify 'Password must meet complexity requirements' is set to 'Enabled'.",
+      "fixText": "Configure the policy value for Computer Configuration >> Windows Settings >> Security Settings >> Account Policies >> Password Policy >> 'Password must meet complexity requirements' to 'Enabled'.",
+      "azureImplementation": {
+        "Service": "Microsoft Entra ID, Azure AD Password Protection",
+        "Configuration": "Configure Microsoft Entra ID password policies to enforce complexity. Deploy Azure AD Password Protection to on-premises Active Directory.",
+        "Policy": "Azure Policy: 'Audit Windows machines that do not have the password policy setting set correctly'",
+        "Automation": "Use Microsoft Entra ID Conditional Access and Authentication Methods policies for centralized enforcement."
+      },
+      "serviceType": "Azure Virtual Machines"
+    },
+    {
+      "stigId": "V-34567",
+      "vulnId": "V-34567",
+      "ruleId": "SV-34567r1_rule",
+      "title": "Web server must use TLS 1.2 or higher for encrypted sessions",
+      "description": "Transport Layer Security (TLS) encryption is a required security setting. The use of older TLS versions and SSL is explicitly banned for DoD systems.",
+      "severity": "High",
+      "category": "Web Server",
+      "stigFamily": "System and Communications Protection",
+      "nistControls": ["SC-8", "SC-8(1)", "SC-23"],
+      "cciRefs": ["CCI-002418", "CCI-002421", "CCI-002422"],
+      "checkText": "Review the web server configuration to verify TLS 1.2 or higher is the only protocol enabled. For IIS: Open IIS Manager, verify TLS 1.2 is enabled under SSL Settings. Check Windows Registry for SChannel protocol settings.",
+      "fixText": "Configure the web server to only allow TLS 1.2 and above. Disable TLS 1.0, TLS 1.1, SSL 2.0, and SSL 3.0 protocols. For Azure App Service, set minimum TLS version to 1.2 in the TLS/SSL settings.",
+      "azureImplementation": {
+        "Service": "Azure App Service, Azure Application Gateway, Azure Front Door",
+        "Configuration": "Set minimum TLS version to 1.2 in App Service TLS/SSL settings. Configure Application Gateway SSL policy to use predefined or custom policy with TLS 1.2+.",
+        "Policy": "Azure Policy: 'App Service apps should use the latest TLS version', 'Function apps should use the latest TLS version'",
+        "Automation": "Use Azure Policy remediation tasks to automatically set minimum TLS to 1.2 across all App Services."
+      },
+      "serviceType": "Azure App Service"
+    },
+    {
+      "stigId": "V-45678",
+      "vulnId": "V-45678",
+      "ruleId": "SV-45678r1_rule",
+      "title": "Database server must encrypt data at rest using AES-256 or equivalent",
+      "description": "If data at rest is not encrypted, it could be read by anyone who obtains physical access to the storage media. Encryption at rest protects the confidentiality of stored data.",
+      "severity": "High",
+      "category": "Database",
+      "stigFamily": "System and Communications Protection",
+      "nistControls": ["SC-28", "SC-28(1)"],
+      "cciRefs": ["CCI-002475", "CCI-002476"],
+      "checkText": "Verify that Transparent Data Encryption (TDE) is enabled on the database. For SQL Server, run: SELECT db.name, dm.encryption_state FROM sys.databases db LEFT JOIN sys.dm_database_encryption_keys dm ON db.database_id = dm.database_id;",
+      "fixText": "Enable Transparent Data Encryption (TDE) on the database. For Azure SQL: Navigate to Security > Transparent data encryption > Set to 'On'. Ensure customer-managed keys or service-managed keys are configured.",
+      "azureImplementation": {
+        "Service": "Azure SQL Database, Azure Cosmos DB, Azure Storage",
+        "Configuration": "Enable TDE with service-managed or customer-managed keys (CMK). For Azure Storage, encryption is enabled by default with Microsoft-managed keys.",
+        "Policy": "Azure Policy: 'Transparent Data Encryption on SQL databases should be enabled', 'Azure SQL Database should have Azure Active Directory Only Authentication enabled'",
+        "Automation": "Use Azure Policy DeployIfNotExists to automatically enable TDE on new SQL databases."
+      },
+      "serviceType": "Azure SQL Database"
+    },
+    {
+      "stigId": "V-56789",
+      "vulnId": "V-56789",
+      "ruleId": "SV-56789r1_rule",
+      "title": "Network devices must terminate management sessions after 10 minutes of inactivity",
+      "description": "If a management session or connection is not terminated after 10 minutes of inactivity, the session may remain open and available for use by unauthorized individuals.",
+      "severity": "Medium",
+      "category": "Network",
+      "stigFamily": "Access Control",
+      "nistControls": ["AC-12", "SC-10"],
+      "cciRefs": ["CCI-001133", "CCI-002361"],
+      "checkText": "Verify the network device is configured to terminate sessions after 10 minutes of inactivity. Check session timeout configurations in the management interface and SSH/console settings.",
+      "fixText": "Configure the network device to automatically terminate management sessions after a maximum of 10 minutes of inactivity.",
+      "azureImplementation": {
+        "Service": "Azure Bastion, Azure Firewall, Network Security Groups",
+        "Configuration": "Configure Azure Bastion session timeout. Set idle session timeout for Azure Firewall management. Use NSG flow logs to monitor active sessions.",
+        "Policy": "Azure Policy: Custom policy definition to audit session timeout settings on virtual network appliances",
+        "Automation": "Use Azure Logic Apps or Functions to automatically disconnect idle sessions via Azure Resource Manager APIs."
+      },
+      "serviceType": "Azure Networking"
+    },
+    {
+      "stigId": "V-67890",
+      "vulnId": "V-67890",
+      "ruleId": "SV-67890r1_rule",
+      "title": "Systems must implement least privilege access for administrative accounts",
+      "description": "Without restricting which roles and individuals can select which events are audited, unauthorized personnel may be able to prevent or interfere with the auditing of critical events.",
+      "severity": "High",
+      "category": "Operating System",
+      "stigFamily": "Access Control",
+      "nistControls": ["AC-6", "AC-6(1)", "AC-6(5)"],
+      "cciRefs": ["CCI-002235", "CCI-002883"],
+      "checkText": "Verify that administrative accounts are configured with the minimum permissions necessary to perform required duties. Review role assignments and verify no accounts have excessive permissions beyond their function.",
+      "fixText": "Configure administrative accounts to use the minimum set of roles and permissions needed. Implement role-based access control (RBAC) with just-in-time (JIT) access for privileged operations.",
+      "azureImplementation": {
+        "Service": "Microsoft Entra ID PIM, Azure RBAC",
+        "Configuration": "Enable Privileged Identity Management (PIM) for all administrative roles. Configure just-in-time access activation with approval workflows. Use custom RBAC roles with minimum permissions.",
+        "Policy": "Azure Policy: 'A maximum of 3 owners should be designated for your subscription', 'There should be more than one owner assigned to your subscription'",
+        "Automation": "Use PIM APIs to automatically review and revoke standing access. Implement access reviews on a regular schedule."
+      },
+      "serviceType": "Azure Identity"
+    },
+    {
+      "stigId": "V-78901",
+      "vulnId": "V-78901",
+      "ruleId": "SV-78901r1_rule",
+      "title": "Application must validate all input from external interfaces",
+      "description": "Without validation of input, the application is susceptible to injection attacks including SQL injection, cross-site scripting (XSS), and command injection.",
+      "severity": "High",
+      "category": "Application Security",
+      "stigFamily": "System and Information Integrity",
+      "nistControls": ["SI-10", "SI-10(5)"],
+      "cciRefs": ["CCI-001310"],
+      "checkText": "Review the application code and configuration to verify all inputs from external interfaces (user input, API calls, file uploads, etc.) are validated. Verify input validation includes type checking, length limits, format validation, and encoding.",
+      "fixText": "Implement comprehensive input validation for all external-facing inputs. Use parameterized queries for database operations. Implement output encoding for web applications. Use allowlisting rather than denylisting for input validation.",
+      "azureImplementation": {
+        "Service": "Azure Web Application Firewall (WAF), Azure API Management",
+        "Configuration": "Deploy Azure WAF with OWASP rule sets. Configure API Management input validation policies. Enable Azure Defender for App Service for runtime threat detection.",
+        "Policy": "Azure Policy: 'Web Application Firewall (WAF) should be enabled for Application Gateway', 'Web Application Firewall (WAF) should be enabled for Azure Front Door Service'",
+        "Automation": "Use Azure DevOps or GitHub Actions with SAST/DAST tools in CI/CD pipelines. Integrate Microsoft Security DevOps extension for automated security scanning."
+      },
+      "serviceType": "Azure App Service"
+    },
+    {
+      "stigId": "V-89012",
+      "vulnId": "V-89012",
+      "ruleId": "SV-89012r1_rule",
+      "title": "Systems must implement continuous monitoring of security controls",
+      "description": "Without ongoing monitoring of security controls, the organization cannot ensure that controls continue to be effective, increasing the risk of undetected security breaches.",
+      "severity": "Medium",
+      "category": "Security Operations",
+      "stigFamily": "Audit and Accountability",
+      "nistControls": ["CA-7", "AU-6"],
+      "cciRefs": ["CCI-001744"],
+      "checkText": "Verify continuous monitoring is implemented for all security controls. Review monitoring dashboards, alert configurations, and evidence of regular review of security posture.",
+      "fixText": "Implement continuous monitoring using security information and event management (SIEM), automated compliance scanning, and regular security posture assessments. Configure alerting for deviations from baseline security configurations.",
+      "azureImplementation": {
+        "Service": "Microsoft Defender for Cloud, Azure Monitor, Microsoft Sentinel",
+        "Configuration": "Enable Microsoft Defender for Cloud with enhanced security features. Configure Azure Monitor alerts for security events. Deploy Microsoft Sentinel for SIEM/SOAR capabilities.",
+        "Policy": "Azure Policy: 'Microsoft Defender for Cloud should be enabled', 'Azure Monitor should collect activity logs from all regions'",
+        "Automation": "Use Microsoft Sentinel playbooks (Logic Apps) for automated incident response. Configure Defender for Cloud workflow automations for compliance deviations."
+      },
+      "serviceType": "Azure Security"
+    }
+  ]
+}

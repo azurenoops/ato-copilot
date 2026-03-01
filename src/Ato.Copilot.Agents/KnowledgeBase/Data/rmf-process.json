@@ -1,0 +1,144 @@
+{
+  "version": "1.0.0",
+  "steps": [
+    {
+      "step": 1,
+      "title": "Categorize",
+      "description": "Categorize the information system and the information processed, stored, and transmitted by that system based on an impact analysis (FIPS 199/CNSSI 1253).",
+      "activities": [
+        "Identify the information types processed, stored, or transmitted",
+        "Determine the impact level (Low, Moderate, High) for each security objective (CIA)",
+        "Assign the overall system categorization based on the highest impact level",
+        "Register the system in eMASS or equivalent authorization tool",
+        "Document the categorization in the System Security Plan (SSP)"
+      ],
+      "outputs": ["System categorization", "SSP Section 2 (System Description)", "Privacy Impact Assessment (PIA)"],
+      "roles": ["System Owner", "Information Owner", "ISSM"],
+      "dodInstruction": "DoDI 8510.01, Enclosure 4"
+    },
+    {
+      "step": 2,
+      "title": "Select",
+      "description": "Select the appropriate set of security controls for the system based on its categorization and apply tailoring guidance.",
+      "activities": [
+        "Identify the initial baseline controls from NIST SP 800-53",
+        "Apply tailoring guidance to remove non-applicable controls",
+        "Add supplemental controls as required by DoD or DISA",
+        "Identify common controls provided by the infrastructure or cloud provider",
+        "Document control selections and rationale in the SSP"
+      ],
+      "outputs": ["Security control baseline selection", "SSP control selection documentation", "Tailoring rationale"],
+      "roles": ["System Owner", "ISSO", "Security Control Assessor"],
+      "dodInstruction": "DoDI 8510.01, Enclosure 5"
+    },
+    {
+      "step": 3,
+      "title": "Implement",
+      "description": "Implement the selected security controls and document how the controls are deployed within the system and its operating environment.",
+      "activities": [
+        "Deploy technical, operational, and management security controls",
+        "Configure systems per DISA STIGs and SRGs",
+        "Document control implementation details in the SSP",
+        "Develop and document standard operating procedures (SOPs)",
+        "Implement continuous monitoring capabilities"
+      ],
+      "outputs": ["Implemented security controls", "Updated SSP with implementation details", "Configuration documentation"],
+      "roles": ["System Owner", "ISSO", "System Administrator"],
+      "dodInstruction": "DoDI 8510.01, Enclosure 6"
+    },
+    {
+      "step": 4,
+      "title": "Assess",
+      "description": "Assess the security controls to determine the extent to which they are implemented correctly, operating as intended, and producing the desired outcome.",
+      "activities": [
+        "Develop the Security Assessment Plan (SAP)",
+        "Conduct security control assessments per NIST SP 800-53A",
+        "Run automated scanning tools (ACAS, SCAP, STIG Viewer)",
+        "Document findings in the Security Assessment Report (SAR)",
+        "Develop the Plan of Action and Milestones (POA&M) for findings"
+      ],
+      "outputs": ["Security Assessment Plan (SAP)", "Security Assessment Report (SAR)", "Plan of Action & Milestones (POA&M)"],
+      "roles": ["Security Control Assessor (SCA)", "ISSM", "ISSO"],
+      "dodInstruction": "DoDI 8510.01, Enclosure 6"
+    },
+    {
+      "step": 5,
+      "title": "Authorize",
+      "description": "Authorize the system based on a determination that the risk to organizational operations, assets, and individuals is acceptable.",
+      "activities": [
+        "Compile the authorization package (SSP, SAR, POA&M)",
+        "Present residual risks to the Authorizing Official (AO)",
+        "AO makes risk-based authorization decision (ATO, DATO, IATO)",
+        "Issue the authorization decision letter",
+        "Set authorization boundary and terms/conditions"
+      ],
+      "outputs": ["Authorization decision (ATO/DATO/IATO)", "Authorization letter", "Authorization boundary documentation"],
+      "roles": ["Authorizing Official (AO)", "AO Designated Representative", "ISSM"],
+      "dodInstruction": "DoDI 8510.01, Enclosure 7"
+    },
+    {
+      "step": 6,
+      "title": "Monitor",
+      "description": "Monitor security controls on an ongoing basis to ensure continued effectiveness and to support risk management decisions.",
+      "activities": [
+        "Implement continuous monitoring strategy per NIST SP 800-137",
+        "Conduct ongoing security control assessments",
+        "Monitor and analyze security alerts and vulnerabilities",
+        "Report security posture to AO and stakeholders",
+        "Update SSP, SAR, and POA&M as changes occur"
+      ],
+      "outputs": ["Continuous monitoring reports", "Updated POA&M", "Ongoing authorization documentation"],
+      "roles": ["ISSO", "ISSM", "System Owner"],
+      "dodInstruction": "DoDI 8510.01, Enclosure 8"
+    }
+  ],
+  "serviceGuidance": {
+    "navy": {
+      "organization": "Navy",
+      "description": "Navy RMF authorization follows SECNAVINST 5239.3C with Navy-specific requirements and SPAWAR/NAVCYBERFOR oversight.",
+      "contacts": ["NAVCYBERFOR (Navy Cyber Forces)", "SPAWAR/PEO Digital", "Fleet ISSM"],
+      "requirements": [
+        "Register system in eMASS with Navy-specific categorization",
+        "Follow Navy-specific STIG implementation requirements",
+        "Submit authorization package to Navy AO via chain of command",
+        "Conduct Navy-specific ConMon reporting cadence (monthly)"
+      ],
+      "timeline": "Typical Navy ATO timeline: 6-12 months depending on system complexity and impact level.",
+      "tools": ["eMASS", "ACAS", "SCAP Compliance Checker", "STIG Viewer", "HBSS"]
+    },
+    "army": {
+      "organization": "Army",
+      "description": "Army RMF authorization follows AR 25-2 with Army-specific cyber requirements and ARCYBER oversight.",
+      "contacts": ["ARCYBER (Army Cyber Command)", "NETCOM", "Local ISSM"],
+      "requirements": [
+        "Register in eMASS with Army POC chain",
+        "Follow ARCYBER directive for STIG compliance",
+        "Submit to designated Army AO",
+        "Coordinate with ARCYBER for interconnection agreements"
+      ],
+      "timeline": "Typical Army ATO timeline: 4-8 months for tactical systems, 6-12 months for enterprise.",
+      "tools": ["eMASS", "ACAS", "Compliance Checker", "STIG Viewer"]
+    },
+    "airforce": {
+      "organization": "Air Force",
+      "description": "Air Force RMF authorization follows AFI 17-130 with 16th Air Force/CYBERCOM oversight.",
+      "contacts": ["16th Air Force", "688th Cyberspace Wing", "Wing ISSM"],
+      "requirements": [
+        "Register in eMASS with AF-specific attributes",
+        "Follow AFCYBER STIG implementation guidance",
+        "Submit authorization package to AF AO",
+        "Participate in AF ConMon program"
+      ],
+      "timeline": "Typical Air Force ATO timeline: 6-9 months.",
+      "tools": ["eMASS", "ACAS", "SCAP", "STIG Viewer"]
+    }
+  },
+  "deliverablesOverview": [
+    { "step": 1, "stepTitle": "Categorize", "deliverables": ["System Security Plan (SSP) Section 2", "Privacy Impact Assessment (PIA)", "System Registration in eMASS"] },
+    { "step": 2, "stepTitle": "Select", "deliverables": ["Control Baseline Selection", "Tailoring Rationale", "Common Control Documentation"] },
+    { "step": 3, "stepTitle": "Implement", "deliverables": ["Updated SSP with Implementation Details", "Configuration Documentation", "Standard Operating Procedures (SOPs)"] },
+    { "step": 4, "stepTitle": "Assess", "deliverables": ["Security Assessment Plan (SAP)", "Security Assessment Report (SAR)", "Plan of Action & Milestones (POA&M)"] },
+    { "step": 5, "stepTitle": "Authorize", "deliverables": ["Authorization Package", "Authorization Decision Letter", "Terms & Conditions"] },
+    { "step": 6, "stepTitle": "Monitor", "deliverables": ["Continuous Monitoring Reports", "Updated POA&M", "Annual Security Review"] }
+  ]
+}

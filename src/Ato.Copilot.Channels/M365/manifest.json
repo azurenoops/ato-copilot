@@ -1,0 +1,44 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/vDevPreview/MicrosoftTeams.schema.json",
+  "manifestVersion": "devPreview",
+  "id": "00000000-0000-0000-0000-000000000001",
+  "version": "1.0.0",
+  "packageName": "com.ato.copilot",
+  "developer": {
+    "name": "ATO",
+    "websiteUrl": "https://ato.example.com",
+    "privacyUrl": "https://ato.example.com/privacy",
+    "termsOfUseUrl": "https://ato.example.com/terms"
+  },
+  "name": {
+    "short": "Platform Copilot",
+    "full": "ATO Copilot for M365"
+  },
+  "description": {
+    "short": "AI-powered Compliance platform for Azure Government environments",
+    "full": "ATO Copilot provides compliance assessment, and knowledge base capabilities for Azure Government workloads (IL5/IL6). Integrates with NIST 800-53 Rev 5, FedRAMP, and DoD frameworks."
+  },
+  "icons": {
+    "outline": "outline.png",
+    "color": "color.png"
+  },
+  "accentColor": "#0078D4",
+  "bots": [
+    {
+      "botId": "00000000-0000-0000-0000-000000000001",
+      "scopes": ["personal", "team", "groupChat"],
+      "commandLists": [
+        {
+          "scopes": ["personal"],
+          "commands": [
+            { "title": "assess", "description": "Run a compliance assessment" },
+            { "title": "explain", "description": "Explain a NIST control" },            
+            { "title": "remediate", "description": "View remediation tasks" }
+          ]
+        }
+      ]
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": ["ato.example.com"]
+}

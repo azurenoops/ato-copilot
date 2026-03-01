@@ -21,6 +21,10 @@ public static class McpServiceExtensions
 
         // MCP Tools
         services.AddSingleton<ComplianceMcpTools>();
+        services.AddSingleton<KnowledgeBaseMcpTools>();
+
+        // Agent Orchestrator — confidence-scored multi-agent routing
+        services.AddSingleton<AgentOrchestrator>();
 
         // MCP Server
         services.AddSingleton<McpServer>();

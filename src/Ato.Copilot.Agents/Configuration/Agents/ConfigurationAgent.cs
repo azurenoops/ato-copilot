@@ -41,6 +41,40 @@ public class ConfigurationAgent : BaseAgent
     public override string Description =>
         "Manages ATO Copilot settings: subscription, framework, baseline, environment, and preferences";
 
+    /// <summary>
+    /// Evaluates confidence that this agent can handle the given message.
+    /// Configuration-intent keywords (configure, set, subscription, framework, settings) score high (0.8).
+    /// Returns 0.0 for unrecognized queries since configuration is a narrow domain.
+    /// </summary>
+    public override double CanHandle(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return 0.0;
+
+        var lower = message.ToLowerInvariant();
+
+        // Strong configuration intent
+        string[] configKeywords = ["configure", "set subscription", "set framework",
+            "change setting", "update setting", "my settings", "show settings",
+            "switch subscription", "select subscription", "select framework"];
+        foreach (var keyword in configKeywords)
+        {
+            if (lower.Contains(keyword))
+                return 0.8;
+        }
+
+        // Moderate configuration intent
+        string[] moderateKeywords = ["subscription", "framework", "baseline", "preferences", "environment"];
+        foreach (var keyword in moderateKeywords)
+        {
+            if (lower.Contains(keyword))
+                return 0.5;
+        }
+
+        // Configuration agent has a narrow domain — return 0.0 for unrecognized
+        return 0.0;
+    }
+
     /// <inheritdoc />
     public override string GetSystemPrompt()
     {

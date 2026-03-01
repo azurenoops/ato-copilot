@@ -1,0 +1,124 @@
+{
+  "families": {
+    "AC": {
+      "name": "Access Control",
+      "description": "Controls for managing access to systems and information, including account management, access enforcement, and least privilege.",
+      "azureServices": ["Microsoft Entra ID", "Azure RBAC", "Conditional Access", "PIM"],
+      "azureGuidance": "Use Microsoft Entra ID for centralized identity. Apply Azure RBAC for role-based access. Enable Conditional Access policies for MFA. Use PIM for just-in-time privileged access."
+    },
+    "AU": {
+      "name": "Audit and Accountability",
+      "description": "Controls for creating, protecting, and retaining audit records to enable monitoring, analysis, investigation, and reporting.",
+      "azureServices": ["Azure Monitor", "Log Analytics", "Microsoft Sentinel", "Activity Log"],
+      "azureGuidance": "Enable Azure Monitor diagnostic settings. Route logs to Log Analytics workspace. Deploy Microsoft Sentinel for SIEM/SOAR. Retain audit logs per organizational policy (minimum 1 year for FedRAMP High)."
+    },
+    "AT": {
+      "name": "Awareness and Training",
+      "description": "Controls for security awareness training and role-based security training for personnel.",
+      "azureServices": ["Microsoft Learn", "Compliance Manager"],
+      "azureGuidance": "Leverage Microsoft Learn for Azure security training. Use Compliance Manager to track training requirements and evidence."
+    },
+    "CM": {
+      "name": "Configuration Management",
+      "description": "Controls for establishing and maintaining baseline configurations and inventories of systems.",
+      "azureServices": ["Azure Policy", "Azure Blueprints", "Azure Resource Graph", "Change Tracking"],
+      "azureGuidance": "Define baseline configurations with Azure Policy. Deploy guard rails with Azure Blueprints. Monitor configuration drift with Change Tracking. Query resource state with Azure Resource Graph."
+    },
+    "CP": {
+      "name": "Contingency Planning",
+      "description": "Controls for continuity of operations, disaster recovery, and backup procedures.",
+      "azureServices": ["Azure Backup", "Azure Site Recovery", "Availability Zones", "Geo-Redundant Storage"],
+      "azureGuidance": "Configure Azure Backup for critical data. Deploy Azure Site Recovery for DR. Use Availability Zones for high availability. Enable GRS/GZRS for storage redundancy."
+    },
+    "IA": {
+      "name": "Identification and Authentication",
+      "description": "Controls for identifying and authenticating users, devices, and services before granting access.",
+      "azureServices": ["Microsoft Entra ID", "MFA", "Certificate-Based Auth", "Managed Identities"],
+      "azureGuidance": "Enforce MFA via Conditional Access. Use certificate-based authentication for CAC/PIV. Deploy Managed Identities for service-to-service auth. Enable passwordless authentication methods."
+    },
+    "IR": {
+      "name": "Incident Response",
+      "description": "Controls for incident detection, analysis, containment, eradication, and recovery procedures.",
+      "azureServices": ["Microsoft Sentinel", "Microsoft Defender for Cloud", "Azure Logic Apps"],
+      "azureGuidance": "Deploy Microsoft Sentinel for incident detection and response. Configure automated playbooks with Logic Apps. Integrate Microsoft Defender for Cloud alerts into incident workflows."
+    },
+    "MA": {
+      "name": "Maintenance",
+      "description": "Controls for system maintenance, including controlled maintenance and maintenance tools.",
+      "azureServices": ["Azure Update Manager", "Azure Automation"],
+      "azureGuidance": "Use Azure Update Manager for patch management. Automate maintenance tasks with Azure Automation runbooks."
+    },
+    "MP": {
+      "name": "Media Protection",
+      "description": "Controls for protecting information on digital and non-digital media during storage, transport, and disposal.",
+      "azureServices": ["Azure Disk Encryption", "Azure Key Vault", "Storage Service Encryption"],
+      "azureGuidance": "Enable Azure Disk Encryption for VMs. Use Azure Key Vault for key management. Enable Storage Service Encryption (SSE) with customer-managed keys for sensitive data."
+    },
+    "PE": {
+      "name": "Physical and Environmental Protection",
+      "description": "Controls for physical access, monitoring, and environmental protections for facilities housing systems.",
+      "azureServices": ["Azure Datacenter Security"],
+      "azureGuidance": "Azure datacenters provide physical security controls. Review Microsoft compliance documentation for datacenter certifications. For on-premises components, implement organizational physical security policies."
+    },
+    "PL": {
+      "name": "Planning",
+      "description": "Controls for system security and privacy plans, rules of behavior, and information security architecture.",
+      "azureServices": ["Compliance Manager", "Azure Security Benchmark"],
+      "azureGuidance": "Use Compliance Manager for security planning and assessment tracking. Align architecture with Azure Security Benchmark recommendations."
+    },
+    "PM": {
+      "name": "Program Management",
+      "description": "Controls for organization-wide information security program management.",
+      "azureServices": ["Microsoft Purview", "Compliance Manager"],
+      "azureGuidance": "Use Microsoft Purview for data governance. Leverage Compliance Manager for program-level tracking and reporting."
+    },
+    "PS": {
+      "name": "Personnel Security",
+      "description": "Controls for personnel screening, termination, transfer, and access agreements.",
+      "azureServices": ["Microsoft Entra ID", "Access Reviews"],
+      "azureGuidance": "Use Microsoft Entra ID access reviews for periodic re-certification. Automate account disable/removal on personnel termination. Configure lifecycle workflows for onboarding/offboarding."
+    },
+    "PT": {
+      "name": "PII Processing and Transparency",
+      "description": "Controls for processing personally identifiable information with proper authority, purpose, and transparency.",
+      "azureServices": ["Microsoft Purview", "Azure Information Protection"],
+      "azureGuidance": "Use Microsoft Purview for PII discovery and classification. Apply Azure Information Protection labels for sensitive data. Configure data loss prevention policies."
+    },
+    "RA": {
+      "name": "Risk Assessment",
+      "description": "Controls for risk assessment, vulnerability scanning, and risk response.",
+      "azureServices": ["Microsoft Defender for Cloud", "Azure Security Center", "Qualys Integration"],
+      "azureGuidance": "Enable Microsoft Defender for Cloud for continuous vulnerability assessment. Configure automated MDFC recommendations. Integrate third-party vulnerability scanners for comprehensive coverage."
+    },
+    "SA": {
+      "name": "System and Services Acquisition",
+      "description": "Controls for system development lifecycle, acquisition processes, and supply chain risk management.",
+      "azureServices": ["Azure DevOps", "GitHub Advanced Security"],
+      "azureGuidance": "Use Azure DevOps or GitHub for secure SDLC. Enable GitHub Advanced Security for code scanning. Implement supply chain security controls for dependencies."
+    },
+    "SC": {
+      "name": "System and Communications Protection",
+      "description": "Controls for protecting communications and system boundaries, including encryption, boundary protection, and network security.",
+      "azureServices": ["Azure Firewall", "NSG", "Azure Front Door", "TLS/SSL", "Azure VPN Gateway"],
+      "azureGuidance": "Deploy Azure Firewall for network boundary protection. Configure NSGs for microsegmentation. Enforce TLS 1.2+ for all communications. Use Azure VPN Gateway or ExpressRoute for encrypted connections."
+    },
+    "SI": {
+      "name": "System and Information Integrity",
+      "description": "Controls for flaw remediation, malicious code protection, information system monitoring, and security alerts.",
+      "azureServices": ["Microsoft Defender for Cloud", "Microsoft Defender for Endpoint", "Azure Monitor"],
+      "azureGuidance": "Enable Microsoft Defender for Cloud for security posture management. Deploy Microsoft Defender for Endpoint for endpoint protection. Configure Azure Monitor alerts for security events."
+    },
+    "SR": {
+      "name": "Supply Chain Risk Management",
+      "description": "Controls for managing supply chain risks including acquisition strategies, supplier assessments, and component authenticity.",
+      "azureServices": ["Azure DevOps", "GitHub Advanced Security"],
+      "azureGuidance": "Use GitHub Advanced Security for dependency scanning. Implement SBOMs for software supply chain transparency. Review Azure service provider compliance certifications."
+    }
+  },
+  "metadata": {
+    "source": "NIST SP 800-53 Rev. 5",
+    "version": "5.1.1",
+    "lastUpdated": "2025-01-01",
+    "note": "Azure service mappings are curated guidance — verify against current Azure documentation for your specific deployment."
+  }
+}
