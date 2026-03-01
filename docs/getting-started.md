@@ -2,6 +2,9 @@
 
 > Set up, build, and run the ATO Copilot MCP server for NIST 800-53 compliance on Azure Government.
 
+!!! tip "Looking for per-persona onboarding?"
+    If you are an ISSM, ISSO, SCA, AO, or Engineer looking for role-specific getting-started guidance, see the [Getting Started hub](getting-started/index.md).
+
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
@@ -324,8 +327,8 @@ The assessment will:
 
 ## Next Steps
 
-- [Architecture](architecture.md) — System design, project structure, and patterns
-- [Development](development.md) — Contributing, testing, and code conventions
+- [Architecture](architecture/overview.md) — System design, project structure, and patterns
+- [Development](dev/contributing.md) — Contributing, testing, and code conventions
 - [Deployment](deployment.md) — Production deployment, security, and operations
-- [Compliance Watch](compliance-watch.md) — Continuous monitoring and alerting
-- [Remediation Kanban](remediation-kanban.md) — Track and resolve compliance findings
+- [Compliance Watch](guides/compliance-watch.md) — Continuous monitoring and alerting
+- [Remediation Kanban](guides/remediation-kanban.md) — Track and resolve compliance findings

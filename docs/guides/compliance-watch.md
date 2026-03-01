@@ -383,3 +383,25 @@ Access control is enforced via PIM (Privileged Identity Management). Use `pim_ac
 2. Check that the service principal has Reader access to Azure Activity Log
 3. Event polling interval is configurable (default: 120 seconds)
 4. Only compliance-relevant operations trigger scans (policy, RBAC, NSG, storage, Key Vault changes)
+
+---
+
+## Air-Gapped Environment Notes
+
+!!! warning "Disconnected / Air-Gapped Monitoring"
+    In air-gapped or disconnected environments, Compliance Watch operates with the following limitations:
+    
+    - **Event-driven monitoring** is unavailable (requires Azure Event Grid / Activity Log access). Use **scheduled-only mode** with local policy cache.
+    - **Notification channels**: External email and webhook channels are unavailable. Notifications are limited to local channels (VS Code notifications, audit log entries).
+    - **Auto-remediation**: Requires network access to Azure resources for write operations. In air-gapped environments, generate remediation scripts and apply manually.
+    - **Baseline capture**: Initial baseline capture requires one-time network access. Subsequent drift detection works against the cached baseline.
+    - **Alert data**: All alert storage, lifecycle management, and SLA tracking work fully offline.
+
+---
+
+## See Also
+
+- [ISSO Guide](../personas/isso.md) — ISSO workflows including Monitor phase
+- [ISSM Guide](issm-guide.md) — ISSM oversight and portfolio monitoring
+- [Remediation Kanban Guide](remediation-kanban.md) — Task management for findings
+- [RMF Phase Reference](../rmf-phases/index.md) — Monitor phase details

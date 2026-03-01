@@ -84,6 +84,7 @@
 
 | Term | Definition |
 |------|-----------|
+| **Kanban** | ATO Copilot's visual task management system for tracking remediation work through columns (Backlog → To Do → In Progress → Review → Done) |
 
 ## M
 
@@ -107,6 +108,7 @@
 | Term | Definition |
 |------|-----------|
 | **ODP** | Organization-Defined Parameter — Customizable values within NIST 800-53 controls |
+| **OSCAL** | Open Security Controls Assessment Language — NIST standard for machine-readable compliance data (v1.0.6 supported) |
 
 ## P
 
@@ -146,11 +148,13 @@
 
 | Term | Definition |
 |------|-----------|
+| **USCYBERCOM** | United States Cyber Command — combatant command that may direct cyber operations affecting system authorization |
 
 ## W
 
 | Term | Definition |
 |------|-----------|
+| **Watch** | ATO Copilot's Compliance Watch subsystem — real-time monitoring, alerting, and auto-remediation engine |
 
 ## X
 

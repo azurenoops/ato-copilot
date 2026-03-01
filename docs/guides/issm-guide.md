@@ -4,12 +4,15 @@
 
 This guide walks an Information System Security Manager (ISSM) through the system registration and RMF lifecycle workflow using the ATO Copilot MCP tools.
 
+!!! tip "New to ATO Copilot?"
+    If this is your first time using ATO Copilot as an ISSM, start with the [ISSM Getting Started](../getting-started/issm.md) page for prerequisites, first-time setup, and your first 3 commands.
+
 ---
 
 ## Prerequisites
 
 - Access to the ATO Copilot MCP server
-- Appropriate compliance role credentials
+- `Compliance.SecurityLead` role assigned (see [Persona Overview](../personas/index.md) for role details)
 - Knowledge of the system's Azure resource inventory
 
 ---
@@ -723,3 +726,27 @@ custom template for DOCX generation.
    compliance_generate_document(document_type="ssp",
      format="docx", system_id="sys-001", template="<template-id>")
 ```
+
+---
+
+## Air-Gapped Environment Notes
+
+!!! warning "Monitor Phase — Disconnected Environments"
+    In air-gapped or disconnected environments, the following limitations apply to ISSM Monitor phase workflows:
+    
+    - **eMASS export** (`compliance_export_emass`) generates the Excel file locally — manual transfer to eMASS via removable media is required.
+    - **Notifications** (`compliance_send_notification`) are limited to local channels (VS Code, audit log); external email/webhook notifications are unavailable.
+    - **OSCAL export** (`compliance_export_oscal`) works fully offline (file generation only).
+    - **Watch monitoring** requires network access to Azure Policy/Defender for event-driven mode — use **scheduled-only mode** with local policy cache.
+    - **ConMon reports** (`compliance_generate_conmon_report`) work fully offline using locally cached data.
+
+---
+
+## See Also
+
+- [ISSM Getting Started](../getting-started/issm.md) — First-time setup and first 3 commands
+- [Persona Overview](../personas/index.md) — All personas, RACI matrix, and role definitions
+- [RMF Phase Reference](../rmf-phases/index.md) — Phase-by-phase workflow details
+- [ISSO Guide](../personas/isso.md) — ISSO workflows for day-to-day operations
+- [Compliance Watch Guide](compliance-watch.md) — Detailed continuous monitoring documentation
+- [Quick Reference Card](../reference/quick-reference-cards.md) — Printable ISSM cheat sheet

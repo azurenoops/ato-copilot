@@ -4,6 +4,9 @@
 
 This guide covers the Authorizing Official's tools for issuing authorization decisions, accepting risk, and reviewing the risk register.
 
+!!! tip "New to ATO Copilot?"
+    If this is your first time using ATO Copilot as an AO, start with the [AO Getting Started](../getting-started/ao.md) page for prerequisites, first-time setup, and your first 3 commands.
+
 ---
 
 ## Prerequisites
@@ -11,6 +14,31 @@ This guide covers the Authorizing Official's tools for issuing authorization dec
 - ATO Copilot MCP server access
 - `Compliance.AuthorizingOfficial` role assigned to the system
 - Assessment completed (SAR generated, POA&M items created)
+
+---
+
+## Portfolio View
+
+As an AO, you typically manage a portfolio of systems. Use the multi-system dashboard for portfolio-level visibility:
+
+**Natural Language Queries:**
+
+> **"Show the multi-system compliance dashboard"** — Portfolio view of all authorized systems
+
+> **"Show all systems with ATOs expiring in the next 90 days"** — Expiration alerts across portfolio
+
+> **"Which of my authorized systems have CAT I findings?"** — Risk-based portfolio filtering
+
+> **"Show risk acceptances expiring in the next 90 days across all systems"** — Upcoming risk acceptance expirations
+
+> **"Show authorization decisions I have issued this year"** — Decision history
+
+| Tool | Purpose |
+|------|---------|
+| `compliance_multi_system_dashboard` | All systems in one view with scores and status |
+| `compliance_track_ato_expiration` | Graduated expiration alerts (90d/60d/30d/expired) |
+| `compliance_show_risk_register` | Review accepted risks approaching expiration |
+| `compliance_reauthorization_workflow` | Check triggers and initiate reauthorization |
 
 ---
 
@@ -186,3 +214,12 @@ Tool: `compliance_show_risk_register`
 | `Invalid decision_type` | Unrecognized type string | Use: `ATO`, `AtoWithConditions`, `IATT`, `DATO` |
 | `Invalid residual_risk_level` | Unrecognized level | Use: `Low`, `Medium`, `High`, `Critical` |
 | `Finding not found` | Invalid finding_id for risk acceptance | Verify finding exists |
+
+---
+
+## See Also
+
+- [AO Getting Started](../getting-started/ao.md) — First-time setup and first 3 commands
+- [Persona Overview](../personas/index.md) — All personas, RACI matrix, and role definitions
+- [RMF Phase Reference](../rmf-phases/index.md) — Phase-by-phase workflow details
+- [Quick Reference Card](../reference/quick-reference-cards.md) — Printable AO cheat sheet

@@ -4,6 +4,9 @@
 
 This guide walks through the complete SSP authoring workflow using the MCP compliance tools, from initial system registration through SSP document generation.
 
+!!! tip "New to ATO Copilot?"
+    If this is your first time using ATO Copilot as an Engineer, start with the [Engineer Getting Started](../getting-started/engineer.md) page for prerequisites, first-time setup, and your first 3 commands.
+
 ---
 
 ## Prerequisites
@@ -219,3 +222,87 @@ Parameters:
 - **Service:** `ISspService` / `SspService` — business logic with `IProgress<string>` support for long-running operations
 - **Tools:** 5 MCP tools registered via DI in `ServiceCollectionExtensions.cs` and wired in `ComplianceMcpTools.cs`
 - **Tests:** 35 unit tests (`SspAuthoringToolTests.cs`) + 5 integration tests (`SspAuthoringIntegrationTests.cs`)
+
+---
+
+## Remediation Workflows
+
+ATO Copilot provides two remediation paths:
+
+| Path | Tools | When to Use |
+|------|-------|-------------|
+| **Standalone** | `compliance_generate_plan` → `compliance_remediate` → `compliance_validate_remediation` | Quick fixes by finding ID — no task tracking needed |
+| **Kanban** | `kanban_task_list` → `kanban_remediate_task` → `kanban_task_validate` | Task-managed remediation with assignment, audit trails, and POA&M export |
+
+### Standalone Remediation
+
+Use the standalone tools when you want to fix a finding directly without task tracking:
+
+| Step | Command | Tool | Purpose |
+|------|---------|------|---------|
+| 1 | Generate remediation plan | `compliance_generate_plan` | Prioritized plan for all findings on a subscription |
+| 2 | Remediate with dry run | `compliance_remediate` | Preview fix — `dry_run: true` by default |
+| 3 | Apply the fix | `compliance_remediate` | Set `dry_run: false` to apply |
+| 4 | Validate the fix | `compliance_validate_remediation` | Re-scan to confirm finding is resolved |
+
+!!! tip "Remediation workflow chaining"
+    After an assessment reveals findings, generate a remediation plan first (`compliance_generate_plan`), then fix individual findings (`compliance_remediate`). Always validate after applying (`compliance_validate_remediation`).
+
+### Kanban Remediation Workflow
+
+When the ISSO or ISSM creates a remediation board from assessment findings, engineers receive Kanban tasks to fix compliance issues.
+
+### Task Lifecycle
+
+```
+Backlog → ToDo → InProgress → InReview → Done
+                     ↕
+                  Blocked
+```
+
+### Common Commands
+
+| Command | Tool | Purpose |
+|---------|------|---------|
+| Show my assigned tasks | `kanban_task_list` | View assigned remediation tasks |
+| Show task details | `kanban_get_task` | Full details with control ID, resources, script |
+| Move to In Progress | `kanban_move_task` | Start working on a task |
+| Fix with dry run | `kanban_remediate_task` | Preview remediation before applying |
+| Validate the fix | `kanban_task_validate` | Re-scan resources to verify remediation |
+| Collect evidence | `kanban_collect_evidence` | Collect compliance evidence for the task |
+| Move to In Review | `kanban_move_task` | Submit for ISSO review |
+
+### Status Transition Rules
+
+| Transition | Rule |
+|-----------|------|
+| → Blocked | Requires blocker comment |
+| Blocked → | Requires resolution comment |
+| → Done | Requires validation pass (or officer override) |
+| → InProgress | Auto-assigns if unassigned |
+| → InReview | Triggers automatic validation scan |
+| Done → anything | Terminal — cannot reopen |
+
+---
+
+## VS Code IaC Diagnostics
+
+ATO Copilot integrates compliance checking directly into your VS Code editing experience:
+
+- **IaC Diagnostics** — Compliance findings appear as squiggly underlines in Bicep, Terraform, and ARM template files
+  - CAT I / CAT II findings → Error severity (red underline)
+  - CAT III findings → Warning severity (yellow underline)
+- **Quick Fix** — Lightbulb Code Actions suggest fixes based on STIG findings
+- **Hover Info** — Hovering over a flagged resource shows the NIST control, STIG rule, and CAT severity
+- **`@ato` Chat Participant** — Ask compliance questions in the Copilot Chat panel
+
+---
+
+## See Also
+
+- [Engineer Getting Started](../getting-started/engineer.md) — First-time setup and first 3 commands
+- [Persona Overview](../personas/index.md) — All personas, RACI matrix, and role definitions
+- [RMF Phase Reference](../rmf-phases/index.md) — Phase-by-phase workflow details
+- [Remediation Kanban Guide](remediation-kanban.md) — Full Kanban board documentation
+- [Compliance Watch Guide](compliance-watch.md) — Alert handling for drift findings
+- [Quick Reference Card](../reference/quick-reference-cards.md) — Printable Engineer cheat sheet

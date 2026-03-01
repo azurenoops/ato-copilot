@@ -4,11 +4,33 @@
 
 This guide walks Security Control Assessors through the assessment workflow using ATO Copilot's MCP tools.
 
+!!! tip "New to ATO Copilot?"
+    If this is your first time using ATO Copilot as an SCA, start with the [SCA Getting Started](../getting-started/sca.md) page for prerequisites, first-time setup, and your first 3 commands.
+
 ---
 
 ## Overview
 
 As an SCA, you record per-control effectiveness determinations, map findings to DoD CAT severity levels, take immutable assessment snapshots, verify evidence chain of custody, and generate Security Assessment Reports (SARs).
+
+!!! warning "Read-Only Role"
+    As SCA you have **read-only** access. You cannot modify narratives, fix findings, or issue authorization decisions. If you attempt a write operation, ATO Copilot will return an RBAC denial with explanation.
+
+### RBAC Constraints
+
+| Tool | Access | Notes |
+|------|--------|-------|
+| `compliance_assess_control` | ✅ Allowed | SCA's primary function |
+| `compliance_take_snapshot` | ✅ Allowed | Creates immutable records |
+| `compliance_verify_evidence` | ✅ Allowed | Evidence integrity verification |
+| `compliance_check_evidence_completeness` | ✅ Allowed | Coverage reporting |
+| `compliance_compare_snapshots` | ✅ Allowed | Trend analysis |
+| `compliance_generate_sar` | ✅ Allowed | SAR generation |
+| `compliance_generate_rar` | ✅ Allowed | RAR generation |
+| `compliance_write_narrative` | ❌ Denied | SCA cannot modify SSP |
+| `compliance_remediate` | ❌ Denied | SCA cannot fix findings |
+| `compliance_issue_authorization` | ❌ Denied | Only AO can authorize |
+| `watch_dismiss_alert` | ❌ Denied | Cannot dismiss alerts |
 
 ### Prerequisite Workflow
 
@@ -186,3 +208,33 @@ The SAR includes:
 | `compliance_check_evidence_completeness` | Any compliance role |
 | `compliance_compare_snapshots` | Any compliance role |
 | `compliance_generate_sar` | `Compliance.Auditor` |
+
+---
+
+## Evidence Integrity
+
+All evidence collected by ATO Copilot is integrity-protected:
+
+- **Collection**: Each evidence item receives a SHA-256 hash at collection time
+- **Verification**: `compliance_verify_evidence` recomputes the hash and compares it to the stored value
+- **Tamper detection**: If the hash differs, the evidence is flagged as `tampered`
+- **Immutable snapshots**: Assessment snapshots are immutable — they cannot be updated or deleted after creation
+
+---
+
+## Air-Gapped Environment Notes
+
+!!! info "Assess Phase — Disconnected Environments"
+    All SCA assessment tools work fully offline:
+    
+    - `compliance_assess_control`, `compliance_take_snapshot`, `compliance_verify_evidence`, `compliance_compare_snapshots`, `compliance_generate_sar`, `compliance_generate_rar` — all operate on locally stored assessment data.
+    - **Evidence collection** (`compliance_collect_evidence`) requires network access to Azure resources. In air-gapped environments, evidence must be imported from prior scans or manual artifact uploads.
+
+---
+
+## See Also
+
+- [SCA Getting Started](../getting-started/sca.md) — First-time setup and first 3 commands
+- [Persona Overview](../personas/index.md) — All personas, RACI matrix, and role definitions
+- [RMF Phase Reference](../rmf-phases/index.md) — Phase-by-phase workflow details
+- [Quick Reference Card](../reference/quick-reference-cards.md) — Printable SCA cheat sheet

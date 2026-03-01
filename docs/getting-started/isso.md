@@ -1,0 +1,77 @@
+# Getting Started: ISSO
+
+> First-time setup and orientation for Information System Security Officer users.
+
+---
+
+## Prerequisites
+
+| Requirement | Details |
+|------------|---------|
+| **Access** | CAC enrolled with `Compliance.Analyst` role |
+| **Tools** | VS Code with GitHub Copilot Chat extension (primary), Microsoft Teams |
+| **Knowledge** | Assigned as ISSO to one or more systems by the ISSM (via `compliance_assign_rmf_role`) |
+
+## First-Time Setup
+
+1. **Verify your role and system assignments**
+
+    ```
+    @ato "What systems am I assigned to?"
+    ```
+
+    Expected result: List of systems where you are assigned as ISSO.
+
+2. **Check the current RMF phase for your system**
+
+    ```
+    @ato "Show system details for {id}"
+    ```
+
+    Expected result: System summary with current RMF phase, authorization status, and compliance score.
+
+3. **Start your primary workflow**
+
+    If your system is in the **Implement** phase:
+    ```
+    @ato "Show narrative progress for system {id}"
+    ```
+
+    If your system is in the **Monitor** phase:
+    ```
+    @ato "Show monitoring status for all subscriptions"
+    ```
+
+## Your First 3 Commands
+
+### 1. Check Narrative Progress
+
+> **"Show narrative progress for system {id}"**
+
+Expected result: Per-control-family completion percentages showing how many narratives are written vs. remaining.
+
+### 2. Auto-Populate Inherited Narratives
+
+> **"Auto-populate the inherited control narratives for system {id}"**
+
+Expected result: ~40–60% of narratives auto-filled from the embedded control catalog. Remaining customer controls need manual authoring.
+
+### 3. Enable Watch Monitoring
+
+> **"Enable daily monitoring for subscription {sub-id}"**
+
+Expected result: Compliance Watch enabled with daily scheduled scans. Alerts will appear for drift and violations.
+
+## What's Next
+
+- [Full ISSO Guide](../personas/isso.md) — Complete Implement/Assess/Monitor workflows
+- [RMF Phase Reference](../rmf-phases/index.md) — Phase-by-phase details
+- [Quick Reference Card](../reference/quick-reference-cards.md) — Printable ISSO cheat sheet
+
+## Common First-Day Issues
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| "What systems am I assigned to?" returns empty | ISSM has not yet assigned you as ISSO | Ask your ISSM to run `compliance_assign_rmf_role` for the target system |
+| "Access denied: Compliance.Analyst cannot invoke watch_dismiss_alert" | ISSOs cannot dismiss alerts — only officers (ISSM) can | Escalate to your ISSM to dismiss false positive alerts |
+| AI narrative suggestions unavailable | Air-gapped environment without LLM endpoint | Write narratives manually using `compliance_write_narrative`; inherited narratives still auto-populate from the embedded catalog |
