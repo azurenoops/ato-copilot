@@ -120,6 +120,7 @@ public class AtoCopilotContext : DbContext
         modelBuilder.Entity<ComplianceAssessment>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(100);
             entity.Property(e => e.SubscriptionId).HasMaxLength(100);
             entity.Property(e => e.Framework).HasMaxLength(50);
             entity.Property(e => e.Baseline).HasMaxLength(20);
@@ -192,6 +193,7 @@ public class AtoCopilotContext : DbContext
         modelBuilder.Entity<NistControl>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(20);
             entity.Property(e => e.Family).HasMaxLength(5);
             entity.Property(e => e.ImpactLevel).HasMaxLength(20);
             entity.Property(e => e.ParentControlId).HasMaxLength(20);
@@ -201,11 +203,12 @@ public class AtoCopilotContext : DbContext
             entity.Property(e => e.Baselines).HasConversion(stringListConverter);
             entity.Property(e => e.AzurePolicyDefinitionIds).HasConversion(stringListConverter);
 
-            // Self-referential: NistControl 1:N ControlEnhancements (cascade)
+            // Self-referential: NistControl 1:N ControlEnhancements
+            // SQL Server does not allow CASCADE on self-referencing FKs.
             entity.HasMany(e => e.ControlEnhancements)
                 .WithOne()
                 .HasForeignKey(e => e.ParentControlId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict);
 
             // NistControl 1:N ComplianceFinding (restrict — findings must not be orphaned)
             entity.HasMany<ComplianceFinding>()

@@ -44,14 +44,38 @@ public class AzureGatewayOptions
     public bool EnableUserTokenPassthrough { get; set; }
 }
 
+/// <summary>
+/// Azure OpenAI service configuration for agent AI processing.
+/// Bound from the "Gateway:AzureOpenAI" configuration section.
+/// </summary>
 public class AzureOpenAIGatewayOptions
 {
+    /// <summary>API key for Azure OpenAI authentication (used when UseManagedIdentity is false).</summary>
     public string ApiKey { get; set; } = string.Empty;
+
+    /// <summary>Azure OpenAI service endpoint URL (e.g., https://my-service.openai.azure.us/).</summary>
     public string Endpoint { get; set; } = string.Empty;
+
+    /// <summary>Default deployment name for backward compatibility.</summary>
     public string DeploymentName { get; set; } = "gpt-4o";
+
+    /// <summary>Whether to use DefaultAzureCredential instead of API key.</summary>
     public bool UseManagedIdentity { get; set; }
+
+    /// <summary>Chat completion deployment name used for agent AI processing.</summary>
     public string ChatDeploymentName { get; set; } = "gpt-4o";
+
+    /// <summary>Embedding deployment name for vector operations.</summary>
     public string EmbeddingDeploymentName { get; set; } = "text-embedding-ada-002";
+
+    /// <summary>Master feature flag — when false, all agents skip AI processing and use deterministic tool routing.</summary>
+    public bool AgentAIEnabled { get; set; }
+
+    /// <summary>Maximum number of LLM ↔ tool-call round-trips before terminating with a summary response.</summary>
+    public int MaxToolCallRounds { get; set; } = 5;
+
+    /// <summary>LLM sampling temperature (0.0–1.0). Lower values produce more deterministic responses.</summary>
+    public double Temperature { get; set; } = 0.3;
 }
 
 public class GitHubGatewayOptions

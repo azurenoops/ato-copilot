@@ -75,10 +75,28 @@ public class ChatHub : Hub
                 status = "Processing"
             });
 
+            // Create progress reporter that pushes SignalR events to the client
+            var clients = Clients;
+            var conversationId = request.ConversationId;
+            var progress = new Progress<string>(async step =>
+            {
+                try
+                {
+                    await clients.Group(conversationId).SendAsync("MessageProgress", new
+                    {
+                        conversationId,
+                        messageId,
+                        step,
+                        timestamp = DateTime.UtcNow
+                    });
+                }
+                catch { /* best-effort progress */ }
+            });
+
             // Process message via scoped ChatService
             using var scope = _scopeFactory.CreateScope();
             var chatService = scope.ServiceProvider.GetRequiredService<IChatService>();
-            var response = await chatService.SendMessageAsync(request);
+            var response = await chatService.SendMessageAsync(request, progress);
 
             if (response.Success)
             {

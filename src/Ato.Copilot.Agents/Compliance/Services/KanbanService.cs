@@ -79,14 +79,37 @@ public class KanbanService : IKanbanService
             .Include(a => a.Findings)
             .FirstOrDefaultAsync(a => a.Id == assessmentId, cancellationToken);
 
+        // Fallback: if the provided ID doesn't match (e.g. LLM hallucinated an ID),
+        // try to find the most recent assessment for the given subscription.
+        if (assessment == null && !string.IsNullOrWhiteSpace(subscriptionId))
+        {
+            _logger.LogWarning("Assessment '{AssessmentId}' not found, falling back to latest for subscription {Sub}",
+                assessmentId, subscriptionId);
+            assessment = await _context.Assessments
+                .Include(a => a.Findings)
+                .Where(a => a.SubscriptionId == subscriptionId)
+                .OrderByDescending(a => a.AssessedAt)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        // Last resort: get the most recent assessment across all subscriptions
         if (assessment == null)
-            throw new InvalidOperationException($"Assessment '{assessmentId}' not found.");
+        {
+            _logger.LogWarning("No assessment found for subscription, falling back to latest overall");
+            assessment = await _context.Assessments
+                .Include(a => a.Findings)
+                .OrderByDescending(a => a.AssessedAt)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        if (assessment == null)
+            throw new InvalidOperationException($"Assessment '{assessmentId}' not found. No assessments exist. Run a compliance assessment first.");
 
         var board = new RemediationBoard
         {
             Name = name,
             SubscriptionId = subscriptionId,
-            AssessmentId = assessmentId,
+            AssessmentId = assessment.Id,
             Owner = owner,
         };
 
@@ -381,10 +404,21 @@ public class KanbanService : IKanbanService
     public async Task<RemediationTask?> GetTaskAsync(
         string taskId, CancellationToken cancellationToken = default)
     {
-        return await _context.RemediationTasks
+        // Try by primary key (GUID) first, then fall back to human-readable TaskNumber (e.g. REM-001)
+        var task = await _context.RemediationTasks
             .Include(t => t.Comments.Where(c => !c.IsDeleted))
             .Include(t => t.History)
             .FirstOrDefaultAsync(t => t.Id == taskId, cancellationToken);
+
+        if (task is null)
+        {
+            task = await _context.RemediationTasks
+                .Include(t => t.Comments.Where(c => !c.IsDeleted))
+                .Include(t => t.History)
+                .FirstOrDefaultAsync(t => t.TaskNumber == taskId, cancellationToken);
+        }
+
+        return task;
     }
 
     /// <inheritdoc />

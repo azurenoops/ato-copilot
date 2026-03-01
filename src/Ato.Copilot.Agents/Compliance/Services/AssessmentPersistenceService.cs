@@ -45,6 +45,34 @@ public class AssessmentPersistenceService : IAssessmentPersistenceService
         {
             await using var context = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
+            // Normalize finding ControlIds: set to null if the referenced NistControl doesn't exist.
+            // The Findings→NistControls FK is optional (IsRequired=false) but a non-null ControlId
+            // that doesn't match any NistControl.Id violates the FK constraint.
+            var nistControlIds = await context.NistControls
+                .Select(c => c.Id)
+                .ToListAsync(cancellationToken);
+            var nistControlSet = new HashSet<string>(nistControlIds, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var finding in assessment.Findings)
+            {
+                if (!string.IsNullOrEmpty(finding.ControlId))
+                {
+                    // Try lowercase match first (NistControls use lowercase IDs)
+                    var normalizedId = finding.ControlId.ToLowerInvariant();
+                    if (nistControlSet.Contains(normalizedId))
+                    {
+                        finding.ControlId = normalizedId;
+                    }
+                    else if (!nistControlSet.Contains(finding.ControlId))
+                    {
+                        // No matching NistControl exists — null out to avoid FK violation
+                        _logger.LogDebug("ControlId '{ControlId}' not found in NistControls, setting to null",
+                            finding.ControlId);
+                        finding.ControlId = null!;
+                    }
+                }
+            }
+
             var existing = await context.Assessments
                 .FirstOrDefaultAsync(a => a.Id == assessment.Id, cancellationToken);
 

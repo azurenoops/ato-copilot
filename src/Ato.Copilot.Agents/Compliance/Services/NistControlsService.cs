@@ -251,6 +251,10 @@ public class NistControlsService : INistControlsService
 
     // ─── Cache Loading ───────────────────────────────────────────────────────
 
+    /// <inheritdoc />
+    public async Task<List<NistControl>> GetAllControlsAsync(CancellationToken cancellationToken = default)
+        => await GetControlsAsync(cancellationToken);
+
     /// <summary>
     /// Gets the backward-compatible NistControl list from cache, loading if needed.
     /// </summary>

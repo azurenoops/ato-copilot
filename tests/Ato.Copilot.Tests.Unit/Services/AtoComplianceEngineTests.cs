@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -69,8 +70,14 @@ public class AtoComplianceEngineTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private AtoComplianceEngine CreateEngine() =>
-        new(
+    private AtoComplianceEngine CreateEngine()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(_complianceWatchMock.Object);
+        services.AddSingleton(_alertManagerMock.Object);
+        var sp = services.BuildServiceProvider();
+
+        return new(
             _nistMock.Object,
             _policyMock.Object,
             _defenderMock.Object,
@@ -81,8 +88,8 @@ public class AtoComplianceEngineTests : IDisposable
             _azureResourceMock.Object,
             _stigValidationMock.Object,
             _evidenceCollectorRegistryMock.Object,
-            _complianceWatchMock.Object,
-            _alertManagerMock.Object);
+            sp);
+    }
 
     private static string MakePolicyResponse(List<object>? states = null) =>
         JsonSerializer.Serialize(new

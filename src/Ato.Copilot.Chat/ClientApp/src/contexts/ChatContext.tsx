@@ -35,6 +35,7 @@ const initialState: ChatState = {
   messages: [],
   isLoading: false,
   isProcessing: false,
+  progressMessage: null,
   error: null,
   connectionStatus: ConnectionStatus.Disconnected,
   typingUsers: [],
@@ -97,7 +98,10 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, isLoading: action.payload };
 
     case 'SET_PROCESSING':
-      return { ...state, isProcessing: action.payload };
+      return { ...state, isProcessing: action.payload, progressMessage: action.payload ? state.progressMessage : null };
+
+    case 'SET_PROGRESS':
+      return { ...state, progressMessage: action.payload };
 
     case 'SET_ERROR':
       return { ...state, error: action.payload };
@@ -179,7 +183,15 @@ export function ChatProvider({ children }: ChatProviderProps) {
 
     connection.on('MessageProcessing', (_data: { conversationId: string; messageId: string }) => {
       dispatchRef.current({ type: 'SET_PROCESSING', payload: true });
+      dispatchRef.current({ type: 'SET_PROGRESS', payload: 'Processing your request...' });
     });
+
+    connection.on(
+      'MessageProgress',
+      (data: { conversationId: string; messageId: string; step: string }) => {
+        dispatchRef.current({ type: 'SET_PROGRESS', payload: data.step });
+      }
+    );
 
     connection.on(
       'MessageReceived',
@@ -229,14 +241,8 @@ export function ChatProvider({ children }: ChatProviderProps) {
         type: 'SET_CONNECTION_STATUS',
         payload: ConnectionStatus.Connected,
       });
-      // Re-join active conversation
-      if (activeConversationRef.current) {
-        try {
-          await connection.invoke('JoinConversation', activeConversationRef.current);
-        } catch (err) {
-          console.error('Failed to re-join conversation after reconnect:', err);
-        }
-      }
+      // The useEffect watching connectionStatus + activeConversationId
+      // will automatically re-join the active conversation group.
     });
 
     connection.onclose(() => {
@@ -269,6 +275,33 @@ export function ChatProvider({ children }: ChatProviderProps) {
     };
   }, []);
 
+  // ─── Auto-join SignalR group when active conversation changes ─
+  // Handles: auto-created conversations (loadConversations never calls
+  // selectConversation), connection established after conversation was
+  // already set, and normal conversation switches. Double-joins are
+  // harmless — Hub just re-adds to the same group.
+
+  useEffect(() => {
+    const conversationId = state.activeConversationId;
+    const connection = connectionRef.current;
+    if (
+      !conversationId ||
+      !connection ||
+      connection.state !== HubConnectionState.Connected
+    )
+      return;
+
+    connection.invoke('JoinConversation', conversationId).catch((err) => {
+      console.error('Failed to auto-join conversation group:', err);
+    });
+
+    return () => {
+      if (connection.state === HubConnectionState.Connected) {
+        connection.invoke('LeaveConversation', conversationId).catch(() => {});
+      }
+    };
+  }, [state.activeConversationId, state.connectionStatus]);
+
   // ─── Load Conversations on Mount ─────────────────────────────
 
   const loadConversations = useCallback(async () => {
@@ -299,29 +332,14 @@ export function ChatProvider({ children }: ChatProviderProps) {
 
   const selectConversation = useCallback(
     async (conversationId: string) => {
-      // Leave previous conversation group
-      if (
-        state.activeConversationId &&
-        connectionRef.current?.state === HubConnectionState.Connected
-      ) {
-        try {
-          await connectionRef.current.invoke('LeaveConversation', state.activeConversationId);
-        } catch {
-          // ignore
-        }
-      }
-
+      // Setting active conversation triggers the useEffect that handles
+      // SignalR group leave (cleanup) + join (effect) automatically.
       dispatch({ type: 'SET_ACTIVE_CONVERSATION', payload: conversationId });
       dispatch({ type: 'SET_LOADING', payload: true });
 
       try {
         const messages = await chatApi.getMessages(conversationId);
         dispatch({ type: 'SET_MESSAGES', payload: messages });
-
-        // Join new conversation group
-        if (connectionRef.current?.state === HubConnectionState.Connected) {
-          await connectionRef.current.invoke('JoinConversation', conversationId);
-        }
       } catch (err) {
         console.error('Failed to load messages:', err);
         dispatch({ type: 'SET_ERROR', payload: 'Failed to load messages' });
@@ -352,6 +370,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
 
       dispatch({ type: 'ADD_MESSAGE', payload: optimisticMessage });
       dispatch({ type: 'SET_PROCESSING', payload: true });
+      dispatch({ type: 'SET_PROGRESS', payload: 'Sending message to ATO Copilot...' });
       dispatch({ type: 'SET_ERROR', payload: null });
 
       try {
@@ -360,29 +379,39 @@ export function ChatProvider({ children }: ChatProviderProps) {
           message: content.trim(),
         };
 
-        const response = await chatApi.sendMessage(request);
-
-        // Update optimistic message to Sent
-        dispatch({
-          type: 'UPDATE_MESSAGE_STATUS',
-          payload: { id: optimisticId, status: MessageStatus.Completed },
-        });
-
-        if (response.success) {
-          // Add AI response
-          const aiMessage: ChatMessage = {
-            id: response.messageId,
-            conversationId: state.activeConversationId,
-            content: response.content,
-            role: MessageRole.Assistant,
-            timestamp: new Date().toISOString(),
-            status: MessageStatus.Completed,
-            metadata: response.metadata || {},
-            tools: response.recommendedTools || [],
-          };
-          dispatch({ type: 'ADD_MESSAGE', payload: aiMessage });
+        // Send via SignalR so progress events fire back in real-time
+        if (connectionRef.current?.state === HubConnectionState.Connected) {
+          await connectionRef.current.invoke('SendMessage', request);
+          // SignalR handlers (MessageReceived / MessageError) handle the response
+          dispatch({
+            type: 'UPDATE_MESSAGE_STATUS',
+            payload: { id: optimisticId, status: MessageStatus.Completed },
+          });
         } else {
-          dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to send message' });
+          // Fallback to REST if SignalR is disconnected
+          const response = await chatApi.sendMessage(request);
+
+          dispatch({
+            type: 'UPDATE_MESSAGE_STATUS',
+            payload: { id: optimisticId, status: MessageStatus.Completed },
+          });
+
+          if (response.success) {
+            const aiMessage: ChatMessage = {
+              id: response.messageId,
+              conversationId: state.activeConversationId,
+              content: response.content,
+              role: MessageRole.Assistant,
+              timestamp: new Date().toISOString(),
+              status: MessageStatus.Completed,
+              metadata: response.metadata || {},
+              tools: response.recommendedTools || [],
+            };
+            dispatch({ type: 'ADD_MESSAGE', payload: aiMessage });
+          } else {
+            dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to send message' });
+          }
+          dispatch({ type: 'SET_PROCESSING', payload: false });
         }
       } catch (err) {
         dispatch({
@@ -390,7 +419,6 @@ export function ChatProvider({ children }: ChatProviderProps) {
           payload: { id: optimisticId, status: MessageStatus.Error, error: 'Failed to send' },
         });
         dispatch({ type: 'SET_ERROR', payload: 'Failed to send message' });
-      } finally {
         dispatch({ type: 'SET_PROCESSING', payload: false });
       }
     },

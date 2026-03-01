@@ -120,6 +120,52 @@ For production, switch to **SQL Server**:
 
 The database is **auto-migrated** at startup — no manual migration commands needed.
 
+### Azure OpenAI (Optional)
+
+Enable LLM-powered natural language processing in agents. When configured and enabled, agents use Azure OpenAI to understand user intent, select tools via function-calling, and return natural language responses. **When unconfigured or disabled, agents behave exactly as before** — deterministic keyword routing and raw tool output.
+
+```json
+{
+  "Gateway": {
+    "AzureOpenAI": {
+      "Endpoint": "https://your-resource.openai.azure.com",
+      "ApiKey": "your-api-key",
+      "ChatDeploymentName": "gpt-4o",
+      "AgentAIEnabled": true,
+      "MaxToolCallRounds": 5,
+      "Temperature": 0.3
+    }
+  }
+}
+```
+
+For Azure Government with Managed Identity:
+
+```json
+{
+  "Gateway": {
+    "AzureOpenAI": {
+      "Endpoint": "https://your-resource.openai.azure.us",
+      "UseManagedIdentity": true,
+      "ChatDeploymentName": "gpt-4o",
+      "AgentAIEnabled": true
+    }
+  }
+}
+```
+
+| Setting | Type | Default | Description |
+|---|---|---|---|
+| `Endpoint` | string | `""` | Azure OpenAI resource endpoint. Empty = AI disabled. |
+| `ApiKey` | string | `""` | API key (ignored when `UseManagedIdentity` is true) |
+| `ChatDeploymentName` | string | `""` | Chat model deployment name (e.g., `gpt-4o`) |
+| `AgentAIEnabled` | bool | `false` | Feature flag — must be `true` to enable AI processing |
+| `MaxToolCallRounds` | int | `5` | Max LLM tool-call rounds before returning |
+| `Temperature` | double | `0.3` | LLM temperature (0.0–1.0) |
+| `UseManagedIdentity` | bool | `false` | Use `DefaultAzureCredential` instead of API key |
+
+**Degraded mode**: If `Endpoint` is empty or `AgentAIEnabled` is `false`, all agents fall back to deterministic processing with zero overhead. No Azure OpenAI calls are made.
+
 ### Environment Variables
 
 All configuration can be overridden with environment variables prefixed with `ATO_`:

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -30,6 +31,7 @@ public class AtoRemediationEngineTests
     private readonly Mock<INistRemediationStepsService> _nistSteps;
     private readonly Mock<IScriptSanitizationService> _sanitization;
     private readonly Mock<IKanbanService> _kanban;
+    private readonly Mock<IServiceScopeFactory> _scopeFactory;
     private readonly Mock<ILogger<AtoRemediationEngine>> _logger;
     private readonly ComplianceAgentOptions _options;
     private readonly AtoRemediationEngine _sut;
@@ -46,6 +48,14 @@ public class AtoRemediationEngineTests
         _sanitization = new Mock<IScriptSanitizationService>();
         _kanban = new Mock<IKanbanService>();
         _logger = new Mock<ILogger<AtoRemediationEngine>>();
+
+        // Wire up IServiceScopeFactory → IServiceScope → IServiceProvider → IKanbanService
+        _scopeFactory = new Mock<IServiceScopeFactory>();
+        var mockScope = new Mock<IServiceScope>();
+        var mockScopeProvider = new Mock<IServiceProvider>();
+        mockScopeProvider.Setup(p => p.GetService(typeof(IKanbanService))).Returns(_kanban.Object);
+        mockScope.Setup(s => s.ServiceProvider).Returns(mockScopeProvider.Object);
+        _scopeFactory.Setup(f => f.CreateScope()).Returns(mockScope.Object);
 
         _options = new ComplianceAgentOptions
         {
@@ -82,7 +92,7 @@ public class AtoRemediationEngineTests
         _sut = CreateEngine();
     }
 
-    private AtoRemediationEngine CreateEngine(IKanbanService? kanban = null)
+    private AtoRemediationEngine CreateEngine(IServiceScopeFactory? scopeFactory = null)
     {
         return new AtoRemediationEngine(
             _complianceEngine.Object,
@@ -95,7 +105,7 @@ public class AtoRemediationEngineTests
             _sanitization.Object,
             Options.Create(_options),
             _logger.Object,
-            kanban ?? _kanban.Object);
+            scopeFactory ?? _scopeFactory.Object);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -2025,7 +2035,14 @@ public class AtoRemediationEngineTests
     [Fact]
     public async Task Execute_NullKanbanService_SkipsSilently()
     {
-        // Arrange — engine with null kanban (bypass CreateEngine helper to avoid null-coalescing)
+        // Arrange — engine with scope factory returning null kanban
+        var nullScopeFactory = new Mock<IServiceScopeFactory>();
+        var nullScope = new Mock<IServiceScope>();
+        var nullProvider = new Mock<IServiceProvider>();
+        nullProvider.Setup(p => p.GetService(typeof(IKanbanService))).Returns((IKanbanService?)null);
+        nullScope.Setup(s => s.ServiceProvider).Returns(nullProvider.Object);
+        nullScopeFactory.Setup(f => f.CreateScope()).Returns(nullScope.Object);
+
         var engine = new AtoRemediationEngine(
             _complianceEngine.Object,
             _dbFactory.Object,
@@ -2037,7 +2054,7 @@ public class AtoRemediationEngineTests
             _sanitization.Object,
             Options.Create(_options),
             _logger.Object,
-            kanbanService: null);
+            nullScopeFactory.Object);
 
         var finding = CreateAutoRemediableFinding("F-KB-4");
         SetupFindingLookup(finding);

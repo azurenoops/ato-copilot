@@ -1,8 +1,11 @@
 using System.Diagnostics;
 using System.Reflection;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Ato.Copilot.Agents.Common;
 using Ato.Copilot.Agents.Configuration.Tools;
+using Ato.Copilot.Core.Configuration;
 
 namespace Ato.Copilot.Agents.Configuration.Agents;
 
@@ -24,8 +27,10 @@ public class ConfigurationAgent : BaseAgent
     /// <param name="logger">Logger instance.</param>
     public ConfigurationAgent(
         ConfigurationTool configurationTool,
-        ILogger<ConfigurationAgent> logger)
-        : base(logger)
+        ILogger<ConfigurationAgent> logger,
+        IChatClient? chatClient = null,
+        IOptions<AzureOpenAIGatewayOptions>? aiOptions = null)
+        : base(logger, chatClient, aiOptions?.Value)
     {
         _configurationTool = configurationTool;
         RegisterTool(_configurationTool);
@@ -104,11 +109,17 @@ public class ConfigurationAgent : BaseAgent
     public override async Task<AgentResponse> ProcessAsync(
         string message,
         AgentConversationContext context,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progress = null)
     {
         var sw = Stopwatch.StartNew();
 
         Logger.LogInformation("Configuration agent processing: {Message}", message);
+
+        // ── AI-powered processing path (Feature 011) ────────────────────
+        var aiResponse = await TryProcessWithAiAsync(message, context, cancellationToken, progress);
+        if (aiResponse != null)
+            return aiResponse;
 
         // Route the message to the appropriate configuration action
         var action = ClassifyIntent(message);

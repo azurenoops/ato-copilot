@@ -4,11 +4,13 @@ FROM node:20.18.1-alpine AS frontend-build
 WORKDIR /app/ClientApp
 
 # Copy package files first for layer caching
-COPY src/Ato.Copilot.Chat/ClientApp/package*.json ./
-RUN npm ci --silent
+COPY src/Ato.Copilot.Chat/ClientApp/package.json ./
+RUN npm install --legacy-peer-deps
 
 # Copy frontend source and build
 COPY src/Ato.Copilot.Chat/ClientApp/ ./
+ENV CI=true
+ENV TSC_COMPILE_ON_ERROR=true
 RUN npm run build
 
 # ─── Stage 2: Build .NET Backend ─────────────────────────────────
@@ -31,8 +33,7 @@ RUN dotnet restore src/Ato.Copilot.Chat/Ato.Copilot.Chat.csproj
 COPY src/ src/
 RUN dotnet publish src/Ato.Copilot.Chat/Ato.Copilot.Chat.csproj \
     -c Release \
-    -o /app/publish \
-    --no-restore
+    -o /app/publish
 
 # ─── Stage 3: Runtime ────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
@@ -40,6 +41,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 # Create non-root user per FR-040
 RUN addgroup --system --gid 1001 appgroup && \
     adduser --system --uid 1001 --ingroup appgroup appuser
+
+# Install curl for health checks
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -49,8 +53,8 @@ COPY --from=backend-build /app/publish .
 # Copy built React app to wwwroot
 COPY --from=frontend-build /app/ClientApp/build ./wwwroot
 
-# Create uploads directory with proper permissions
-RUN mkdir -p /app/uploads && chown -R appuser:appgroup /app/uploads
+# Create uploads and logs directories with proper permissions
+RUN mkdir -p /app/uploads /app/logs && chown -R appuser:appgroup /app/uploads /app/logs
 
 # Set environment
 ENV ASPNETCORE_URLS=http://+:8080

@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -5,6 +6,7 @@ using Xunit;
 using FluentAssertions;
 using Ato.Copilot.Agents.Compliance.Configuration;
 using Ato.Copilot.Agents.Compliance.Services;
+using Ato.Copilot.Core.Data.Context;
 using Ato.Copilot.Core.Interfaces.Compliance;
 using Ato.Copilot.Core.Models.Compliance;
 
@@ -12,7 +14,8 @@ namespace Ato.Copilot.Tests.Unit.Services;
 
 /// <summary>
 /// Unit tests for <see cref="NistControlsCacheWarmupService"/>: warmup lifecycle,
-/// initial delay, periodic refresh, failure retry, stoppingToken cancellation.
+/// initial delay, periodic refresh, failure retry, stoppingToken cancellation,
+/// and database sync of NIST controls.
 /// Uses minimal WarmupDelaySeconds=5 to keep tests fast.
 /// </summary>
 public class NistControlsCacheWarmupServiceTests
@@ -22,6 +25,7 @@ public class NistControlsCacheWarmupServiceTests
 
     private NistControlsCacheWarmupService CreateService(
         NistControlsOptions? options = null,
+        IDbContextFactory<AtoCopilotContext>? dbFactory = null,
         ComplianceValidationService? validationService = null)
     {
         var opts = options ?? new NistControlsOptions
@@ -34,6 +38,7 @@ public class NistControlsCacheWarmupServiceTests
             _nistServiceMock.Object,
             Options.Create(opts),
             _loggerMock.Object,
+            dbFactory,
             validationService);
     }
 
@@ -227,6 +232,13 @@ public class NistControlsCacheWarmupServiceTests
     }
 
     [Fact]
+    public void Constructor_AcceptsNullDbFactory()
+    {
+        var service = CreateService(dbFactory: null);
+        service.Should().NotBeNull();
+    }
+
+    [Fact]
     public void Constructor_AcceptsConfiguredOptions()
     {
         var options = new NistControlsOptions
@@ -237,6 +249,35 @@ public class NistControlsCacheWarmupServiceTests
 
         var service = CreateService(options);
         service.Should().NotBeNull();
+    }
+
+    // ─── DB Sync ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task WarmupCache_SkipsDbSync_WhenNoDbFactory()
+    {
+        var catalog = CreateMinimalCatalog();
+        _nistServiceMock.Setup(s => s.GetCatalogAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(catalog);
+        _nistServiceMock.Setup(s => s.GetVersionAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync("5.2.0");
+
+        // No dbFactory — sync should be skipped silently
+        var service = CreateService(
+            new NistControlsOptions { WarmupDelaySeconds = 5, CacheDurationHours = 1 },
+            dbFactory: null);
+        using var cts = new CancellationTokenSource();
+
+        await service.StartAsync(cts.Token);
+        await Task.Delay(TimeSpan.FromSeconds(8));
+
+        await cts.CancelAsync();
+        await service.StopAsync(CancellationToken.None);
+
+        // GetAllControlsAsync should NOT be called when there's no dbFactory
+        _nistServiceMock.Verify(
+            s => s.GetAllControlsAsync(It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

@@ -15,6 +15,7 @@ public class McpHttpBridge
     private readonly McpServer _mcpServer;
     private readonly ILogger<McpHttpBridge> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
+    private readonly JsonSerializerOptions _sseJsonOptions;
 
     /// <summary>Initializes a new instance of the <see cref="McpHttpBridge"/> class.</summary>
     /// <param name="mcpServer">The MCP server to delegate requests to.</param>
@@ -27,6 +28,12 @@ public class McpHttpBridge
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             WriteIndented = true
+        };
+        // SSE events MUST be single-line — no indentation
+        _sseJsonOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = false
         };
     }
 
@@ -49,6 +56,12 @@ public class McpHttpBridge
             .WithName("McpChat")
             .WithTags("MCP")
             .WithDescription("Process compliance requests via AI agent");
+
+        // Streaming chat endpoint with SSE progress events
+        app.MapPost("/mcp/chat/stream", (Delegate)HandleChatStreamRequestAsync)
+            .WithName("McpChatStream")
+            .WithTags("MCP")
+            .WithDescription("Process compliance requests with real-time progress via SSE");
 
         // Health endpoint
         app.MapGet("/health", (Delegate)HandleHealthAsync)
@@ -131,6 +144,67 @@ public class McpHttpBridge
         {
             _logger.LogError(ex, "Error processing chat request");
             return Results.Problem(ex.Message);
+        }
+    }
+
+    /// <summary>Handles chat requests with SSE streaming for real-time progress.</summary>
+    private async Task HandleChatStreamRequestAsync(HttpContext context)
+    {
+        try
+        {
+            var chatRequest = await JsonSerializer.DeserializeAsync<ChatRequest>(
+                context.Request.Body, _jsonOptions);
+
+            if (chatRequest == null || string.IsNullOrEmpty(chatRequest.Message))
+            {
+                context.Response.StatusCode = 400;
+                await context.Response.WriteAsJsonAsync(new { error = "Message is required" });
+                return;
+            }
+
+            _logger.LogInformation("Streaming chat request | ConvId: {ConvId}", chatRequest.ConversationId);
+
+            // Set up SSE headers
+            context.Response.ContentType = "text/event-stream";
+            context.Response.Headers["Cache-Control"] = "no-cache";
+            context.Response.Headers["Connection"] = "keep-alive";
+            await context.Response.Body.FlushAsync();
+
+            // Create progress reporter that writes SSE events
+            var progress = new Progress<string>(async step =>
+            {
+                try
+                {
+                    var eventData = JsonSerializer.Serialize(new { type = "progress", step }, _sseJsonOptions);
+                    await context.Response.WriteAsync($"data: {eventData}\n\n");
+                    await context.Response.Body.FlushAsync();
+                }
+                catch { /* client disconnected */ }
+            });
+
+            var result = await _mcpServer.ProcessChatRequestAsync(
+                chatRequest.Message,
+                chatRequest.ConversationId,
+                chatRequest.Context,
+                chatRequest.ConversationHistory?.Select(m => (m.Role, m.Content)).ToList(),
+                context.RequestAborted,
+                progress);
+
+            // Write final result as SSE event
+            var resultData = JsonSerializer.Serialize(new { type = "result", data = result }, _sseJsonOptions);
+            await context.Response.WriteAsync($"data: {resultData}\n\n");
+            await context.Response.Body.FlushAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing streaming chat request");
+            try
+            {
+                var errorData = JsonSerializer.Serialize(new { type = "error", error = ex.Message }, _sseJsonOptions);
+                await context.Response.WriteAsync($"data: {errorData}\n\n");
+                await context.Response.Body.FlushAsync();
+            }
+            catch { /* client disconnected */ }
         }
     }
 

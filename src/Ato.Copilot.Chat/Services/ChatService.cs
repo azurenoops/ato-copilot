@@ -37,13 +37,15 @@ public class ChatService : IChatService
     // ─── Messaging (US1) ─────────────────────────────────────────
 
     /// <inheritdoc/>
-    public async Task<ChatResponse> SendMessageAsync(SendMessageRequest request)
+    public async Task<ChatResponse> SendMessageAsync(SendMessageRequest request, IProgress<string>? progress = null)
     {
         var stopwatch = Stopwatch.StartNew();
         var messageId = Guid.NewGuid().ToString();
 
         try
         {
+            progress?.Report("Saving message...");
+
             // Persist user message with status Sent
             var userMessage = new ChatMessage
             {
@@ -61,16 +63,18 @@ public class ChatService : IChatService
             userMessage.Status = MessageStatus.Processing;
             await _dbContext.SaveChangesAsync();
 
+            progress?.Report("Building conversation context...");
+
             // Build context window (last 20 messages)
             var history = await GetConversationHistoryAsync(request.ConversationId);
 
-            // Call MCP Server
+            // Call MCP Server via SSE streaming endpoint for real-time progress
             var client = _httpClientFactory.CreateClient("McpServer");
             var mcpRequest = new
             {
                 conversationId = request.ConversationId,
                 message = request.GetContent(),
-                history = history.Select(m => new { role = m.Role.ToString(), content = m.Content }),
+                conversationHistory = history.Select(m => new { role = m.Role.ToString(), content = m.Content }),
                 context = request.Context
             };
 
@@ -79,24 +83,145 @@ public class ChatService : IChatService
                 Encoding.UTF8,
                 "application/json");
 
-            HttpResponseMessage? mcpResponse = null;
+            progress?.Report("Connecting to ATO Copilot...");
+
+            JsonElement? mcpResult = null;
+            string? streamError = null;
 
             try
             {
-                // Primary endpoint
-                mcpResponse = await client.PostAsync("/mcp/chat", jsonContent);
+                // Use streaming endpoint for real-time progress
+                var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/mcp/chat/stream")
+                {
+                    Content = jsonContent
+                };
+                var mcpResponse = await client.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead);
+
+                if (mcpResponse.IsSuccessStatusCode)
+                {
+                    using var stream = await mcpResponse.Content.ReadAsStreamAsync();
+                    using var reader = new StreamReader(stream);
+
+                    var dataBuffer = new System.Text.StringBuilder();
+                    var inDataBlock = false;
+
+                    while (!reader.EndOfStream)
+                    {
+                        var line = await reader.ReadLineAsync();
+
+                        // SSE spec: empty line terminates an event
+                        if (string.IsNullOrEmpty(line))
+                        {
+                            if (inDataBlock && dataBuffer.Length > 0)
+                            {
+                                // Process the accumulated data block
+                                var eventJson = dataBuffer.ToString();
+                                dataBuffer.Clear();
+                                inDataBlock = false;
+
+                                try
+                                {
+                                    var evt = JsonSerializer.Deserialize<JsonElement>(eventJson);
+                                    var eventType = evt.TryGetProperty("type", out var typeProp) ? typeProp.GetString() : null;
+
+                                    switch (eventType)
+                                    {
+                                        case "progress":
+                                            if (evt.TryGetProperty("step", out var stepProp))
+                                                progress?.Report(stepProp.GetString() ?? "Processing...");
+                                            break;
+                                        case "result":
+                                            if (evt.TryGetProperty("data", out var dataProp))
+                                                mcpResult = dataProp;
+                                            break;
+                                        case "error":
+                                            streamError = evt.TryGetProperty("error", out var errorProp)
+                                                ? errorProp.GetString()
+                                                : "Unknown streaming error";
+                                            break;
+                                    }
+                                }
+                                catch (JsonException ex)
+                                {
+                                    _logger.LogWarning("Failed to parse SSE event: {Error} | Data: {Data}", ex.Message, eventJson);
+                                }
+                            }
+                            continue;
+                        }
+
+                        if (line.StartsWith("data: "))
+                        {
+                            dataBuffer.Append(line[6..]);
+                            inDataBlock = true;
+                        }
+                        else if (inDataBlock)
+                        {
+                            // Continuation line for multi-line data
+                            dataBuffer.Append(line);
+                        }
+                    }
+
+                    // Handle last event if stream ends without trailing blank line
+                    if (inDataBlock && dataBuffer.Length > 0)
+                    {
+                        try
+                        {
+                            var evt = JsonSerializer.Deserialize<JsonElement>(dataBuffer.ToString());
+                            var eventType = evt.TryGetProperty("type", out var typeProp) ? typeProp.GetString() : null;
+
+                            if (eventType == "result" && evt.TryGetProperty("data", out var dataProp))
+                                mcpResult = dataProp;
+                            else if (eventType == "error")
+                                streamError = evt.TryGetProperty("error", out var errorProp)
+                                    ? errorProp.GetString() : "Unknown streaming error";
+                        }
+                        catch (JsonException ex)
+                        {
+                            _logger.LogWarning("Failed to parse final SSE event: {Error}", ex.Message);
+                        }
+                    }
+                }
+                else
+                {
+                    // Fallback: call non-streaming endpoint
+                    _logger.LogWarning("Streaming endpoint returned {StatusCode}, falling back to sync endpoint",
+                        mcpResponse.StatusCode);
+
+                    var fallbackContent = new StringContent(
+                        JsonSerializer.Serialize(mcpRequest, JsonOptions),
+                        Encoding.UTF8,
+                        "application/json");
+                    var fallbackResponse = await client.PostAsync("/mcp/chat", fallbackContent);
+                    if (fallbackResponse.IsSuccessStatusCode)
+                    {
+                        var responseContent = await fallbackResponse.Content.ReadAsStringAsync();
+                        mcpResult = JsonSerializer.Deserialize<JsonElement>(responseContent);
+                    }
+                    else
+                    {
+                        streamError = $"MCP server returned status {fallbackResponse.StatusCode}";
+                    }
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Primary MCP endpoint /mcp/chat failed, trying fallback");
-                // Fallback endpoint per research.md
+                _logger.LogWarning(ex, "Streaming MCP endpoint failed, trying fallback");
                 try
                 {
                     var fallbackContent = new StringContent(
                         JsonSerializer.Serialize(mcpRequest, JsonOptions),
                         Encoding.UTF8,
                         "application/json");
-                    mcpResponse = await client.PostAsync("/api/chat/query", fallbackContent);
+                    var fallbackResponse = await client.PostAsync("/mcp/chat", fallbackContent);
+                    if (fallbackResponse.IsSuccessStatusCode)
+                    {
+                        var responseContent = await fallbackResponse.Content.ReadAsStringAsync();
+                        mcpResult = JsonSerializer.Deserialize<JsonElement>(responseContent);
+                    }
+                    else
+                    {
+                        streamError = $"Fallback MCP endpoint returned status {fallbackResponse.StatusCode}";
+                    }
                 }
                 catch (Exception fallbackEx)
                 {
@@ -107,14 +232,40 @@ public class ChatService : IChatService
 
             stopwatch.Stop();
 
-            if (mcpResponse != null && mcpResponse.IsSuccessStatusCode)
-            {
-                var responseContent = await mcpResponse.Content.ReadAsStringAsync();
-                var mcpResult = JsonSerializer.Deserialize<JsonElement>(responseContent);
+            progress?.Report("Finalizing response...");
 
-                var aiContent = mcpResult.TryGetProperty("content", out var contentProp)
-                    ? contentProp.GetString() ?? "I processed your request but have no specific response."
-                    : "I processed your request but have no specific response.";
+            if (streamError != null)
+            {
+                _logger.LogError("MCP Server streaming error: {Error}", streamError);
+
+                userMessage.Status = MessageStatus.Error;
+                userMessage.Metadata = new Dictionary<string, object>
+                {
+                    ["error"] = streamError,
+                    ["errorCategory"] = "McpError"
+                };
+                await _dbContext.SaveChangesAsync();
+
+                return new ChatResponse
+                {
+                    MessageId = messageId,
+                    Content = "",
+                    Success = false,
+                    Error = streamError
+                };
+            }
+
+            if (mcpResult.HasValue)
+            {
+                var result = mcpResult.Value;
+
+                // MCP server returns "response" property; fall back to "content" for compatibility
+                var aiContent = result.TryGetProperty("response", out var responseProp)
+                    ? responseProp.GetString()
+                    : result.TryGetProperty("content", out var contentProp)
+                        ? contentProp.GetString()
+                        : null;
+                aiContent ??= "I processed your request but have no specific response.";
 
                 // Build metadata
                 var metadata = new Dictionary<string, object>
@@ -122,7 +273,7 @@ public class ChatService : IChatService
                     ["processingTimeMs"] = stopwatch.ElapsedMilliseconds
                 };
 
-                if (mcpResult.TryGetProperty("metadata", out var metadataProp))
+                if (result.TryGetProperty("metadata", out var metadataProp))
                 {
                     foreach (var prop in metadataProp.EnumerateObject())
                     {
@@ -169,13 +320,13 @@ public class ChatService : IChatService
 
                 // Extract suggestions
                 List<SuggestedAction>? suggestions = null;
-                if (mcpResult.TryGetProperty("suggestedActions", out var suggestionsProp))
+                if (result.TryGetProperty("suggestedActions", out var suggestionsProp))
                 {
                     suggestions = JsonSerializer.Deserialize<List<SuggestedAction>>(suggestionsProp.GetRawText(), JsonOptions);
                 }
 
                 List<string>? recommendedTools = null;
-                if (mcpResult.TryGetProperty("recommendedTools", out var toolsProp))
+                if (result.TryGetProperty("recommendedTools", out var toolsProp))
                 {
                     recommendedTools = JsonSerializer.Deserialize<List<string>>(toolsProp.GetRawText(), JsonOptions);
                 }
@@ -192,21 +343,14 @@ public class ChatService : IChatService
             }
             else
             {
-                // MCP returned error status
-                var errorContent = mcpResponse != null
-                    ? await mcpResponse.Content.ReadAsStringAsync()
-                    : "No response received";
-                var statusCode = mcpResponse?.StatusCode;
-
-                _logger.LogError("MCP Server returned {StatusCode}: {Error}", statusCode, errorContent);
-
-                var (errorMessage, category) = CategorizeMcpError(statusCode, errorContent);
+                // No result received
+                _logger.LogError("MCP Server returned no result");
 
                 userMessage.Status = MessageStatus.Error;
                 userMessage.Metadata = new Dictionary<string, object>
                 {
-                    ["error"] = errorMessage,
-                    ["errorCategory"] = category
+                    ["error"] = "No response received from AI service",
+                    ["errorCategory"] = "NoResponse"
                 };
                 await _dbContext.SaveChangesAsync();
 
@@ -215,7 +359,7 @@ public class ChatService : IChatService
                     MessageId = messageId,
                     Content = "",
                     Success = false,
-                    Error = errorMessage
+                    Error = "No response received from AI service"
                 };
             }
         }

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Ato.Copilot.Core.Constants;
 using Ato.Copilot.Core.Data.Context;
@@ -28,8 +29,13 @@ public class AtoComplianceEngine : IAtoComplianceEngine
     private readonly IAzureResourceService _azureResourceService;
     private readonly IStigValidationService _stigValidationService;
     private readonly IEvidenceCollectorRegistry _evidenceCollectorRegistry;
-    private readonly IComplianceWatchService? _complianceWatchService;
-    private readonly IAlertManager? _alertManager;
+    private readonly IServiceProvider _serviceProvider;
+
+    // Lazy-resolved to break circular dependency:
+    // AtoComplianceEngine → IComplianceWatchService → ComplianceWatchService → IAtoComplianceEngine
+    private IComplianceWatchService? _complianceWatchService;
+    private IAlertManager? _alertManager;
+    private bool _optionalServicesResolved;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -50,8 +56,7 @@ public class AtoComplianceEngine : IAtoComplianceEngine
         IAzureResourceService azureResourceService,
         IStigValidationService stigValidationService,
         IEvidenceCollectorRegistry evidenceCollectorRegistry,
-        IComplianceWatchService? complianceWatchService = null,
-        IAlertManager? alertManager = null)
+        IServiceProvider serviceProvider)
     {
         _nistService = nistService;
         _policyService = policyService;
@@ -63,8 +68,19 @@ public class AtoComplianceEngine : IAtoComplianceEngine
         _azureResourceService = azureResourceService;
         _stigValidationService = stigValidationService;
         _evidenceCollectorRegistry = evidenceCollectorRegistry;
-        _complianceWatchService = complianceWatchService;
-        _alertManager = alertManager;
+        _serviceProvider = serviceProvider;
+    }
+
+    /// <summary>
+    /// Lazily resolves optional services that would cause a circular dependency
+    /// if injected via the constructor (IComplianceWatchService ↔ IAtoComplianceEngine).
+    /// </summary>
+    private void EnsureOptionalServicesResolved()
+    {
+        if (_optionalServicesResolved) return;
+        _complianceWatchService = _serviceProvider.GetService<IComplianceWatchService>();
+        _alertManager = _serviceProvider.GetService<IAlertManager>();
+        _optionalServicesResolved = true;
     }
 
     /// <inheritdoc />
@@ -1189,6 +1205,7 @@ public class AtoComplianceEngine : IAtoComplianceEngine
         }
 
         // Try to get Compliance Watch monitoring status
+        EnsureOptionalServicesResolved();
         try
         {
             if (_complianceWatchService is not null)

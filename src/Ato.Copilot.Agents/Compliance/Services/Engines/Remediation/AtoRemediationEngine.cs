@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ato.Copilot.Agents.Compliance.Configuration;
@@ -29,7 +30,7 @@ public class AtoRemediationEngine : IRemediationEngine
     private readonly INistRemediationStepsService _nistStepsService;
     private readonly IScriptSanitizationService _sanitizationService;
     private readonly ComplianceAgentOptions _options;
-    private readonly IKanbanService? _kanbanService;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<AtoRemediationEngine> _logger;
 
     private readonly ConcurrentDictionary<string, RemediationExecution> _activeRemediations = new();
@@ -62,7 +63,7 @@ public class AtoRemediationEngine : IRemediationEngine
         IScriptSanitizationService sanitizationService,
         IOptions<ComplianceAgentOptions> options,
         ILogger<AtoRemediationEngine> logger,
-        IKanbanService? kanbanService = null)
+        IServiceScopeFactory scopeFactory)
     {
         _complianceEngine = complianceEngine;
         _dbFactory = dbFactory;
@@ -73,7 +74,7 @@ public class AtoRemediationEngine : IRemediationEngine
         _nistStepsService = nistStepsService;
         _sanitizationService = sanitizationService;
         _options = options.Value;
-        _kanbanService = kanbanService;
+        _scopeFactory = scopeFactory;
         _logger = logger;
         _semaphore = new SemaphoreSlim(_options.Remediation.MaxConcurrentRemediations);
     }
@@ -1729,16 +1730,19 @@ public class AtoRemediationEngine : IRemediationEngine
     /// <summary>Post-execution kanban sync — advance linked task to InReview and collect evidence.</summary>
     private async Task SyncKanbanPostExecutionAsync(RemediationExecution execution, CancellationToken ct)
     {
-        if (_kanbanService == null) return;
         if (execution.Status != RemediationExecutionStatus.Completed) return;
 
         try
         {
-            var task = await _kanbanService.GetTaskByLinkedAlertIdAsync(execution.FindingId, ct);
+            using var scope = _scopeFactory.CreateScope();
+            var kanbanService = scope.ServiceProvider.GetService<IKanbanService>();
+            if (kanbanService == null) return;
+
+            var task = await kanbanService.GetTaskByLinkedAlertIdAsync(execution.FindingId, ct);
             if (task == null) return;
 
             // Advance task to InReview
-            await _kanbanService.MoveTaskAsync(
+            await kanbanService.MoveTaskAsync(
                 task.Id,
                 Core.Models.Kanban.TaskStatus.InReview,
                 "system", "Remediation Engine", "System",
@@ -1747,7 +1751,7 @@ public class AtoRemediationEngine : IRemediationEngine
                 cancellationToken: ct);
 
             // Collect evidence
-            await _kanbanService.CollectTaskEvidenceAsync(
+            await kanbanService.CollectTaskEvidenceAsync(
                 task.Id, "system", "Remediation Engine",
                 execution.SubscriptionId, ct);
 
@@ -1762,14 +1766,16 @@ public class AtoRemediationEngine : IRemediationEngine
     /// <summary>Post-failure kanban sync — add comment to linked task with error details.</summary>
     private async Task SyncKanbanFailureAsync(RemediationExecution execution, string errorMessage, CancellationToken ct)
     {
-        if (_kanbanService == null) return;
-
         try
         {
-            var task = await _kanbanService.GetTaskByLinkedAlertIdAsync(execution.FindingId, ct);
+            using var scope = _scopeFactory.CreateScope();
+            var kanbanService = scope.ServiceProvider.GetService<IKanbanService>();
+            if (kanbanService == null) return;
+
+            var task = await kanbanService.GetTaskByLinkedAlertIdAsync(execution.FindingId, ct);
             if (task == null) return;
 
-            await _kanbanService.AddCommentAsync(
+            await kanbanService.AddCommentAsync(
                 task.Id,
                 "system", "Remediation Engine",
                 $"⚠️ Automated remediation failed: {errorMessage}",

@@ -1,10 +1,12 @@
 using System.Diagnostics;
 using System.Reflection;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ato.Copilot.Agents.Common;
 using Ato.Copilot.Agents.KnowledgeBase.Configuration;
 using Ato.Copilot.Agents.KnowledgeBase.Tools;
+using Ato.Copilot.Core.Configuration;
 using Ato.Copilot.Core.Models.Compliance;
 using Ato.Copilot.State.Abstractions;
 
@@ -36,8 +38,10 @@ public class KnowledgeBaseAgent : BaseAgent
         ExplainRmfTool explainRmfTool,
         ExplainImpactLevelTool explainImpactLevelTool,
         GetFedRampTemplateGuidanceTool getFedRampTemplateGuidanceTool,
-        ILogger<KnowledgeBaseAgent> logger)
-        : base(logger)
+        ILogger<KnowledgeBaseAgent> logger,
+        IChatClient? chatClient = null,
+        IOptions<AzureOpenAIGatewayOptions>? aiOptions = null)
+        : base(logger, chatClient, aiOptions?.Value)
     {
         _options = options.Value;
         _stateManager = stateManager;
@@ -166,7 +170,8 @@ public class KnowledgeBaseAgent : BaseAgent
     public override async Task<AgentResponse> ProcessAsync(
         string message,
         AgentConversationContext context,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progress = null)
     {
         var sw = Stopwatch.StartNew();
 
@@ -185,7 +190,15 @@ public class KnowledgeBaseAgent : BaseAgent
                 ProcessingTimeMs = sw.Elapsed.TotalMilliseconds
             };
         }
-
+        // \u2500\u2500 AI-powered processing path (Feature 011) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        var aiResponse = await TryProcessWithAiAsync(message, context, cancellationToken, progress);
+        if (aiResponse != null)
+        {
+            // Store cross-agent state for AI responses too
+            await StoreQueryStateAsync(KnowledgeQueryType.GeneralKnowledge, message, aiResponse.Response, cancellationToken);
+            await TrackOperationAsync(KnowledgeQueryType.GeneralKnowledge, message, true, sw.Elapsed.TotalMilliseconds, cancellationToken);
+            return aiResponse;
+        }
         var queryType = AnalyzeQueryType(message);
 
         // Find the appropriate tool for this query type

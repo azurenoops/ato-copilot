@@ -22,7 +22,7 @@ public class AgentOrchestratorTests
         mock.SetupGet(a => a.Description).Returns($"Mock {agentName}");
         mock.Setup(a => a.CanHandle(It.IsAny<string>())).Returns(canHandleScore);
         mock.Setup(a => a.GetSystemPrompt()).Returns("Mock prompt");
-        mock.Setup(a => a.ProcessAsync(It.IsAny<string>(), It.IsAny<AgentConversationContext>(), It.IsAny<CancellationToken>()))
+        mock.Setup(a => a.ProcessAsync(It.IsAny<string>(), It.IsAny<AgentConversationContext>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<string>?>()))
             .ReturnsAsync(new AgentResponse { Success = true, Response = "OK", AgentName = agentName });
         return mock.Object;
     }

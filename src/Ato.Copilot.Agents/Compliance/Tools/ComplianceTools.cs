@@ -70,6 +70,7 @@ public class ComplianceAssessmentTool : BaseTool
             subscriptionId, resourceGroup: null, progress: null, cancellationToken);
 
         var output = $"## Compliance Assessment Results\n\n" +
+               $"**Assessment ID**: {result.Id}\n" +
                $"**Subscription**: {result.SubscriptionId}\n" +
                $"**Framework**: {result.Framework}\n" +
                $"**Scan Type**: {result.ScanType}\n" +

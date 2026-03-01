@@ -572,6 +572,14 @@ public interface INistControlsService
     Task<bool> ValidateControlIdAsync(
         string controlId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns all NIST controls from the cached catalog.
+    /// Used for bulk operations such as syncing to a relational database.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>All controls, or an empty list if the catalog is not loaded.</returns>
+    Task<List<NistControl>> GetAllControlsAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>

@@ -79,7 +79,8 @@ public class McpServer
         string? conversationId = null,
         Dictionary<string, object>? context = null,
         List<(string Role, string Content)>? conversationHistory = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progress = null)
     {
         conversationId ??= Guid.NewGuid().ToString();
         var stopwatch = Stopwatch.StartNew();
@@ -107,8 +108,10 @@ public class McpServer
             }
 
             // Route to appropriate agent via confidence-scored orchestrator
+            progress?.Report("Selecting agent...");
             var targetAgent = _orchestrator.SelectAgent(message) ?? _complianceAgent;
-            var response = await targetAgent.ProcessAsync(message, agentContext, cancellationToken);
+            progress?.Report($"Routed to {targetAgent.AgentName}...");
+            var response = await targetAgent.ProcessAsync(message, agentContext, cancellationToken, progress);
             stopwatch.Stop();
 
             _logger.LogInformation("Routed to {Agent} | ConvId: {ConvId}",

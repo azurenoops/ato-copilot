@@ -89,30 +89,6 @@ public class ComplianceChatTool : BaseTool
         var lower = message.ToLowerInvariant();
         var hasContext = conversation.Messages.Count > 1;
 
-        if (ContainsAny(lower, "what is nist", "explain nist", "nist 800-53"))
-        {
-            return "**NIST 800-53** is a security and privacy controls framework published by NIST. " +
-                   "Rev. 5 contains 20 control families (AC, AU, CM, etc.) covering access control, " +
-                   "audit, configuration management, and more. It's the foundation for FedRAMP compliance.\n\n" +
-                   "Would you like to explore a specific control family?";
-        }
-
-        if (ContainsAny(lower, "what is fedramp", "explain fedramp"))
-        {
-            return "**FedRAMP** (Federal Risk and Authorization Management Program) standardizes security " +
-                   "assessment and authorization for cloud services used by federal agencies. It uses " +
-                   "NIST 800-53 controls at three baselines: Low, Moderate, and High.\n\n" +
-                   "Azure Government supports FedRAMP High compliance.";
-        }
-
-        if (ContainsAny(lower, "what is ato", "explain ato", "authorization to operate"))
-        {
-            return "**ATO (Authorization to Operate)** is the formal approval for a system to process " +
-                   "government data. It requires: (1) a System Security Plan (SSP), (2) a Security " +
-                   "Assessment Report (SAR), and (3) a Plan of Action & Milestones (POA&M).\n\n" +
-                   "Use `compliance_generate_document` to create these documents.";
-        }
-
         if (ContainsAny(lower, "how to start", "getting started", "first steps"))
         {
             return "## Getting Started with Compliance\n\n" +

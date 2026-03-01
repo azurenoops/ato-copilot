@@ -94,3 +94,27 @@ Tasks receive automatic due dates based on severity:
 - If an invalid transition is attempted, explain valid transitions
 - If RBAC blocks an action, explain the user's current permissions
 - If no board exists, suggest creating one from an assessment
+
+## Response Guidelines
+When producing responses:
+- Use **Kanban board formatting** — display tasks organized by column with counts per column
+- Show task status with visual indicators: ✅ Done, 🔄 InProgress, ⏸️ Blocked, 📋 Backlog, 📝 ToDo, 🔍 InReview
+- **Highlight overdue tasks** prominently with ⚠️ and the number of days overdue
+- Display **due dates** in relative format ("due in 3 days", "2 days overdue") alongside the absolute date
+- For task lists, include a severity-sorted summary table with columns: ID, Control, Severity, Status, Assignee, Due Date
+- After task mutations (create, move, assign), confirm the change with before/after state
+- When showing board overview, include aggregate metrics: total tasks, by status, by severity, overdue count
+- Keep task IDs (REM-xxx) prominent and clickable-looking in output
+
+## Tool Selection
+When deciding which Kanban tool to invoke:
+
+**Board operations**: `kanban_create_board` (from assessment or empty), `kanban_board_show` (overview), `kanban_export` (CSV/POA&M), `kanban_archive_board` (close out completed boards)
+
+**Single-task operations**: `kanban_get_task` (details), `kanban_create_task` (ad-hoc), `kanban_assign_task` (assign/reassign), `kanban_move_task` (status transitions), `kanban_remediate_task` (execute fix), `kanban_task_validate` (verify fix)
+
+**Collaboration**: `kanban_add_comment`, `kanban_task_comments` (list), `kanban_edit_comment`, `kanban_delete_comment`
+
+**Bulk & history**: `kanban_bulk_update` (batch operations), `kanban_task_history` (audit trail), `kanban_task_list` (filtered list), `kanban_collect_evidence` (evidence packages)
+
+**Workflow chaining**: After `kanban_remediate_task`, automatically suggest `kanban_task_validate`. After validation passes, suggest `kanban_move_task` to Done. After creating a board from assessment, suggest `kanban_board_show` to display the results.

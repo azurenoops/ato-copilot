@@ -2,11 +2,14 @@ using Azure.Core;
 using Azure.Identity;
 using Azure.ResourceManager;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using OpenAI;
 using Ato.Copilot.Core.Configuration;
 using Ato.Copilot.Core.Data.Context;
+using System.ClientModel;
 
 namespace Ato.Copilot.Core.Extensions;
 
@@ -37,9 +40,13 @@ public static class CoreServiceExtensions
         services.Configure<AlertOptions>(configuration.GetSection(AlertOptions.SectionName));
         services.Configure<NotificationOptions>(configuration.GetSection(NotificationOptions.SectionName));
         services.Configure<EscalationOptions>(configuration.GetSection(EscalationOptions.SectionName));
+        services.Configure<AzureOpenAIGatewayOptions>(configuration.GetSection("Gateway:AzureOpenAI"));
 
         // Register HTTP client factory
         services.AddHttpClient();
+
+        // Register IChatClient from Azure OpenAI when configured
+        RegisterChatClient(services, configuration);
 
         // Register database context with provider selection
         RegisterDbContext(services, configuration);
@@ -48,6 +55,58 @@ public static class CoreServiceExtensions
         RegisterArmClient(services, configuration);
 
         return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="IChatClient"/> as a singleton when Gateway:AzureOpenAI:Endpoint
+    /// is configured. Uses API key or DefaultAzureCredential based on UseManagedIdentity.
+    /// When Endpoint is empty or missing, registration is silently skipped — agents fall back
+    /// to deterministic tool routing (Constitution Principle: graceful degradation).
+    /// </summary>
+    private static void RegisterChatClient(IServiceCollection services, IConfiguration configuration)
+    {
+        var endpoint = configuration.GetValue<string>("Gateway:AzureOpenAI:Endpoint");
+        if (string.IsNullOrWhiteSpace(endpoint))
+            return;
+
+        var useManagedIdentity = configuration.GetValue<bool>("Gateway:AzureOpenAI:UseManagedIdentity");
+        var chatDeploymentName = configuration.GetValue<string>("Gateway:AzureOpenAI:ChatDeploymentName") ?? "gpt-4o";
+
+        services.AddSingleton<IChatClient>(sp =>
+        {
+            var logger = sp.GetService<ILogger<IChatClient>>();
+
+            Azure.AI.OpenAI.AzureOpenAIClient azureClient;
+            if (useManagedIdentity)
+            {
+                var cloudEnv = configuration.GetValue<string>("Gateway:Azure:CloudEnvironment") ?? "AzureGovernment";
+                var authorityHost = cloudEnv.Equals("AzureCloud", StringComparison.OrdinalIgnoreCase)
+                    ? AzureAuthorityHosts.AzurePublicCloud
+                    : AzureAuthorityHosts.AzureGovernment;
+
+                var credential = new DefaultAzureCredential(new DefaultAzureCredentialOptions
+                {
+                    AuthorityHost = authorityHost
+                });
+
+                azureClient = new Azure.AI.OpenAI.AzureOpenAIClient(new Uri(endpoint), credential);
+                logger?.LogInformation(
+                    "Registered IChatClient with DefaultAzureCredential for {Endpoint}, deployment {Deployment}",
+                    endpoint, chatDeploymentName);
+            }
+            else
+            {
+                var apiKey = configuration.GetValue<string>("Gateway:AzureOpenAI:ApiKey") ?? string.Empty;
+                azureClient = new Azure.AI.OpenAI.AzureOpenAIClient(
+                    new Uri(endpoint),
+                    new ApiKeyCredential(apiKey));
+                logger?.LogInformation(
+                    "Registered IChatClient with API key for {Endpoint}, deployment {Deployment}",
+                    endpoint, chatDeploymentName);
+            }
+
+            return azureClient.AsChatClient(chatDeploymentName);
+        });
     }
 
     /// <summary>
@@ -63,8 +122,14 @@ public static class CoreServiceExtensions
         var connectionString = configuration.GetConnectionString("DefaultConnection")
                                ?? "Data Source=ato-copilot.db";
 
-        services.AddDbContext<AtoCopilotContext>(options =>
+        services.AddDbContextFactory<AtoCopilotContext>(options =>
         {
+            // Suppress PendingModelChangesWarning — model snapshot may lag behind
+            // code-first changes during active development. EnsureCreated/Migrate
+            // will apply the correct schema.
+            options.ConfigureWarnings(w =>
+                w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+
             if (provider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase))
             {
                 options.UseSqlServer(connectionString, sqlOptions =>
