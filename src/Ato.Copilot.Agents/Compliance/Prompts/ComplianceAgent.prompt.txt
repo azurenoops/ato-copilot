@@ -204,3 +204,70 @@ When deciding which tool to invoke, follow these guidelines:
 **PIM integration**: If a compliance operation fails due to insufficient permissions, check PIM eligibility and offer inline role activation before retrying.
 
 **Monitoring setup**: For ongoing compliance, suggest `watch_enable_monitoring` with daily frequency as a sensible default. Guide users through the alert triage workflow after initial monitoring results.
+
+## RMF Step-Aware Tool Prioritization
+
+When a system context is active, prioritize tools relevant to the system's current RMF step.
+Always accept cross-step requests, but surface step-relevant tools first in suggestions.
+
+### Step 0 — Prepare
+**Primary tools**: `compliance_register_system`, `compliance_list_systems`, `compliance_get_system`,
+`compliance_define_boundary`, `compliance_exclude_from_boundary`, `compliance_assign_rmf_role`,
+`compliance_list_rmf_roles`
+**Goal**: Register the system, define authorization boundary, assign RMF roles.
+**Next step hint**: "System is registered. Next: Categorize with FIPS 199 → `compliance_categorize_system`."
+
+### Step 1 — Categorize
+**Primary tools**: `compliance_categorize_system`, `compliance_get_categorization`,
+`compliance_suggest_info_types`
+**Goal**: Perform FIPS 199 / SP 800-60 security categorization.
+**Next step hint**: "Categorization complete. Next: Select baseline → `compliance_select_baseline`."
+
+### Step 2 — Select
+**Primary tools**: `compliance_select_baseline`, `compliance_tailor_baseline`,
+`compliance_set_inheritance`, `compliance_get_baseline`, `compliance_generate_crm`,
+`compliance_show_stig_mapping`
+**Goal**: Select NIST baseline, apply overlays, tailor controls, set inheritance, generate CRM.
+**Next step hint**: "Baseline selected. Next: Implement controls → `compliance_write_narrative`."
+
+### Step 3 — Implement
+**Primary tools**: `compliance_write_narrative`, `compliance_suggest_narrative`,
+`compliance_batch_populate_narratives`, `compliance_narrative_progress`,
+`compliance_generate_ssp`, `compliance_generate_document`, `compliance_remediate`,
+`compliance_generate_plan`
+**Supporting**: `kanban_create_board`, `kanban_remediate_task`
+**Goal**: Write SSP narratives, implement controls, remediate findings, generate SSP document.
+**Next step hint**: "Implementation in progress. When ready for assessment → `compliance_assess_control`."
+
+### Step 4 — Assess
+**Primary tools**: `compliance_assess_control`, `compliance_take_snapshot`,
+`compliance_compare_snapshots`, `compliance_verify_evidence`,
+`compliance_check_evidence_completeness`, `compliance_generate_sar`,
+`compliance_assess`, `compliance_collect_evidence`
+**Goal**: Assess control effectiveness, take snapshots, generate SAR.
+**Next step hint**: "Assessment complete. Next: Build authorization package → `compliance_bundle_authorization_package`."
+
+### Step 5 — Authorize
+**Primary tools**: `compliance_issue_authorization`, `compliance_accept_risk`,
+`compliance_show_risk_register`, `compliance_create_poam`, `compliance_list_poam`,
+`compliance_generate_rar`, `compliance_bundle_authorization_package`,
+`compliance_upload_template`, `compliance_generate_document`
+**Goal**: AO reviews risk, issues ATO decision, creates POA&M, generates RAR.
+**Next step hint**: "Authorization issued. Next: Set up monitoring → `compliance_create_conmon_plan`."
+
+### Step 6 — Monitor
+**Primary tools**: `compliance_create_conmon_plan`, `compliance_generate_conmon_report`,
+`compliance_report_significant_change`, `compliance_track_ato_expiration`,
+`compliance_multi_system_dashboard`, `compliance_reauthorization_workflow`,
+`compliance_send_notification`, `compliance_export_emass`, `compliance_export_oscal`,
+`watch_enable_monitoring`, `watch_show_alerts`, `watch_compliance_trend`
+**Goal**: Continuous monitoring, ConMon reports, ATO expiration tracking, eMASS/OSCAL export.
+**Next step hint**: "System is in continuous monitoring. Check `compliance_track_ato_expiration` for reauthorization timeline."
+
+### Cross-Step Tools (Always Available)
+These tools are useful regardless of the current RMF step:
+- `compliance_status`, `compliance_history`, `compliance_audit_log`
+- `compliance_get_control_family`, `nist_control_search`, `nist_control_explain`
+- `compliance_list_systems`, `compliance_get_system`
+- `compliance_advance_rmf_step` (transition to next step with gate validation)
+- All Kanban tools, PIM tools, CAC tools, JIT tools

@@ -258,34 +258,41 @@ public class ControlFamilyTool : BaseTool
 public class DocumentGenerationTool : BaseTool
 {
     private readonly IDocumentGenerationService _documentService;
+    private readonly IDocumentTemplateService _templateService;
     private readonly IServiceScopeFactory _scopeFactory;
 
     /// <summary>Initializes a new instance of the <see cref="DocumentGenerationTool"/> class.</summary>
     /// <param name="documentService">Document generation service.</param>
+    /// <param name="templateService">Template/rendering service for DOCX and PDF output.</param>
     /// <param name="scopeFactory">Service scope factory for resolving scoped services.</param>
     /// <param name="logger">Logger instance.</param>
     public DocumentGenerationTool(
         IDocumentGenerationService documentService,
+        IDocumentTemplateService templateService,
         IServiceScopeFactory scopeFactory,
         ILogger<DocumentGenerationTool> logger) : base(logger)
     {
         _documentService = documentService;
+        _templateService = templateService;
         _scopeFactory = scopeFactory;
     }
 
     /// <inheritdoc />
     public override string Name => "compliance_generate_document";
     /// <inheritdoc />
-    public override string Description => "Generate compliance documentation (SSP, POA&M, SAR). For POA&M, optionally provide a boardId to include open remediation tasks.";
+    public override string Description => "Generate compliance documentation (SSP, POA&M, SAR, RAR). Supports markdown, DOCX, and PDF output formats. For POA&M, optionally provide a boardId to include open remediation tasks.";
 
     /// <inheritdoc />
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["document_type"] = new() { Name = "document_type", Description = "Document type: ssp, poam, sar", Type = "string", Required = true },
+        ["document_type"] = new() { Name = "document_type", Description = "Document type: ssp, poam, sar, rar", Type = "string", Required = true },
         ["subscription_id"] = new() { Name = "subscription_id", Description = "Azure subscription for evidence", Type = "string" },
         ["framework"] = new() { Name = "framework", Description = "Compliance framework", Type = "string" },
         ["system_name"] = new() { Name = "system_name", Description = "System name for document", Type = "string" },
-        ["board_id"] = new() { Name = "board_id", Description = "Optional Kanban board ID — when provided for POA&M, includes open remediation tasks from the board", Type = "string" }
+        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID — required for DOCX/PDF output", Type = "string" },
+        ["board_id"] = new() { Name = "board_id", Description = "Optional Kanban board ID — when provided for POA&M, includes open remediation tasks from the board", Type = "string" },
+        ["format"] = new() { Name = "format", Description = "Output format: 'markdown' (default), 'docx', or 'pdf'", Type = "string" },
+        ["template"] = new() { Name = "template", Description = "Template ID for custom DOCX template (optional, DOCX/PDF only)", Type = "string" }
     };
 
     /// <inheritdoc />
@@ -295,8 +302,62 @@ public class DocumentGenerationTool : BaseTool
         var subscriptionId = GetArg<string>(arguments, "subscription_id");
         var framework = GetArg<string>(arguments, "framework");
         var systemName = GetArg<string>(arguments, "system_name");
+        var systemId = GetArg<string>(arguments, "system_id");
         var boardId = GetArg<string>(arguments, "board_id");
+        var format = GetArg<string>(arguments, "format") ?? "markdown";
+        var templateId = GetArg<string>(arguments, "template");
 
+        // ── DOCX / PDF output (requires system_id) ──────────────────────
+        if (format.Equals("docx", StringComparison.OrdinalIgnoreCase) ||
+            format.Equals("pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(systemId))
+                return System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    status = "error",
+                    message = "system_id is required for DOCX/PDF output."
+                }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+
+            byte[] bytes;
+            string mimeType;
+            string extension;
+
+            if (format.Equals("pdf", StringComparison.OrdinalIgnoreCase))
+            {
+                bytes = await _templateService.RenderPdfAsync(
+                    systemId, documentType, progress: null, cancellationToken);
+                mimeType = "application/pdf";
+                extension = "pdf";
+            }
+            else
+            {
+                bytes = await _templateService.RenderDocxAsync(
+                    systemId, documentType, templateId, cancellationToken);
+                mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+                extension = "docx";
+            }
+
+            var result = new
+            {
+                status = "success",
+                data = new
+                {
+                    document_type = documentType,
+                    format,
+                    system_id = systemId,
+                    template_id = templateId,
+                    file_size_bytes = bytes.Length,
+                    mime_type = mimeType,
+                    filename = $"{documentType}_{systemId[..Math.Min(8, systemId.Length)]}.{extension}",
+                    content_base64 = Convert.ToBase64String(bytes)
+                }
+            };
+
+            return System.Text.Json.JsonSerializer.Serialize(result,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+
+        // ── Markdown output (existing behavior) ─────────────────────────
         var doc = await _documentService.GenerateDocumentAsync(documentType, subscriptionId, framework, systemName, cancellationToken);
         var content = doc.Content;
 

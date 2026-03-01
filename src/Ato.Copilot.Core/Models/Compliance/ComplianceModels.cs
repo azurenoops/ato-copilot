@@ -464,6 +464,199 @@ public enum ScriptType
     Terraform
 }
 
+// ──────────────────────────── RMF Lifecycle Enums ────────────────────────────────────────────────
+
+/// <summary>
+/// The seven phases of the NIST Risk Management Framework (SP 800-37 Rev 2).
+/// Defines the lifecycle position of a <see cref="RegisteredSystem"/>.
+/// Not to be confused with the <see cref="RmfStep"/> record used for RMF guidance data.
+/// </summary>
+public enum RmfPhase
+{
+    /// <summary>Step 0 — Prepare: Establish context, register system, assign roles.</summary>
+    Prepare,
+    /// <summary>Step 1 — Categorize: FIPS 199 categorization, determine Impact Level.</summary>
+    Categorize,
+    /// <summary>Step 2 — Select: Choose NIST baseline, apply overlays, tailor controls.</summary>
+    Select,
+    /// <summary>Step 3 — Implement: Write SSP narratives, implement controls, remediate findings.</summary>
+    Implement,
+    /// <summary>Step 4 — Assess: SCA evaluates control effectiveness, takes snapshots.</summary>
+    Assess,
+    /// <summary>Step 5 — Authorize: AO issues ATO/ATOwC/IATT/DATO decision.</summary>
+    Authorize,
+    /// <summary>Step 6 — Monitor: Continuous monitoring, ConMon reports, reauthorization.</summary>
+    Monitor
+}
+
+/// <summary>
+/// System type classification per DoDI 8510.01.
+/// </summary>
+public enum SystemType
+{
+    /// <summary>A discrete set of information resources organized for the collection, processing, maintenance, use, sharing, dissemination, or disposition of information.</summary>
+    MajorApplication,
+    /// <summary>Collection of computing environments connected by one or more internal networks under the control of a single authority and security policy.</summary>
+    Enclave,
+    /// <summary>Shared IT service such as email, DNS, or Active Directory.</summary>
+    PlatformIt
+}
+
+/// <summary>
+/// Mission criticality designation for DoD systems.
+/// </summary>
+public enum MissionCriticality
+{
+    /// <summary>System directly supports a military mission; loss has immediate operational impact.</summary>
+    MissionCritical,
+    /// <summary>System supports essential functions; loss causes significant degradation.</summary>
+    MissionEssential,
+    /// <summary>System supports administrative/business functions; loss is inconvenient but manageable.</summary>
+    MissionSupport
+}
+
+/// <summary>
+/// Azure cloud environment types for system registration.
+/// Determines ARM endpoints, authentication endpoints, and service availability.
+/// </summary>
+public enum AzureCloudEnvironment
+{
+    /// <summary>Azure Commercial (public cloud).</summary>
+    Commercial,
+    /// <summary>Azure Government (IL2–IL5, connected).</summary>
+    Government,
+    /// <summary>Azure Government air-gapped IL5 (disconnected).</summary>
+    GovernmentAirGappedIl5,
+    /// <summary>Azure Government air-gapped IL6 / classified (disconnected).</summary>
+    GovernmentAirGappedIl6
+}
+
+/// <summary>
+/// FIPS 199 security impact value for confidentiality, integrity, or availability.
+/// Integer values support high-water-mark comparison via <c>Math.Max</c>.
+/// </summary>
+public enum ImpactValue
+{
+    /// <summary>Limited adverse effect.</summary>
+    Low = 0,
+    /// <summary>Serious adverse effect.</summary>
+    Moderate = 1,
+    /// <summary>Severe or catastrophic adverse effect.</summary>
+    High = 2
+}
+
+/// <summary>
+/// RMF role assignments per DoDI 8510.01. Maps to RBAC role constants
+/// in <see cref="Constants.ComplianceRoles"/>.
+/// </summary>
+public enum RmfRole
+{
+    /// <summary>Authorizing Official — issues ATO decisions.</summary>
+    AuthorizingOfficial,
+    /// <summary>Information System Security Manager — oversight of ISSO activities.</summary>
+    Issm,
+    /// <summary>Information System Security Officer — day-to-day security operations.</summary>
+    Isso,
+    /// <summary>Security Control Assessor — independent assessment of control effectiveness.</summary>
+    Sca,
+    /// <summary>System Owner — responsible for system implementation (maps to Engineer persona).</summary>
+    SystemOwner
+}
+
+/// <summary>
+/// Control tailoring actions applied to a baseline.
+/// </summary>
+public enum TailoringAction
+{
+    /// <summary>Control added to baseline (beyond standard NIST selection).</summary>
+    Added,
+    /// <summary>Control removed from baseline with documented rationale.</summary>
+    Removed
+}
+
+/// <summary>
+/// Control inheritance type for FedRAMP/DoD shared responsibility.
+/// </summary>
+public enum InheritanceType
+{
+    /// <summary>Fully inherited from a cloud service provider or common control provider.</summary>
+    Inherited,
+    /// <summary>Shared responsibility between provider and customer.</summary>
+    Shared,
+    /// <summary>Fully customer-implemented (customer is solely responsible).</summary>
+    Customer
+}
+
+/// <summary>
+/// SSP control implementation status per NIST SP 800-53A.
+/// </summary>
+public enum ImplementationStatus
+{
+    /// <summary>Control is fully implemented and operational.</summary>
+    Implemented,
+    /// <summary>Control is partially implemented; some aspects remain incomplete.</summary>
+    PartiallyImplemented,
+    /// <summary>Control is planned but not yet implemented.</summary>
+    Planned,
+    /// <summary>Control is not applicable to this system (with documented justification).</summary>
+    NotApplicable
+}
+
+/// <summary>
+/// SCA determination of whether a control satisfies its security requirements.
+/// </summary>
+public enum EffectivenessDetermination
+{
+    /// <summary>Control meets all security requirements.</summary>
+    Satisfied,
+    /// <summary>Control does not fully meet security requirements — findings generated.</summary>
+    OtherThanSatisfied
+}
+
+/// <summary>
+/// DoD CAT (Category) severity levels for findings per DoDI 8510.01.
+/// Maps from <see cref="FindingSeverity"/>: Critical/High → CAT I, Medium → CAT II, Low → CAT III.
+/// </summary>
+public enum CatSeverity
+{
+    /// <summary>Any finding that directly and immediately results in loss of confidentiality, availability, or integrity.</summary>
+    CatI,
+    /// <summary>Any finding that has a potential to result in loss of confidentiality, availability, or integrity.</summary>
+    CatII,
+    /// <summary>Any finding that degrades measures to protect against loss of confidentiality, availability, or integrity.</summary>
+    CatIII
+}
+
+/// <summary>
+/// Authorization decision types issued by the Authorizing Official.
+/// </summary>
+public enum AuthorizationDecisionType
+{
+    /// <summary>Authorization to Operate — full authority with expiration date.</summary>
+    Ato,
+    /// <summary>Authorization to Operate with Conditions — conditional with required mitigations.</summary>
+    AtoWithConditions,
+    /// <summary>Interim Authorization to Test — limited scope and duration for testing.</summary>
+    Iatt,
+    /// <summary>Denial of Authorization to Operate — system must not operate.</summary>
+    Dato
+}
+
+/// <summary>
+/// Plan of Action and Milestones item lifecycle status.
+/// </summary>
+public enum PoamStatus
+{
+    /// <summary>Remediation is in progress or awaiting action.</summary>
+    Ongoing,
+    /// <summary>Remediation has been completed and validated.</summary>
+    Completed,
+    /// <summary>Remediation is behind schedule.</summary>
+    Delayed,
+    /// <summary>Risk has been formally accepted by the AO in lieu of remediation.</summary>
+    RiskAccepted
+}
+
 // ──────────────────────── Remediation Options ────────────────────────
 
 /// <summary>
@@ -659,6 +852,14 @@ public class ComplianceAssessment
 
     /// <summary>Per-pillar success/failure (ARM, Policy, Defender). Persisted as JSON column.</summary>
     public Dictionary<string, bool> ScanPillarResults { get; set; } = new();
+
+    // ─── New Properties (Feature 015 — US7: Assessment Artifacts) ─────────
+
+    /// <summary>Optional FK → RegisteredSystem (nullable for backward compat with pre-RMF assessments).</summary>
+    public string? RegisteredSystemId { get; set; }
+
+    /// <summary>Navigation to RegisteredSystem (if linked).</summary>
+    public RegisteredSystem? RegisteredSystem { get; set; }
 }
 
 /// <summary>
@@ -755,6 +956,11 @@ public class ComplianceFinding
 
     /// <summary>Identity of the user or service that performed the remediation.</summary>
     public string? RemediatedBy { get; set; }
+
+    // ─── New Properties (Feature 015 — US7: Assessment Artifacts) ─────────
+
+    /// <summary>DoD CAT severity level for this finding (CAT I, CAT II, or CAT III).</summary>
+    public CatSeverity? CatSeverity { get; set; }
 }
 
 /// <summary>
@@ -968,6 +1174,17 @@ public class ComplianceEvidence
 
     /// <summary>SHA-256 hash of Content for integrity verification.</summary>
     public string ContentHash { get; set; } = string.Empty;
+
+    // ─── New Properties (Feature 015 — US7: Assessment Artifacts) ─────────
+
+    /// <summary>Identity of the collector (user, service principal, or automated agent).</summary>
+    public string? CollectorIdentity { get; set; }
+
+    /// <summary>Collection method used (e.g., "Automated", "Manual", "API", "Script").</summary>
+    public string? CollectionMethod { get; set; }
+
+    /// <summary>UTC timestamp when evidence integrity was last verified via hash recomputation.</summary>
+    public DateTime? IntegrityVerifiedAt { get; set; }
 }
 
 /// <summary>
@@ -1517,6 +1734,14 @@ public class ComplianceAlert
     /// <summary>Identity of user who dismissed the alert.</summary>
     public string? DismissedBy { get; set; }
 
+    /// <summary>
+    /// Optional FK to the registered system this alert is associated with.
+    /// Nullable for backward compatibility — pre-Feature 015 alerts remain null.
+    /// Populated by ComplianceWatchService when creating alerts for subscriptions
+    /// that belong to a registered system (resolved via AzureEnvironmentProfile.SubscriptionIds).
+    /// </summary>
+    public string? RegisteredSystemId { get; set; }
+
     /// <summary>FK to parent alert if this is part of a correlated group.</summary>
     public Guid? GroupedAlertId { get; set; }
 
@@ -1557,6 +1782,9 @@ public class ComplianceAlert
 
     /// <summary>Notifications sent for this alert.</summary>
     public ICollection<AlertNotification> Notifications { get; set; } = new List<AlertNotification>();
+
+    /// <summary>Navigation to the registered system (if linked).</summary>
+    public RegisteredSystem? RegisteredSystem { get; set; }
 }
 
 /// <summary>
@@ -1930,6 +2158,14 @@ public class ComplianceSnapshot
 
     /// <summary>True if this is a weekly rollup snapshot (Sundays).</summary>
     public bool IsWeeklySnapshot { get; set; }
+
+    // ─── New Properties (Feature 015 — US7: Assessment Artifacts) ─────────
+
+    /// <summary>SHA-256 integrity hash over canonical snapshot content for tamper detection.</summary>
+    public string IntegrityHash { get; set; } = string.Empty;
+
+    /// <summary>True once snapshot is finalized — no UPDATE or DELETE allowed.</summary>
+    public bool IsImmutable { get; set; }
 }
 
 /// <summary>

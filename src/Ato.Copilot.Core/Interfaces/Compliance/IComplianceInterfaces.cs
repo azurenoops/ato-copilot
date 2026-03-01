@@ -997,6 +997,29 @@ public interface IStigKnowledgeService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Cross-reference data, or null if STIG not found.</returns>
     Task<StigCrossReference?> GetStigCrossReferenceAsync(string stigId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get STIG controls mapped to a NIST control via CCI chain.
+    /// Resolves: NIST control → CCI IDs → STIG rules (with CCI references).
+    /// </summary>
+    /// <param name="controlId">NIST 800-53 control ID (e.g., "AC-2").</param>
+    /// <param name="severity">Optional severity filter (High/Medium/Low).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of matching STIG controls with their CCI chain data.</returns>
+    Task<List<StigControl>> GetStigsByCciChainAsync(
+        string controlId,
+        StigSeverity? severity = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get CCI mappings for a NIST control ID.
+    /// </summary>
+    /// <param name="controlId">NIST 800-53 control ID (e.g., "AC-2").</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of CCI mappings for the control.</returns>
+    Task<List<CciMapping>> GetCciMappingsAsync(
+        string controlId,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

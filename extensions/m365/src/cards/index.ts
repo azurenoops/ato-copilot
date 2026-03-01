@@ -21,4 +21,8 @@ export { buildConfirmationCard, type ConfirmationData } from "./confirmationCard
 export { buildKanbanBoardCard, type KanbanBoardData } from "./kanbanBoardCard";
 export { buildAgentAttribution } from "./shared";
 export { buildSuggestionButtons } from "./shared";
+export { buildSystemSummaryCard, type SystemSummaryData } from "./systemSummaryCard";
+export { buildCategorizationCard, type CategorizationData } from "./categorizationCard";
+export { buildAuthorizationCard, type AuthorizationData } from "./authorizationCard";
+export { buildDashboardCard, type DashboardData } from "./dashboardCard";
 export { selectCard } from "./cardRouter";

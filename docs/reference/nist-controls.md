@@ -245,3 +245,52 @@ Activity spans under source `Ato.Copilot.NistControls`:
 | NistControlMcpToolIntegrationTests | 10 | <1s | Full-stack roundtrip with embedded catalog |
 
 **Total: 89 tests** covering all user stories (US1–US6).
+
+---
+
+## NIST 800-53 Baseline Selection & Tailoring (Feature 015, Phase 5)
+
+Feature 015 extends the NIST controls foundation with automated baseline selection, overlay application, tailoring, and inheritance tracking.
+
+### Reference Data
+
+| Resource | Source | Contents |
+|----------|--------|----------|
+| `nist-800-53-baselines.json` | NIST SP 800-53B | Low (152), Moderate (329), High (400) control ID lists |
+| `cnssi-1253-overlays.json` | CNSSI 1253 | 216 overlay entries across IL2, IL4, IL5, IL6 |
+
+### Baseline Selection Flow
+
+```
+Categorization (FIPS 199) → Baseline Level → Load Controls → Apply Overlay → Save
+```
+
+1. **Derive baseline level** from FIPS 199 overall categorization (Low/Moderate/High)
+2. **Load control IDs** from embedded `nist-800-53-baselines.json`
+3. **Apply CNSSI 1253 overlay** (optional) — adds enhancement controls for DoD Impact Level (IL2/IL4/IL5/IL6)
+4. **Persist** as `ControlBaseline` entity with sorted control ID list
+
+### Tailoring
+
+Controls can be added (organization-specific) or removed (non-applicable) with mandatory rationale. Overlay-required controls generate a warning if removed.
+
+### Inheritance Tracking
+
+Each control is assigned an inheritance type:
+- **Inherited** — Fully provided by CSP (e.g., FedRAMP High authorized)
+- **Shared** — Partially provided; customer has documented responsibility
+- **Customer** — Fully customer-implemented
+
+### Customer Responsibility Matrix (CRM)
+
+Generated from baseline + inheritance data, grouped by NIST 800-53 control family. Shows coverage percentages and highlights undesignated controls.
+
+### MCP Tools
+
+| Tool | Purpose |
+|------|---------|
+| `compliance_select_baseline` | Select baseline from categorization, apply overlay |
+| `compliance_tailor_baseline` | Add/remove controls with rationale |
+| `compliance_set_inheritance` | Map controls to inheritance providers |
+| `compliance_get_baseline` | Retrieve baseline with optional details |
+| `compliance_generate_crm` | Generate CRM grouped by family |

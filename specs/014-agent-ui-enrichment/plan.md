@@ -1,120 +1,104 @@
-# Implementation Plan: Agent-to-UI Response Enrichment
+# Implementation Plan: [FEATURE]
 
-**Branch**: `014-agent-ui-enrichment` | **Date**: 2026-02-26 | **Spec**: [spec.md](spec.md)
-**Input**: Feature specification from `/specs/014-agent-ui-enrichment/spec.md`
+**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
+**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+
+**Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
 
 ## Summary
 
-Enrich the MCP server → client response pipeline so all chat responses carry intent classification, typed structured data, tool execution details, follow-up prompts, and dynamic suggestions for Compliance, KnowledgeBase, and Configuration agents. Fix `agentName`→`agentUsed` serialization mismatch. Evolve error model to structured `ErrorDetail`. Remove dead M365 card builders (cost, deployment, infrastructure, resource) and add 10 compliance-domain Adaptive Cards with drill-down navigation and action buttons. Enrich the VS Code analysis panel with 5-level severity, control family grouping, framework reference, resource context, auto-remediation with CAC+PIM security, and finding status lifecycle. Add SSE streaming progress UI. Expose an IaC scanning MCP tool. All infrastructure-modifying actions require CAC authentication and PIM role elevation via existing MCP tools.
+[Extract from feature spec: primary requirement + technical approach from research]
 
 ## Technical Context
 
-**Language/Version**: C# 13 / .NET 9.0 (server), TypeScript 5.3 (VS Code & M365 extensions)  
-**Primary Dependencies**: Microsoft.Extensions.AI 9.4.0-preview, Azure.Identity 1.13.2, Azure.ResourceManager.* 1.x, Microsoft.EntityFrameworkCore 9.0, Microsoft.Graph 5.70.0, Serilog 4.2.0, System.Text.Json 9.0.5 (C#); axios 1.6.5, adaptivecards 3.0.1, express 4.18.2 (TS)  
-**Storage**: EF Core 9.0 dual-provider (SQLite dev / SQL Server prod); two DbContexts (`AtoCopilotContext` for compliance, `ChatDbContext` for chat); in-memory caching via `Microsoft.Extensions.Caching.Memory`  
-**Testing**: xUnit 2.9.3, FluentAssertions 7.0.0, Moq 4.20.72, EF Core InMemory 9.0, AspNetCore.Mvc.Testing 9.0 (C#); mocha 10.2.0, chai 4.3.10, sinon 17.0.1 (TS)  
-**Target Platform**: Azure Government (AzureUSGovernment primary, AzureCloud secondary); Docker multi-stage (sdk:9.0 → aspnet:9.0), port 3001, non-root user  
-**Project Type**: Multi-project web service (MCP server) + VS Code extension + M365 Teams extension + React Chat SPA  
-**Performance Goals**: Simple MCP queries <5s, complex assessments <30s, health endpoints <200ms p95, startup <10s (Constitution VIII)  
-**Constraints**: <512MB steady-state memory, <1GB bulk ops; NIST 800-53 / FedRAMP High compliance; US Gov data residency; CAC+PIM for infra changes  
-**Scale/Scope**: 3 agents (Compliance, KnowledgeBase, Configuration), ~48 FRs, 3 TS codebases, 8 existing PIM MCP tools, 2462 .NET tests + 93 TS tests baseline
+<!--
+  ACTION REQUIRED: Replace the content in this section with the technical details
+  for the project. The structure here is presented in advisory capacity to guide
+  the iteration process.
+-->
+
+**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
+**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
+**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
+**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
+**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
+**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]  
+**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
+**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
+**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-| Principle | Status | Notes |
-|-----------|--------|-------|
-| I. Documentation as Source of Truth | ✅ PASS | All changes follow spec.md; no invented guidance. New IaC tool and streaming endpoint follow existing patterns in `/docs/`. |
-| II. BaseAgent/BaseTool Architecture | ✅ PASS | AgentResponse extended with optional fields (no new agents). IaC scanning tool extends BaseTool. PIM tools already extend BaseTool. No agent architecture violations. |
-| III. Testing Standards | ✅ PASS | Spec requires zero regressions on 2462+93 baseline. 80%+ coverage mandate. Each FR maps to positive + negative test cases. Edge cases explicitly enumerated in spec. |
-| IV. Azure Government & Compliance | ✅ PASS | CAC+PIM security model for infrastructure changes. NIST 800-53 control family display. FedRAMP compliance context in all outputs. Existing `DefaultAzureCredential` chain preserved. |
-| V. Observability & Structured Logging | ✅ PASS | FR-027/028/029 mandate TS extension logging. AuditLoggingMiddleware used for remediation audit. Tool executions logged per Constitution V. |
-| VI. Code Quality & Maintainability | ✅ PASS | DI injection for all new services. `[JsonPropertyName]` for serialization. ErrorDetail model replaces magic strings. Optional properties avoid breaking changes. |
-| VII. User Experience Consistency | ✅ PASS | Core motivation — enriched response envelope (intentType, agentUsed, toolsExecuted, structured data, ErrorDetail with errorCode+suggestion). Mode parity between stdio/HTTP. Progress feedback via SSE (FR-029a-e). |
-| VIII. Performance Requirements | ✅ PASS | SSE streaming for long ops. CancellationToken on all async paths. No unbounded queries. IaC scan scoped to single file. |
-
-**Gate Result**: ✅ ALL PASS — No violations. Proceed to Phase 0.
+[Gates determined based on constitution file]
 
 ## Project Structure
 
 ### Documentation (this feature)
 
 ```text
-specs/014-agent-ui-enrichment/
-├── plan.md              # This file
-├── research.md          # Phase 0 output
-├── data-model.md        # Phase 1 output
-├── quickstart.md        # Phase 1 output
-├── contracts/           # Phase 1 output
-│   ├── mcp-chat-response.json    # Enriched response schema
-│   ├── mcp-chat-request.json     # Extended request schema (action/actionContext)
-│   ├── sse-events.json           # SSE event type schemas
-│   └── adaptive-cards.json       # Card template contracts
-└── tasks.md             # Phase 2 output (NOT created by /speckit.plan)
+specs/[###-feature]/
+├── plan.md              # This file (/speckit.plan command output)
+├── research.md          # Phase 0 output (/speckit.plan command)
+├── data-model.md        # Phase 1 output (/speckit.plan command)
+├── quickstart.md        # Phase 1 output (/speckit.plan command)
+├── contracts/           # Phase 1 output (/speckit.plan command)
+└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
 ```
 
 ### Source Code (repository root)
+<!--
+  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
+  for this feature. Delete unused options and expand the chosen structure with
+  real paths (e.g., apps/admin, packages/something). The delivered plan must
+  not include Option labels.
+-->
 
 ```text
+# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
 src/
-├── Ato.Copilot.Core/
-│   ├── Models/Compliance/         # ComplianceFinding enrichment (controlFamily, riskLevel, etc.)
-│   └── Interfaces/Auth/           # IPimService (existing, unchanged)
-├── Ato.Copilot.Agents/
-│   ├── Common/BaseAgent.cs        # AgentResponse extension (Suggestions, ResponseData, etc.)
-│   └── Compliance/Tools/          # IaC scanning tool (new BaseTool)
-├── Ato.Copilot.Mcp/
-│   ├── Models/McpProtocol.cs      # McpChatResponse enrichment, ErrorDetail, action fields
-│   ├── Server/McpServer.cs        # ProcessChatRequestAsync enrichment, action routing
-│   └── Tools/ComplianceMcpTools.cs # IaC tool registration (PIM tools already registered)
-├── Ato.Copilot.State/             # No changes expected
-├── Ato.Copilot.Channels/          # No changes expected
-└── Ato.Copilot.Chat/              # No changes expected (ClientApp React SPA not in scope)
-
-extensions/
-├── vscode/
-│   └── src/
-│       ├── commands/              # ComplianceFinding TS interface (analyzeFile.ts)
-│       ├── services/              # McpChatResponse TS interface, SSE streaming client, PIM check flow
-│       ├── webview/               # Analysis panel enrichment (analysisPanel.ts — 5-level severity, control family)
-│       └── participant.ts         # Chat participant enrichment (attribution, tools, suggestions)
-└── m365/
-    └── src/
-        ├── cards/                 # Remove 4 dead cards, add 10 compliance cards (incl. kanban board)
-        └── services/              # McpResponse TS interface, SSE streaming client, PIM check flow
+├── models/
+├── services/
+├── cli/
+└── lib/
 
 tests/
-├── Ato.Copilot.Tests.Unit/
-│   ├── Agents/                    # AgentResponse extension tests, IaC tool tests
-│   ├── Mcp/                       # McpServer enrichment tests, ErrorDetail tests, action routing
-│   └── Models/                    # McpProtocol model tests
-└── Ato.Copilot.Tests.Integration/
-    └── Mcp/                       # End-to-end enriched response tests
+├── contract/
+├── integration/
+└── unit/
+
+# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
+backend/
+├── src/
+│   ├── models/
+│   ├── services/
+│   └── api/
+└── tests/
+
+frontend/
+├── src/
+│   ├── components/
+│   ├── pages/
+│   └── services/
+└── tests/
+
+# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
+api/
+└── [same as backend above]
+
+ios/ or android/
+└── [platform-specific structure: feature modules, UI flows, platform tests]
 ```
 
-**Structure Decision**: Multi-project structure matching existing repo layout. Changes span 3 C# projects (Core models, Agents, Mcp server) and 2 TypeScript extensions (VS Code, M365). No new projects created. Tests added to existing test projects.
+**Structure Decision**: [Document the selected structure and reference the real
+directories captured above]
 
 ## Complexity Tracking
 
-> No Constitution Check violations — this section is intentionally empty.
+> **Fill ONLY if Constitution Check has violations that must be justified**
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
-
-## Constitution Check — Post-Design Re-evaluation
-
-*Re-evaluated after Phase 1 design artifacts (data-model.md, contracts/, quickstart.md).*
-
-| Principle | Status | Post-Design Notes |
-|-----------|--------|-------------------|
-| I. Documentation as Source of Truth | ✅ PASS | All design decisions documented in research.md with rationale. Contract schemas in contracts/ serve as source of truth for response formats. |
-| II. BaseAgent/BaseTool Architecture | ✅ PASS | `AgentResponse` extended with optional properties (no subclassing). `IacComplianceScanTool` extends `BaseTool` with `Name`, `Description`, `Parameters`, `ExecuteAsync()`. PIM tier property inherited. |
-| III. Testing Standards | ✅ PASS | Quickstart mandates ≥2462 .NET + ≥93 TS baseline. Each model change (ErrorDetail, AgentResponse extension) requires positive + negative tests. Edge cases from spec map to boundary tests. |
-| IV. Azure Government & Compliance | ✅ PASS | PIM flow uses existing `IPimService` + MCP tools. CAC validation via `ComplianceAuthorizationMiddleware`. Audit logging via `AuditLoggingMiddleware`. All Azure SDK calls use `DefaultAzureCredential`. US Gov data residency maintained. |
-| V. Observability & Structured Logging | ✅ PASS | FR-027/028/029 in contracts. SSE events provide real-time observability. Audit log fields defined in data model (user identity, PIM role, script hash, result). |
-| VI. Code Quality & Maintainability | ✅ PASS | All new types use DI. `ErrorDetail` eliminates magic strings. `[JsonPropertyName]` for clean serialization. Optional properties with defaults avoid null-check proliferation. Card builders follow single-responsibility (one card per file). |
-| VII. User Experience Consistency | ✅ PASS | Response schema in `mcp-chat-response.json` enforces uniform envelope. `ErrorDetail` has `errorCode` + `message` + `suggestion`. Card contracts define consistent attribution footer and suggestion buttons. SSE provides progress feedback for >2s operations. |
-| VIII. Performance Requirements | ✅ PASS | IaC scan is single-file scoped. SSE streaming avoids timeout on long assessments. Conversation history capped at 20 exchanges. No unbounded collections in contracts. `CancellationToken` on all async tool paths. |
-
-**Post-Design Gate Result**: ✅ ALL PASS — Design is constitution-compliant. Ready for Phase 2 (tasks).
+| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
+| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |

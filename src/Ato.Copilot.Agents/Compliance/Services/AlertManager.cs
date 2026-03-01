@@ -20,6 +20,7 @@ public class AlertManager : IAlertManager
 {
     private readonly IDbContextFactory<AtoCopilotContext> _dbFactory;
     private readonly IAlertCorrelationService? _correlationService;
+    private readonly IAlertNotificationService? _notificationService;
     private readonly ILogger<AlertManager> _logger;
     private readonly AlertOptions _alertOptions;
 
@@ -68,12 +69,14 @@ public class AlertManager : IAlertManager
         IDbContextFactory<AtoCopilotContext> dbFactory,
         IOptions<AlertOptions> alertOptions,
         ILogger<AlertManager> logger,
-        IAlertCorrelationService? correlationService = null)
+        IAlertCorrelationService? correlationService = null,
+        IAlertNotificationService? notificationService = null)
     {
         _dbFactory = dbFactory;
         _alertOptions = alertOptions.Value;
         _logger = logger;
         _correlationService = correlationService;
+        _notificationService = notificationService;
     }
 
     /// <inheritdoc />
@@ -117,6 +120,23 @@ public class AlertManager : IAlertManager
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
         db.ComplianceAlerts.Add(alert);
         await db.SaveChangesAsync(cancellationToken);
+
+        // Phase 17 §9a.2 — fire notification after successful persistence.
+        // Optional dependency: null → silent (backward-compatible).
+        if (_notificationService != null)
+        {
+            try
+            {
+                await _notificationService.SendNotificationAsync(alert, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                // Notification failure must NOT fail alert creation — log and continue.
+                _logger.LogWarning(ex,
+                    "Failed to send notification for alert {AlertId}; alert was persisted successfully",
+                    alert.AlertId);
+            }
+        }
 
         _logger.LogInformation(
             "Alert created | AlertId: {AlertId} | Type: {Type} | Severity: {Severity} | Sub: {Sub}",

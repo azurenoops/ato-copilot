@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ato.Copilot.Core.Configuration;
@@ -22,6 +23,8 @@ public class ComplianceWatchService : IComplianceWatchService
     private readonly IAlertManager _alertManager;
     private readonly IAtoComplianceEngine _complianceEngine;
     private readonly IRemediationEngine _remediationEngine;
+    private readonly ISystemSubscriptionResolver? _subscriptionResolver;
+    private readonly IServiceScopeFactory? _serviceScopeFactory;
     private readonly IOptions<MonitoringOptions> _monitoringOptions;
     private readonly IOptions<AlertOptions> _alertOptions;
     private readonly ILogger<ComplianceWatchService> _logger;
@@ -39,7 +42,9 @@ public class ComplianceWatchService : IComplianceWatchService
         IRemediationEngine remediationEngine,
         IOptions<MonitoringOptions> monitoringOptions,
         IOptions<AlertOptions> alertOptions,
-        ILogger<ComplianceWatchService> logger)
+        ILogger<ComplianceWatchService> logger,
+        ISystemSubscriptionResolver? subscriptionResolver = null,
+        IServiceScopeFactory? serviceScopeFactory = null)
     {
         _dbFactory = dbFactory;
         _alertManager = alertManager;
@@ -48,6 +53,8 @@ public class ComplianceWatchService : IComplianceWatchService
         _monitoringOptions = monitoringOptions;
         _alertOptions = alertOptions;
         _logger = logger;
+        _subscriptionResolver = subscriptionResolver;
+        _serviceScopeFactory = serviceScopeFactory;
     }
 
     /// <inheritdoc />
@@ -377,6 +384,7 @@ public class ComplianceWatchService : IComplianceWatchService
                     continue;
                 }
 
+                await EnrichAlertWithSystemAsync(alert, cancellationToken);
                 var created = await _alertManager.CreateAlertAsync(alert, cancellationToken);
                 alerts.Add(created);
 
@@ -435,11 +443,21 @@ public class ComplianceWatchService : IComplianceWatchService
                             continue;
                         }
 
+                        await EnrichAlertWithSystemAsync(vAlert, cancellationToken);
                         var created = await _alertManager.CreateAlertAsync(vAlert, cancellationToken);
                         alerts.Add(created);
                     }
                 }
             }
+        }
+
+        // Phase 17 §9a.5 — If drift count exceeds threshold for a system, create significant change
+        if (alerts.Count >= _monitoringOptions.Value.SignificantDriftThreshold
+            && _monitoringOptions.Value.AutoCreateSignificantChanges
+            && _subscriptionResolver != null
+            && _serviceScopeFactory != null)
+        {
+            await AutoCreateDriftSignificantChangeAsync(subscriptionId, alerts.Count, cancellationToken);
         }
 
         return alerts;
@@ -485,6 +503,7 @@ public class ComplianceWatchService : IComplianceWatchService
                     RecommendedAction = "Review recent changes and address failing controls to restore compliance score."
                 };
 
+                await EnrichAlertWithSystemAsync(alert, cancellationToken);
                 var created = await _alertManager.CreateAlertAsync(alert, cancellationToken);
                 alerts.Add(created);
             }
@@ -988,7 +1007,7 @@ public class ComplianceWatchService : IComplianceWatchService
                 dryRun: false, cancellationToken: cancellationToken);
 
             // Step 3: Create RESOLUTION alert
-            await _alertManager.CreateAlertAsync(new ComplianceAlert
+            var resolutionAlert = new ComplianceAlert
             {
                 Type = AlertType.Drift, // Resolution sub-type
                 Severity = AlertSeverity.Low,
@@ -1000,7 +1019,9 @@ public class ComplianceWatchService : IComplianceWatchService
                 ControlFamily = alert.ControlFamily,
                 AffectedResources = alert.AffectedResources,
                 ResolvedAt = DateTimeOffset.UtcNow
-            }, cancellationToken);
+            };
+            await EnrichAlertWithSystemAsync(resolutionAlert, cancellationToken);
+            await _alertManager.CreateAlertAsync(resolutionAlert, cancellationToken);
 
             // Step 4: Update rule execution stats
             bestRule.ExecutionCount++;
@@ -1099,6 +1120,76 @@ public class ComplianceWatchService : IComplianceWatchService
                 Message = $"Auto-remediation failed for rule '{bestRule.Name}'.",
                 FailureReason = ex.Message
             };
+        }
+    }
+
+    /// <summary>
+    /// Populates <see cref="ComplianceAlert.RegisteredSystemId"/> using the subscription resolver.
+    /// No-op when the resolver is null (backward-compatible). Phase 17 §9a.1.
+    /// </summary>
+    private async Task EnrichAlertWithSystemAsync(ComplianceAlert alert, CancellationToken cancellationToken)
+    {
+        if (_subscriptionResolver == null || string.IsNullOrWhiteSpace(alert.SubscriptionId))
+            return;
+
+        try
+        {
+            alert.RegisteredSystemId = await _subscriptionResolver.ResolveAsync(alert.SubscriptionId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to resolve RegisteredSystemId for subscription {SubscriptionId}", alert.SubscriptionId);
+        }
+    }
+
+    /// <summary>
+    /// When drift count exceeds <see cref="MonitoringOptions.SignificantDriftThreshold"/>,
+    /// resolve <see cref="IConMonService"/> from a new scope and call <c>ReportChangeAsync</c>
+    /// with <c>changeType = "configuration_drift"</c>. Phase 17 §9a.5.
+    /// </summary>
+    private async Task AutoCreateDriftSignificantChangeAsync(
+        string subscriptionId, int driftCount, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var systemId = await _subscriptionResolver!.ResolveAsync(subscriptionId, cancellationToken);
+            if (string.IsNullOrWhiteSpace(systemId))
+            {
+                _logger.LogDebug(
+                    "Drift threshold exceeded ({Count} >= {Threshold}) for subscription {Sub}, " +
+                    "but no registered system found — skipping significant change creation",
+                    driftCount, _monitoringOptions.Value.SignificantDriftThreshold, subscriptionId);
+                return;
+            }
+
+            using var scope = _serviceScopeFactory!.CreateScope();
+            var conMonService = scope.ServiceProvider.GetService<IConMonService>();
+            if (conMonService == null)
+            {
+                _logger.LogDebug("IConMonService not available — skipping drift significant change creation");
+                return;
+            }
+
+            await conMonService.ReportChangeAsync(
+                systemId,
+                "configuration_drift",
+                $"Configuration drift detected across {driftCount} resources in subscription {subscriptionId}, " +
+                $"exceeding threshold of {_monitoringOptions.Value.SignificantDriftThreshold}. " +
+                $"Automated review recommended.",
+                "ComplianceWatchService",
+                cancellationToken);
+
+            _logger.LogInformation(
+                "Auto-created significant change (configuration_drift) for system {SystemId}: " +
+                "{DriftCount} drifted resources exceeded threshold {Threshold}",
+                systemId, driftCount, _monitoringOptions.Value.SignificantDriftThreshold);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to auto-create significant change for subscription {SubscriptionId} " +
+                "after {DriftCount} drift detections",
+                subscriptionId, driftCount);
         }
     }
 }

@@ -579,3 +579,88 @@ grep "ToolMetrics" logs/ato-copilot-*.log | jq -r '.ExecutionTimeMs'
 # Failed auth attempts
 grep "AUTH_REQUIRED\|PIM_ELEVATION" logs/ato-copilot-*.log
 ```
+
+---
+
+## Feature 015: RMF Workflow Deployment Notes
+
+### New Entities (Database)
+
+Feature 015 adds 18 new EF Core entities. These are applied automatically via migrations at startup:
+
+| Entity | Table | Purpose |
+|--------|-------|---------|
+| `RegisteredSystem` | `RegisteredSystems` | RMF system registration |
+| `SecurityCategorization` | `SecurityCategorizations` | FIPS 199 categorization |
+| `InformationType` | `InformationTypes` | SP 800-60 information types |
+| `AuthorizationBoundary` | `AuthorizationBoundaries` | System boundary resources |
+| `RmfRoleAssignment` | `RmfRoleAssignments` | Personnel role assignments |
+| `ControlBaseline` | `ControlBaselines` | NIST 800-53 baselines |
+| `ControlTailoring` | `ControlTailorings` | Baseline tailoring actions |
+| `ControlInheritance` | `ControlInheritances` | Control inheritance designations |
+| `ControlImplementation` | `ControlImplementations` | SSP narratives |
+| `ControlEffectiveness` | `ControlEffectivenesses` | Assessment determinations |
+| `AssessmentRecord` | `AssessmentRecords` | Immutable assessment snapshots |
+| `AuthorizationDecision` | `AuthorizationDecisions` | ATO/IATT/DATO decisions |
+| `RiskAcceptance` | `RiskAcceptances` | Accepted risks |
+| `PoamItem` | `PoamItems` | Plan of Action & Milestones |
+| `PoamMilestone` | `PoamMilestones` | POA&M milestone tracking |
+| `ConMonPlan` | `ConMonPlans` | Continuous monitoring plans |
+| `ConMonReport` | `ConMonReports` | Periodic compliance reports |
+| `SignificantChange` | `SignificantChanges` | Change events |
+
+### New RBAC Role
+
+Feature 015 adds the `AuthorizingOfficial` role. This role is required for:
+- `compliance_issue_authorization` — Issue ATO/IATT/DATO decisions
+- `compliance_accept_risk` — Accept risk on specific findings
+
+Ensure this role is provisioned in your identity provider and assigned to appropriate personnel.
+
+### New NuGet Packages
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| QuestPDF | 2024.12.3 | PDF document generation (SSP, SAR, POA&M) |
+| ClosedXML | 0.104.2 | eMASS Excel import/export |
+| Microsoft.Graph | 5.70.0 | PIM and Graph API integration |
+
+### Additional Azure Service Principal Permissions
+
+If using PIM tools with Microsoft Graph:
+- **RoleManagement.ReadWrite.Directory** — For PIM role activation
+- **PrivilegedAccess.ReadWrite.AzureADGroup** — For PIM group management
+
+If using JIT VM Access:
+- **Microsoft.Security/locations/jitNetworkAccessPolicies/\*** — For JIT operations
+
+### Embedded Reference Data
+
+Four JSON data files are embedded in the Agents assembly and loaded at startup:
+- `nist-800-53-rev5-catalog.json` — NIST 800-53 control catalog
+- `nist-800-53-baselines.json` — Low/Moderate/High baseline definitions
+- `sp800-60-information-types.json` — SP 800-60 Vol. 2 information types
+- `cnssi-1253-overlays.json` — CNSSI 1253 overlay controls by impact level
+
+These files do not require external configuration.
+
+### RMF Configuration
+
+```json
+{
+  "Agents": {
+    "Compliance": {
+      "DefaultDryRun": true,
+      "EnableAutomatedRemediation": false,
+      "MaxConcurrentAssessments": 5,
+      "MonitoringIntervalMinutes": 60
+    }
+  },
+  "Pim": {
+    "DefaultActivationDurationHours": 4,
+    "MaxActivationDurationHours": 8,
+    "RequireTicketNumber": false,
+    "AutoDeactivateAfterRemediation": false
+  }
+}
+```

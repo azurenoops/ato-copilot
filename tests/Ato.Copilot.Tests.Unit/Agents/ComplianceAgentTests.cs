@@ -37,7 +37,7 @@ public class ComplianceAgentTests
         // Create tool instances with mocked services
         var assessmentTool = new ComplianceAssessmentTool(complianceEngine, scopeFactory, Mock.Of<ILogger<ComplianceAssessmentTool>>());
         var controlFamilyTool = new ControlFamilyTool(nistControls, Mock.Of<ILogger<ControlFamilyTool>>());
-        var documentGenerationTool = new DocumentGenerationTool(docGen, scopeFactory, Mock.Of<ILogger<DocumentGenerationTool>>());
+        var documentGenerationTool = new DocumentGenerationTool(docGen, Mock.Of<IDocumentTemplateService>(), scopeFactory, Mock.Of<ILogger<DocumentGenerationTool>>());
         var evidenceCollectionTool = new EvidenceCollectionTool(evidence, Mock.Of<ILogger<EvidenceCollectionTool>>());
         var remediationExecuteTool = new RemediationExecuteTool(remediationEngine, Mock.Of<ILogger<RemediationExecuteTool>>());
         var validateRemediationTool = new ValidateRemediationTool(remediationEngine, Mock.Of<ILogger<ValidateRemediationTool>>());

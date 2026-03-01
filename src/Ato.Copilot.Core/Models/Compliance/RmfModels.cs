@@ -1,5 +1,8 @@
 namespace Ato.Copilot.Core.Models.Compliance;
 
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
 // ───────────────────────────── RMF Entities (Feature 010) ─────────────────────────────
 
 /// <summary>
@@ -59,3 +62,528 @@ public record DeliverableInfo(
     int Step,
     string StepTitle,
     List<string> Deliverables);
+
+// ───────────────────────────── RMF EF Core Entities (Feature 015) ─────────────────────────────
+
+/// <summary>
+/// Anchor entity for all RMF data. Every persona-driven workflow tool
+/// operates within the context of a registered system.
+/// </summary>
+public class RegisteredSystem
+{
+    /// <summary>Unique identifier (GUID).</summary>
+    [Key]
+    [MaxLength(36)]
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+
+    /// <summary>System name (e.g., "ACME Portal").</summary>
+    [Required]
+    [MaxLength(200)]
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>System acronym (e.g., "ACME").</summary>
+    [MaxLength(20)]
+    public string? Acronym { get; set; }
+
+    /// <summary>System type per DoDI 8510.01.</summary>
+    [Required]
+    public SystemType SystemType { get; set; }
+
+    /// <summary>System description.</summary>
+    [MaxLength(2000)]
+    public string? Description { get; set; }
+
+    /// <summary>Mission criticality designation.</summary>
+    [Required]
+    public MissionCriticality MissionCriticality { get; set; }
+
+    /// <summary>National Security System designation (affects IL mapping).</summary>
+    public bool IsNationalSecuritySystem { get; set; }
+
+    /// <summary>Classified designation string ("Secret", "TopSecret", null).</summary>
+    [MaxLength(20)]
+    public string? ClassifiedDesignation { get; set; }
+
+    /// <summary>Hosting environment ("Azure Government", "Azure Commercial", "On-Premises", "Hybrid").</summary>
+    [Required]
+    [MaxLength(100)]
+    public string HostingEnvironment { get; set; } = string.Empty;
+
+    /// <summary>Current RMF lifecycle position.</summary>
+    [Required]
+    public RmfPhase CurrentRmfStep { get; set; } = RmfPhase.Prepare;
+
+    /// <summary>When the RMF step last changed (UTC).</summary>
+    public DateTime RmfStepUpdatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>User who registered the system.</summary>
+    [Required]
+    [MaxLength(200)]
+    public string CreatedBy { get; set; } = string.Empty;
+
+    /// <summary>Registration timestamp (UTC).</summary>
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Last modification timestamp (UTC).</summary>
+    public DateTime? ModifiedAt { get; set; }
+
+    /// <summary>Soft delete flag.</summary>
+    public bool IsActive { get; set; } = true;
+
+    // ─── Owned entity ────────────────────────────────────────────────────────
+
+    /// <summary>Azure environment profile (owned entity, stored in same table).</summary>
+    public AzureEnvironmentProfile? AzureProfile { get; set; }
+
+    // ─── Navigation properties ───────────────────────────────────────────────
+
+    /// <summary>FIPS 199 security categorization (one per system).</summary>
+    public SecurityCategorization? SecurityCategorization { get; set; }
+
+    /// <summary>Authorization boundary resources.</summary>
+    public ICollection<AuthorizationBoundary> AuthorizationBoundaries { get; set; } = new List<AuthorizationBoundary>();
+
+    /// <summary>RMF role assignments.</summary>
+    public ICollection<RmfRoleAssignment> RmfRoleAssignments { get; set; } = new List<RmfRoleAssignment>();
+
+    /// <summary>Control baseline (one per system).</summary>
+    public ControlBaseline? ControlBaseline { get; set; }
+}
+
+/// <summary>
+/// Azure environment profile for a registered system.
+/// Stored as an owned entity (same table as RegisteredSystem).
+/// </summary>
+public class AzureEnvironmentProfile
+{
+    /// <summary>Azure cloud environment type.</summary>
+    [Required]
+    public AzureCloudEnvironment CloudEnvironment { get; set; }
+
+    /// <summary>ARM management endpoint URL.</summary>
+    [Required]
+    [MaxLength(500)]
+    public string ArmEndpoint { get; set; } = string.Empty;
+
+    /// <summary>Entra ID / authentication endpoint.</summary>
+    [Required]
+    [MaxLength(500)]
+    public string AuthenticationEndpoint { get; set; } = string.Empty;
+
+    /// <summary>Defender for Cloud endpoint.</summary>
+    [MaxLength(500)]
+    public string? DefenderEndpoint { get; set; }
+
+    /// <summary>Policy service endpoint.</summary>
+    [MaxLength(500)]
+    public string? PolicyEndpoint { get; set; }
+
+    /// <summary>Proxy URL for air-gapped environments.</summary>
+    [MaxLength(500)]
+    public string? ProxyUrl { get; set; }
+
+    /// <summary>Azure subscription IDs within the authorization boundary.</summary>
+    public List<string> SubscriptionIds { get; set; } = new();
+}
+
+/// <summary>
+/// FIPS 199 security categorization for a registered system.
+/// Contains information types whose C/I/A impacts drive the overall categorization.
+/// </summary>
+public class SecurityCategorization
+{
+    /// <summary>Unique identifier (GUID).</summary>
+    [Key]
+    [MaxLength(36)]
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+
+    /// <summary>FK to RegisteredSystem (one categorization per system).</summary>
+    [Required]
+    [MaxLength(36)]
+    public string RegisteredSystemId { get; set; } = string.Empty;
+
+    /// <summary>NSS flag for IL derivation.</summary>
+    public bool IsNationalSecuritySystem { get; set; }
+
+    /// <summary>Categorization rationale.</summary>
+    [MaxLength(4000)]
+    public string? Justification { get; set; }
+
+    /// <summary>User who performed categorization.</summary>
+    [Required]
+    [MaxLength(200)]
+    public string CategorizedBy { get; set; } = string.Empty;
+
+    /// <summary>Categorization date (UTC).</summary>
+    public DateTime CategorizedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Last modification (UTC).</summary>
+    public DateTime? ModifiedAt { get; set; }
+
+    // ─── Navigation properties ───────────────────────────────────────────────
+
+    /// <summary>Parent system.</summary>
+    public RegisteredSystem RegisteredSystem { get; set; } = null!;
+
+    /// <summary>Information types that drive the categorization.</summary>
+    public ICollection<InformationType> InformationTypes { get; set; } = new List<InformationType>();
+
+    // ─── Computed properties (not stored) ────────────────────────────────────
+
+    /// <summary>Maximum confidentiality impact across all information types.</summary>
+    [NotMapped]
+    public ImpactValue ConfidentialityImpact =>
+        InformationTypes.Any() ? InformationTypes.Max(it => it.ConfidentialityImpact) : ImpactValue.Low;
+
+    /// <summary>Maximum integrity impact across all information types.</summary>
+    [NotMapped]
+    public ImpactValue IntegrityImpact =>
+        InformationTypes.Any() ? InformationTypes.Max(it => it.IntegrityImpact) : ImpactValue.Low;
+
+    /// <summary>Maximum availability impact across all information types.</summary>
+    [NotMapped]
+    public ImpactValue AvailabilityImpact =>
+        InformationTypes.Any() ? InformationTypes.Max(it => it.AvailabilityImpact) : ImpactValue.Low;
+
+    /// <summary>Overall categorization (high-water mark of C/I/A).</summary>
+    [NotMapped]
+    public ImpactValue OverallCategorization =>
+        (ImpactValue)Math.Max(Math.Max((int)ConfidentialityImpact, (int)IntegrityImpact), (int)AvailabilityImpact);
+
+    /// <summary>Derived DoD Impact Level (IL2/IL4/IL5/IL6).</summary>
+    [NotMapped]
+    public string DoDImpactLevel =>
+        Constants.ComplianceFrameworks.DeriveImpactLevel(
+            OverallCategorization,
+            IsNationalSecuritySystem,
+            RegisteredSystem?.ClassifiedDesignation);
+
+    /// <summary>Derived NIST baseline level (Low/Moderate/High).</summary>
+    [NotMapped]
+    public string NistBaseline =>
+        Constants.ComplianceFrameworks.DeriveBaselineLevel(OverallCategorization);
+
+    /// <summary>Formal FIPS 199 notation string.</summary>
+    [NotMapped]
+    public string FormalNotation =>
+        Constants.ComplianceFrameworks.FormatFips199Notation(
+            RegisteredSystem?.Name ?? "System",
+            ConfidentialityImpact,
+            IntegrityImpact,
+            AvailabilityImpact);
+}
+
+/// <summary>
+/// SP 800-60 information type with provisional or adjusted C/I/A impact levels.
+/// </summary>
+public class InformationType
+{
+    /// <summary>Unique identifier (GUID).</summary>
+    [Key]
+    [MaxLength(36)]
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+
+    /// <summary>FK to SecurityCategorization.</summary>
+    [Required]
+    [MaxLength(36)]
+    public string SecurityCategorizationId { get; set; } = string.Empty;
+
+    /// <summary>SP 800-60 identifier (e.g., "D.1.1").</summary>
+    [Required]
+    [MaxLength(20)]
+    public string Sp80060Id { get; set; } = string.Empty;
+
+    /// <summary>Information type name.</summary>
+    [Required]
+    [MaxLength(200)]
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>SP 800-60 category.</summary>
+    [MaxLength(200)]
+    public string? Category { get; set; }
+
+    /// <summary>Confidentiality impact.</summary>
+    [Required]
+    public ImpactValue ConfidentialityImpact { get; set; }
+
+    /// <summary>Integrity impact.</summary>
+    [Required]
+    public ImpactValue IntegrityImpact { get; set; }
+
+    /// <summary>Availability impact.</summary>
+    [Required]
+    public ImpactValue AvailabilityImpact { get; set; }
+
+    /// <summary>Whether values match SP 800-60 provisional defaults.</summary>
+    public bool UsesProvisionalImpactLevels { get; set; } = true;
+
+    /// <summary>Required if UsesProvisionalImpactLevels is false.</summary>
+    [MaxLength(2000)]
+    public string? AdjustmentJustification { get; set; }
+
+    // ─── Navigation ──────────────────────────────────────────────────────────
+
+    /// <summary>Parent categorization.</summary>
+    public SecurityCategorization SecurityCategorization { get; set; } = null!;
+}
+
+/// <summary>
+/// Azure resource within the authorization boundary of a registered system.
+/// </summary>
+public class AuthorizationBoundary
+{
+    /// <summary>Unique identifier (GUID).</summary>
+    [Key]
+    [MaxLength(36)]
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+
+    /// <summary>FK to RegisteredSystem.</summary>
+    [Required]
+    [MaxLength(36)]
+    public string RegisteredSystemId { get; set; } = string.Empty;
+
+    /// <summary>Azure resource ID.</summary>
+    [Required]
+    [MaxLength(500)]
+    public string ResourceId { get; set; } = string.Empty;
+
+    /// <summary>Azure resource type.</summary>
+    [Required]
+    [MaxLength(200)]
+    public string ResourceType { get; set; } = string.Empty;
+
+    /// <summary>Display name.</summary>
+    [MaxLength(200)]
+    public string? ResourceName { get; set; }
+
+    /// <summary>true = in scope, false = excluded.</summary>
+    [Required]
+    public bool IsInBoundary { get; set; } = true;
+
+    /// <summary>Required if IsInBoundary is false.</summary>
+    [MaxLength(1000)]
+    public string? ExclusionRationale { get; set; }
+
+    /// <summary>CSP/common control provider if inherited.</summary>
+    [MaxLength(200)]
+    public string? InheritanceProvider { get; set; }
+
+    /// <summary>When the resource was added (UTC).</summary>
+    public DateTime AddedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>User who added the resource.</summary>
+    [Required]
+    [MaxLength(200)]
+    public string AddedBy { get; set; } = string.Empty;
+
+    // ─── Navigation ──────────────────────────────────────────────────────────
+
+    /// <summary>Parent system.</summary>
+    public RegisteredSystem RegisteredSystem { get; set; } = null!;
+}
+
+/// <summary>
+/// RMF role assignment for a registered system per DoDI 8510.01.
+/// </summary>
+public class RmfRoleAssignment
+{
+    /// <summary>Unique identifier (GUID).</summary>
+    [Key]
+    [MaxLength(36)]
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+
+    /// <summary>FK to RegisteredSystem.</summary>
+    [Required]
+    [MaxLength(36)]
+    public string RegisteredSystemId { get; set; } = string.Empty;
+
+    /// <summary>RMF role type.</summary>
+    [Required]
+    public RmfRole RmfRole { get; set; }
+
+    /// <summary>Assigned user identity.</summary>
+    [Required]
+    [MaxLength(200)]
+    public string UserId { get; set; } = string.Empty;
+
+    /// <summary>Display name.</summary>
+    [MaxLength(200)]
+    public string? UserDisplayName { get; set; }
+
+    /// <summary>Assignment date (UTC).</summary>
+    public DateTime AssignedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>User who performed the assignment.</summary>
+    [Required]
+    [MaxLength(200)]
+    public string AssignedBy { get; set; } = string.Empty;
+
+    /// <summary>Active flag.</summary>
+    public bool IsActive { get; set; } = true;
+
+    // ─── Navigation ──────────────────────────────────────────────────────────
+
+    /// <summary>Parent system.</summary>
+    public RegisteredSystem RegisteredSystem { get; set; } = null!;
+}
+
+/// <summary>
+/// Control baseline for a registered system. Contains the selected NIST controls
+/// after baseline selection, overlay application, and tailoring.
+/// </summary>
+public class ControlBaseline
+{
+    /// <summary>Unique identifier (GUID).</summary>
+    [Key]
+    [MaxLength(36)]
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+
+    /// <summary>FK to RegisteredSystem (one baseline per system).</summary>
+    [Required]
+    [MaxLength(36)]
+    public string RegisteredSystemId { get; set; } = string.Empty;
+
+    /// <summary>Baseline level ("Low", "Moderate", "High").</summary>
+    [Required]
+    [MaxLength(20)]
+    public string BaselineLevel { get; set; } = string.Empty;
+
+    /// <summary>Applied overlay (e.g., "CNSSI 1253 IL4").</summary>
+    [MaxLength(100)]
+    public string? OverlayApplied { get; set; }
+
+    /// <summary>Total controls after baseline + overlay.</summary>
+    public int TotalControls { get; set; }
+
+    /// <summary>Controls marked as customer responsibility.</summary>
+    public int CustomerControls { get; set; }
+
+    /// <summary>Controls marked as inherited.</summary>
+    public int InheritedControls { get; set; }
+
+    /// <summary>Controls marked as shared.</summary>
+    public int SharedControls { get; set; }
+
+    /// <summary>Controls removed via tailoring.</summary>
+    public int TailoredOutControls { get; set; }
+
+    /// <summary>Controls added via tailoring.</summary>
+    public int TailoredInControls { get; set; }
+
+    /// <summary>Full list of applicable control IDs (JSON column).</summary>
+    public List<string> ControlIds { get; set; } = new();
+
+    /// <summary>Creation timestamp (UTC).</summary>
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>User who created the baseline.</summary>
+    [Required]
+    [MaxLength(200)]
+    public string CreatedBy { get; set; } = string.Empty;
+
+    /// <summary>Last modification (UTC).</summary>
+    public DateTime? ModifiedAt { get; set; }
+
+    // ─── Navigation properties ───────────────────────────────────────────────
+
+    /// <summary>Parent system.</summary>
+    public RegisteredSystem RegisteredSystem { get; set; } = null!;
+
+    /// <summary>Tailoring actions applied to this baseline.</summary>
+    public ICollection<ControlTailoring> Tailorings { get; set; } = new List<ControlTailoring>();
+
+    /// <summary>Inheritance designations for controls in this baseline.</summary>
+    public ICollection<ControlInheritance> Inheritances { get; set; } = new List<ControlInheritance>();
+}
+
+/// <summary>
+/// Control tailoring action applied to a baseline (added or removed control).
+/// </summary>
+public class ControlTailoring
+{
+    /// <summary>Unique identifier (GUID).</summary>
+    [Key]
+    [MaxLength(36)]
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+
+    /// <summary>FK to ControlBaseline.</summary>
+    [Required]
+    [MaxLength(36)]
+    public string ControlBaselineId { get; set; } = string.Empty;
+
+    /// <summary>NIST control ID.</summary>
+    [Required]
+    [MaxLength(20)]
+    public string ControlId { get; set; } = string.Empty;
+
+    /// <summary>Tailoring action (Added or Removed).</summary>
+    [Required]
+    public TailoringAction Action { get; set; }
+
+    /// <summary>Documented justification for the tailoring.</summary>
+    [Required]
+    [MaxLength(2000)]
+    public string Rationale { get; set; } = string.Empty;
+
+    /// <summary>Whether the overlay mandates this control.</summary>
+    public bool IsOverlayRequired { get; set; }
+
+    /// <summary>User who performed the tailoring.</summary>
+    [Required]
+    [MaxLength(200)]
+    public string TailoredBy { get; set; } = string.Empty;
+
+    /// <summary>Tailoring timestamp (UTC).</summary>
+    public DateTime TailoredAt { get; set; } = DateTime.UtcNow;
+
+    // ─── Navigation ──────────────────────────────────────────────────────────
+
+    /// <summary>Parent baseline.</summary>
+    public ControlBaseline ControlBaseline { get; set; } = null!;
+}
+
+/// <summary>
+/// Control inheritance designation for FedRAMP/DoD shared responsibility.
+/// </summary>
+public class ControlInheritance
+{
+    /// <summary>Unique identifier (GUID).</summary>
+    [Key]
+    [MaxLength(36)]
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+
+    /// <summary>FK to ControlBaseline.</summary>
+    [Required]
+    [MaxLength(36)]
+    public string ControlBaselineId { get; set; } = string.Empty;
+
+    /// <summary>NIST control ID.</summary>
+    [Required]
+    [MaxLength(20)]
+    public string ControlId { get; set; } = string.Empty;
+
+    /// <summary>Inheritance type (Inherited, Shared, Customer).</summary>
+    [Required]
+    public InheritanceType InheritanceType { get; set; }
+
+    /// <summary>CSP name if Inherited or Shared.</summary>
+    [MaxLength(200)]
+    public string? Provider { get; set; }
+
+    /// <summary>Customer responsibility description if Shared.</summary>
+    [MaxLength(2000)]
+    public string? CustomerResponsibility { get; set; }
+
+    /// <summary>User who set the inheritance.</summary>
+    [Required]
+    [MaxLength(200)]
+    public string SetBy { get; set; } = string.Empty;
+
+    /// <summary>Timestamp (UTC).</summary>
+    public DateTime SetAt { get; set; } = DateTime.UtcNow;
+
+    // ─── Navigation ──────────────────────────────────────────────────────────
+
+    /// <summary>Parent baseline.</summary>
+    public ControlBaseline ControlBaseline { get; set; } = null!;
+}

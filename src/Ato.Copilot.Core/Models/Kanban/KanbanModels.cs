@@ -117,6 +117,11 @@ public class RemediationTask : ConcurrentEntity
     /// <summary>FK to ComplianceAlert.AlertId when task was created from an alert.</summary>
     public string? LinkedAlertId { get; set; }
 
+    // ─── New Properties (Feature 015 — US8: POA&M Link) ─────────────────────
+
+    /// <summary>Optional FK to PoamItem for formal POA&amp;M tracking.</summary>
+    public string? PoamItemId { get; set; }
+
     /// <summary>User who created the task.</summary>
     public string CreatedBy { get; set; } = "";
 

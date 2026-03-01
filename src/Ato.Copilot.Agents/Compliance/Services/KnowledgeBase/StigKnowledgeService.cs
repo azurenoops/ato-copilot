@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Reflection;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Ato.Copilot.Core.Interfaces.Compliance;
@@ -18,6 +19,7 @@ public class StigKnowledgeService : IStigKnowledgeService
     private readonly ILogger<StigKnowledgeService> _logger;
 
     private const string CacheKey = "kb:stig:all_controls";
+    private const string CciCacheKey = "kb:cci:all_mappings";
     private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -111,6 +113,50 @@ public class StigKnowledgeService : IStigKnowledgeService
             relatedInstructions);
     }
 
+    /// <inheritdoc />
+    public async Task<List<StigControl>> GetStigsByCciChainAsync(
+        string controlId,
+        StigSeverity? severity = null,
+        CancellationToken cancellationToken = default)
+    {
+        var cciMappings = await LoadCciMappingsAsync();
+        var controls = await LoadControlsAsync();
+
+        // Step 1: Find all CCI IDs mapped to this NIST control
+        var normalizedControlId = controlId.ToUpperInvariant();
+        var matchingCciIds = cciMappings
+            .Where(m => m.NistControlId.Equals(controlId, StringComparison.OrdinalIgnoreCase))
+            .Select(m => m.CciId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // Step 2: Find STIG controls that reference any of these CCI IDs
+        var matched = controls.Where(c =>
+            c.CciRefs.Any(cci => matchingCciIds.Contains(cci)) ||
+            c.NistControls.Any(nc => nc.Equals(controlId, StringComparison.OrdinalIgnoreCase)));
+
+        if (severity.HasValue)
+            matched = matched.Where(c => c.Severity == severity.Value);
+
+        // Deduplicate by StigId
+        return matched
+            .GroupBy(c => c.StigId)
+            .Select(g => g.First())
+            .OrderBy(c => c.Severity)
+            .ThenBy(c => c.StigId)
+            .ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<List<CciMapping>> GetCciMappingsAsync(
+        string controlId,
+        CancellationToken cancellationToken = default)
+    {
+        var allMappings = await LoadCciMappingsAsync();
+        return allMappings
+            .Where(m => m.NistControlId.Equals(controlId, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
     /// <summary>
     /// Loads STIG controls from the JSON data file, with 24-hour cache TTL.
     /// </summary>
@@ -160,11 +206,58 @@ public class StigKnowledgeService : IStigKnowledgeService
         }
     }
 
+    /// <summary>
+    /// Loads CCI-NIST mappings from the embedded JSON resource, with 24-hour cache TTL.
+    /// </summary>
+    private async Task<List<CciMapping>> LoadCciMappingsAsync()
+    {
+        if (_cache.TryGetValue(CciCacheKey, out List<CciMapping>? cached) && cached != null)
+            return cached;
+
+        try
+        {
+            var assembly = typeof(StigKnowledgeService).Assembly;
+            var resourceName = assembly.GetManifestResourceNames()
+                .FirstOrDefault(n => n.EndsWith("cci-nist-mapping.json", StringComparison.OrdinalIgnoreCase));
+
+            if (resourceName == null)
+            {
+                _logger.LogWarning("CCI-NIST mapping embedded resource not found");
+                return new List<CciMapping>();
+            }
+
+            await using var stream = assembly.GetManifestResourceStream(resourceName)!;
+            using var reader = new StreamReader(stream);
+            var json = await reader.ReadToEndAsync();
+
+            var doc = JsonSerializer.Deserialize<CciDataFile>(json, JsonOptions);
+            var mappings = doc?.Mappings ?? new List<CciMapping>();
+
+            _cache.Set(CciCacheKey, mappings, CacheTtl);
+            _logger.LogInformation("Loaded {Count} CCI-NIST mappings from embedded resource", mappings.Count);
+            return mappings;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load CCI-NIST mapping data");
+            return new List<CciMapping>();
+        }
+    }
+
     /// <summary>Internal DTO for deserializing the STIG JSON wrapper.</summary>
     private sealed class StigDataFile
     {
         public string Version { get; set; } = string.Empty;
         public string Source { get; set; } = string.Empty;
         public List<StigControl> Controls { get; set; } = new();
+    }
+
+    /// <summary>Internal DTO for deserializing the CCI mapping JSON wrapper.</summary>
+    private sealed class CciDataFile
+    {
+        public string Version { get; set; } = string.Empty;
+        public string Source { get; set; } = string.Empty;
+        public int TotalMappings { get; set; }
+        public List<CciMapping> Mappings { get; set; } = new();
     }
 }

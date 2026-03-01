@@ -18,7 +18,7 @@ public class RemediationScriptExecutorTests
     private readonly Mock<ILogger<RemediationScriptExecutor>> _loggerMock = new();
 
     private RemediationScriptExecutor CreateExecutor() =>
-        new(_sanitizerMock.Object, _loggerMock.Object);
+        new TestableRemediationScriptExecutor(_sanitizerMock.Object, _loggerMock.Object);
 
     private static RemediationScript CreateScript(
         ScriptType type = ScriptType.AzureCli,
@@ -181,5 +181,23 @@ public class RemediationScriptExecutorTests
         result.Error.Should().Contain("Resource group deletion");
         result.Error.Should().Contain("VM deletion");
         result.Error.Should().Contain("Terraform destroy");
+    }
+
+    /// <summary>
+    /// Test subclass that overrides RunSubprocessAsync to avoid real process execution.
+    /// Returns exit code 0 with empty output, simulating a successful script run.
+    /// </summary>
+    private class TestableRemediationScriptExecutor : RemediationScriptExecutor
+    {
+        public TestableRemediationScriptExecutor(
+            IScriptSanitizationService sanitizer,
+            ILogger<RemediationScriptExecutor> logger) : base(sanitizer, logger) { }
+
+        protected override Task<(int ExitCode, string Stdout, string Stderr)> RunSubprocessAsync(
+            RemediationScript script, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult((0, "Remediation completed successfully", string.Empty));
+        }
     }
 }

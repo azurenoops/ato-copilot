@@ -239,6 +239,27 @@ public class MonitoringOptions
 
     /// <summary>Azure cloud environment: AzureGovernment or AzureCloud. Default AzureGovernment.</summary>
     public string CloudEnvironment { get; set; } = "AzureGovernment";
+
+    // ─── Phase 17 §9a.5 — Drift-to-SignificantChange thresholds ─────────────
+
+    /// <summary>
+    /// Minimum number of drift detections within a monitoring cycle that qualifies
+    /// as a <em>significant change</em> and triggers ConMon alert creation.
+    /// Default: 5 (per spec §9a.5).
+    /// </summary>
+    public int SignificantDriftThreshold { get; set; } = 5;
+
+    /// <summary>
+    /// When <c>true</c>, the system automatically creates <c>SignificantChange</c>
+    /// records when drift exceeds <see cref="SignificantDriftThreshold"/>.
+    /// </summary>
+    public bool AutoCreateSignificantChanges { get; set; } = true;
+
+    /// <summary>
+    /// Maximum number of drift alerts to include in a single ConMon report enrichment snapshot.
+    /// Prevents runaway queries on large environments.
+    /// </summary>
+    public int MaxDriftAlertsPerReport { get; set; } = 500;
 }
 
 /// <summary>
