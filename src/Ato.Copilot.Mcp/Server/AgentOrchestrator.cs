@@ -37,7 +37,7 @@ public class AgentOrchestrator
     /// </summary>
     /// <param name="message">User message to route.</param>
     /// <returns>The best-matching agent, or null if no agent scores above the threshold.</returns>
-    public BaseAgent? SelectAgent(string message)
+    public virtual BaseAgent? SelectAgent(string message)
     {
         var scored = _agents
             .Select(a => (agent: a, score: a.CanHandle(message)))

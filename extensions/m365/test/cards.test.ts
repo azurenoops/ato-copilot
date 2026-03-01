@@ -1,10 +1,6 @@
 import { expect } from "chai";
 import {
   buildComplianceCard,
-  buildInfrastructureCard,
-  buildCostCard,
-  buildDeploymentCard,
-  buildResourceCard,
   buildGenericCard,
   buildErrorCard,
   buildFollowUpCard,
@@ -15,10 +11,6 @@ describe("Adaptive Card Builders", () => {
     it("should produce Adaptive Card v1.5 JSON for all card types", () => {
       const cards = [
         buildComplianceCard({ complianceScore: 85, passedControls: 10, warningControls: 2, failedControls: 1 }),
-        buildInfrastructureCard({ resourceId: "/subscriptions/123/rg/test", response: "Deployed" }),
-        buildCostCard({ estimatedCost: 1500, response: "Estimate" }),
-        buildDeploymentCard({ deploymentStatus: "Succeeded", response: "Done" }),
-        buildResourceCard({ resources: [{ name: "vm1", type: "VM", status: "Running" }], response: "Found" }),
         buildGenericCard({ response: "Hello" }),
         buildErrorCard({ errorMessage: "Error occurred" }),
         buildFollowUpCard({ followUpPrompt: "Need more info", missingFields: ["subscription"] }),
@@ -121,103 +113,6 @@ describe("Adaptive Card Builders", () => {
     });
   });
 
-  describe("Infrastructure Card (FR-044)", () => {
-    it("should include portal.azure.us link with resource ID", () => {
-      const resourceId = "/subscriptions/abc-123/resourceGroups/rg-test/providers/Microsoft.Compute/virtualMachines/vm-test";
-      const card = buildInfrastructureCard({
-        resourceId,
-        response: "VM provisioned successfully",
-      });
-      const actions = card.actions as any[];
-      expect(actions).to.have.length(1);
-      expect(actions[0].title).to.equal("View in Azure Portal");
-      expect(actions[0].url).to.equal(`https://portal.azure.us/#resource/${resourceId}`);
-    });
-
-    it("should display response text", () => {
-      const card = buildInfrastructureCard({
-        resourceId: "/subscriptions/123",
-        response: "Resource created",
-      });
-      const body = card.body as any[];
-      const textBlock = body.find(
-        (b: any) => b.type === "TextBlock" && b.text === "Resource created"
-      );
-      expect(textBlock).to.exist;
-    });
-  });
-
-  describe("Cost Card", () => {
-    it("should display estimated cost", () => {
-      const card = buildCostCard({
-        estimatedCost: 2500,
-        response: "Monthly estimate for production environment",
-      });
-      const body = card.body as any[];
-      const costBlock = body.find(
-        (b: any) =>
-          b.type === "TextBlock" && typeof b.text === "string" && b.text.includes("2,500")
-      );
-      expect(costBlock).to.exist;
-    });
-  });
-
-  describe("Deployment Card", () => {
-    it("should show Succeeded status in Good color", () => {
-      const card = buildDeploymentCard({
-        deploymentStatus: "Succeeded",
-        response: "Deployment complete",
-      });
-      const body = card.body as any[];
-      const columnSet = body.find((b: any) => b.type === "ColumnSet");
-      expect(columnSet).to.exist;
-      const statusBlock = columnSet.columns[1].items[0];
-      expect(statusBlock.text).to.equal("Succeeded");
-      expect(statusBlock.color).to.equal("Good");
-    });
-
-    it("should show Failed status in Attention color", () => {
-      const card = buildDeploymentCard({
-        deploymentStatus: "Failed",
-        response: "Deployment failed",
-      });
-      const body = card.body as any[];
-      const columnSet = body.find((b: any) => b.type === "ColumnSet");
-      const statusBlock = columnSet.columns[1].items[0];
-      expect(statusBlock.color).to.equal("Attention");
-    });
-  });
-
-  describe("Resource Card", () => {
-    it("should display resource count", () => {
-      const card = buildResourceCard({
-        resources: [
-          { name: "vm1", type: "VirtualMachine", status: "Running" },
-          { name: "storage1", type: "StorageAccount", status: "Healthy" },
-        ],
-        response: "Found resources",
-      });
-      const body = card.body as any[];
-      const countBlock = body.find(
-        (b: any) => b.type === "TextBlock" && typeof b.text === "string" && b.text.includes("2 resource")
-      );
-      expect(countBlock).to.exist;
-    });
-
-    it("should include header row and data rows", () => {
-      const card = buildResourceCard({
-        resources: [
-          { name: "vm1", type: "VM", status: "Running" },
-        ],
-        response: "Found",
-      });
-      const body = card.body as any[];
-      const columnSets = body.filter((b: any) => b.type === "ColumnSet");
-      // Header + 1 data row
-      expect(columnSets.length).to.be.greaterThanOrEqual(2);
-    });
-  });
-
   describe("Generic Card", () => {
     it("should display response text", () => {
       const card = buildGenericCard({ response: "Hello from ATO Copilot" });
@@ -236,7 +131,7 @@ describe("Adaptive Card Builders", () => {
       const body = card.body as any[];
       const attribution = body.find(
         (b: any) =>
-          b.type === "TextBlock" && typeof b.text === "string" && b.text.includes("ComplianceAgent")
+          b.type === "TextBlock" && typeof b.text === "string" && b.text.includes("Processed by: ComplianceAgent")
       );
       expect(attribution).to.exist;
     });

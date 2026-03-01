@@ -21,23 +21,32 @@ export interface McpRequest {
   };
 }
 
+export interface ToolExecution {
+  toolName: string;
+  success: boolean;
+  executionTimeMs: number;
+}
+
+export interface ErrorDetail {
+  errorCode: string;
+  message: string;
+  suggestion?: string;
+}
+
 export interface McpResponse {
   response: string;
+  success?: boolean;
   agentUsed?: string;
   intentType?: string;
-  data?: {
-    complianceScore?: number;
-    passedControls?: number;
-    warningControls?: number;
-    failedControls?: number;
-    resourceId?: string;
-    estimatedCost?: number;
-    resources?: Array<{ name: string; type: string; status: string }>;
-    deploymentStatus?: string;
-  };
+  conversationId?: string;
+  processingTimeMs?: number;
+  data?: Record<string, unknown>;
+  toolsExecuted?: ToolExecution[];
+  suggestions?: string[];
   requiresFollowUp?: boolean;
   followUpPrompt?: string;
   missingFields?: string[];
+  errors?: ErrorDetail[];
 }
 
 export class ATOApiClient {
@@ -71,17 +80,20 @@ export class ATOApiClient {
 
   /**
    * Send a message to the MCP server and get a response.
+   * Supports optional action/actionContext for Action.Submit payloads (FR-014b).
    */
   async sendMessage(
     text: string,
     conversationId: string,
     userId: string,
-    userName?: string
+    userName?: string,
+    action?: string,
+    actionContext?: Record<string, unknown>
   ): Promise<McpResponse> {
-    const request: McpRequest = {
+    const request: McpRequest & { action?: string; actionContext?: Record<string, unknown> } = {
       conversationId,
       message: text,
-      conversationHistory: [], // No multi-turn for v1
+      conversationHistory: this.getConversationHistory(conversationId),
       context: {
         source: "m365-copilot",
         platform: "M365",
@@ -90,11 +102,62 @@ export class ATOApiClient {
       },
     };
 
+    if (action) request.action = action;
+    if (actionContext) request.actionContext = actionContext;
+
+    const startTime = Date.now();
     const response = await this.client.post<McpResponse>(
       "/mcp/chat",
       request
     );
+
+    const elapsed = Date.now() - startTime;
+    console.info(
+      `[ATOApiClient] POST /mcp/chat | ${conversationId} | ${text.length} chars | ${elapsed}ms | intent=${response.data.intentType ?? "unknown"}`
+    );
+
+    if (response.data.errors && response.data.errors.length > 0) {
+      for (const err of response.data.errors) {
+        console.error(
+          `[ATOApiClient] Error: ${err.errorCode} | ${conversationId} | ${err.message}${err.suggestion ? ` | suggestion=${err.suggestion}` : ""}`
+        );
+      }
+    }
+
+    // Track conversation history (FR-014d)
+    this.addToConversationHistory(conversationId, "user", text);
+    this.addToConversationHistory(conversationId, "assistant", response.data.response);
+
     return response.data;
+  }
+
+  // --- Conversation history (FR-014d, R-011) ---
+
+  private conversationHistories = new Map<string, Array<{ role: string; content: string }>>();
+  private static readonly MAX_HISTORY_EXCHANGES = 20;
+
+  /**
+   * Get conversation history for a given conversationId.
+   */
+  private getConversationHistory(conversationId: string): Array<{ role: string; content: string }> {
+    return this.conversationHistories.get(conversationId) ?? [];
+  }
+
+  /**
+   * Add a message to conversation history, capped at MAX_HISTORY_EXCHANGES pairs.
+   */
+  private addToConversationHistory(conversationId: string, role: string, content: string): void {
+    if (!this.conversationHistories.has(conversationId)) {
+      this.conversationHistories.set(conversationId, []);
+    }
+    const history = this.conversationHistories.get(conversationId)!;
+    history.push({ role, content });
+
+    // Cap at 20 exchanges (40 messages: 20 user + 20 assistant)
+    const maxMessages = ATOApiClient.MAX_HISTORY_EXCHANGES * 2;
+    if (history.length > maxMessages) {
+      history.splice(0, history.length - maxMessages);
+    }
   }
 
   /**

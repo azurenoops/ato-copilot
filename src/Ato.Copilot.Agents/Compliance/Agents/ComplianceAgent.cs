@@ -524,7 +524,10 @@ public class ComplianceAgent : BaseAgent
                 Success = true,
                 Response = toolResult,
                 AgentName = AgentName,
-                ProcessingTimeMs = stopwatch.ElapsedMilliseconds
+                ProcessingTimeMs = stopwatch.ElapsedMilliseconds,
+                // T022a/T022b: Populate ResponseData and Suggestions from tool results
+                ResponseData = BuildResponseData(actionType, toolResult),
+                Suggestions = BuildSuggestions(actionType, toolResult)
             };
         }
         catch (Exception ex)
@@ -543,6 +546,211 @@ public class ComplianceAgent : BaseAgent
                 AgentName = AgentName,
                 ProcessingTimeMs = stopwatch.ElapsedMilliseconds
             };
+        }
+    }
+
+    /// <summary>
+    /// Builds intent-specific structured data from the tool result (T022a, FR-007a).
+    /// The "type" key determines Adaptive Card routing on the client side.
+    /// </summary>
+    private Dictionary<string, object>? BuildResponseData(string actionType, string toolResult)
+    {
+        if (string.IsNullOrEmpty(toolResult))
+            return null;
+
+        try
+        {
+            var data = new Dictionary<string, object>();
+
+            switch (actionType.ToLowerInvariant())
+            {
+                case "assess":
+                case "scan":
+                case "audit":
+                    data["type"] = "assessment";
+                    // Try to extract structured assessment data from the JSON result
+                    if (TryParseJsonProperty(toolResult, "complianceScore", out var score))
+                        data["complianceScore"] = score;
+                    if (TryParseJsonProperty(toolResult, "passedControls", out var passed))
+                        data["passedControls"] = passed;
+                    if (TryParseJsonProperty(toolResult, "warningControls", out var warnings))
+                        data["warningControls"] = warnings;
+                    if (TryParseJsonProperty(toolResult, "failedControls", out var failed))
+                        data["failedControls"] = failed;
+                    if (TryParseJsonProperty(toolResult, "findings", out var findings))
+                        data["findings"] = findings;
+                    if (TryParseJsonProperty(toolResult, "framework", out var fw))
+                        data["framework"] = fw;
+                    if (TryParseJsonProperty(toolResult, "assessmentScope", out var scope))
+                        data["assessmentScope"] = scope;
+                    return data.Count > 1 ? data : null; // Must have more than just "type"
+
+                case "finding":
+                case "control_family":
+                    data["type"] = "finding";
+                    if (TryParseJsonProperty(toolResult, "controlId", out var ctrlId))
+                        data["controlId"] = ctrlId;
+                    if (TryParseJsonProperty(toolResult, "severity", out var severity))
+                        data["severity"] = severity;
+                    if (TryParseJsonProperty(toolResult, "description", out var desc))
+                        data["description"] = desc;
+                    return data.Count > 1 ? data : null;
+
+                case "remediate":
+                case "remediation_plan":
+                    data["type"] = "remediationPlan";
+                    if (TryParseJsonProperty(toolResult, "steps", out var steps))
+                        data["steps"] = steps;
+                    if (TryParseJsonProperty(toolResult, "riskReduction", out var risk))
+                        data["riskReduction"] = risk;
+                    return data.Count > 1 ? data : null;
+
+                case "kanban_show":
+                case "kanban_list":
+                    data["type"] = "kanban";
+                    if (TryParseJsonProperty(toolResult, "board", out var board))
+                        data["board"] = board;
+                    if (TryParseJsonProperty(toolResult, "columns", out var cols))
+                        data["columns"] = cols;
+                    return data.Count > 1 ? data : null;
+
+                case "alert":
+                case "monitor":
+                    data["type"] = "alert";
+                    if (TryParseJsonProperty(toolResult, "alerts", out var alerts))
+                        data["alerts"] = alerts;
+                    return data.Count > 1 ? data : null;
+
+                case "history":
+                case "trend":
+                    data["type"] = "trend";
+                    if (TryParseJsonProperty(toolResult, "history", out var history))
+                        data["history"] = history;
+                    return data.Count > 1 ? data : null;
+
+                case "evidence":
+                    data["type"] = "evidence";
+                    if (TryParseJsonProperty(toolResult, "evidence", out var evidence))
+                        data["evidence"] = evidence;
+                    return data.Count > 1 ? data : null;
+
+                default:
+                    return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to build ResponseData for action {ActionType}", actionType);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Builds contextually relevant follow-up suggestions based on the action type and result (T022b, FR-007d).
+    /// </summary>
+    private List<string> BuildSuggestions(string actionType, string toolResult)
+    {
+        var suggestions = new List<string>();
+        if (string.IsNullOrEmpty(toolResult))
+        {
+            suggestions.Add("Run compliance assessment");
+            suggestions.Add("View compliance status");
+            return suggestions;
+        }
+
+        var hasFailures = toolResult.Contains("\"failed\"", StringComparison.OrdinalIgnoreCase)
+                       || toolResult.Contains("failedControls", StringComparison.OrdinalIgnoreCase)
+                       || toolResult.Contains("\"severity\":\"Critical\"", StringComparison.OrdinalIgnoreCase)
+                       || toolResult.Contains("\"severity\":\"High\"", StringComparison.OrdinalIgnoreCase);
+
+        switch (actionType.ToLowerInvariant())
+        {
+            case "assess":
+            case "scan":
+            case "audit":
+                if (hasFailures)
+                {
+                    suggestions.Add("Generate remediation plan");
+                    suggestions.Add("View detailed findings");
+                    suggestions.Add("Show kanban board");
+                }
+                else
+                {
+                    suggestions.Add("Export compliance report");
+                    suggestions.Add("View compliance trend");
+                }
+                suggestions.Add("Collect compliance evidence");
+                break;
+
+            case "remediate":
+            case "remediation_plan":
+                suggestions.Add("Run compliance assessment");
+                suggestions.Add("View remediation status");
+                suggestions.Add("Show kanban board");
+                break;
+
+            case "evidence":
+                suggestions.Add("Run compliance assessment");
+                suggestions.Add("Generate SSP document");
+                break;
+
+            case "kanban_show":
+            case "kanban_list":
+                suggestions.Add("Run compliance assessment");
+                suggestions.Add("View overdue tasks");
+                break;
+
+            case "monitor":
+            case "alert":
+                suggestions.Add("View alert details");
+                suggestions.Add("Acknowledge alerts");
+                suggestions.Add("View compliance trend");
+                break;
+
+            case "history":
+            case "trend":
+                suggestions.Add("Run compliance assessment");
+                suggestions.Add("Generate remediation plan");
+                break;
+
+            default:
+                suggestions.Add("Run compliance assessment");
+                suggestions.Add("View compliance status");
+                break;
+        }
+
+        return suggestions;
+    }
+
+    /// <summary>
+    /// Attempts to extract a JSON property value from a tool result string.
+    /// </summary>
+    private static bool TryParseJsonProperty(string json, string propertyName, out object value)
+    {
+        value = default!;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(json) || !json.TrimStart().StartsWith("{"))
+                return false;
+
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty(propertyName, out var prop))
+            {
+                value = prop.ValueKind switch
+                {
+                    JsonValueKind.Number => prop.GetDouble(),
+                    JsonValueKind.True => true,
+                    JsonValueKind.False => false,
+                    JsonValueKind.String => prop.GetString()!,
+                    _ => JsonSerializer.Deserialize<object>(prop.GetRawText())!
+                };
+                return true;
+            }
+            return false;
+        }
+        catch
+        {
+            return false;
         }
     }
 

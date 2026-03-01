@@ -13,14 +13,8 @@
 import express, { Request, Response } from "express";
 import { ATOApiClient, McpResponse } from "./services/atoApiClient";
 import {
-  buildComplianceCard,
-  buildInfrastructureCard,
-  buildCostCard,
-  buildDeploymentCard,
-  buildResourceCard,
-  buildGenericCard,
   buildErrorCard,
-  buildFollowUpCard,
+  selectCard,
 } from "./cards";
 
 // --- Configuration validation (FR-048) ---
@@ -49,69 +43,41 @@ const apiClient = new ATOApiClient(ATO_API_URL, ATO_API_KEY || undefined);
 const app = express();
 app.use(express.json());
 
-// --- Intent-based card routing ---
+// --- Intent-based card routing (FR-011) ---
 
 function buildCardForResponse(mcpResponse: McpResponse): Record<string, unknown> {
-  // Follow-up takes priority
-  if (mcpResponse.requiresFollowUp && mcpResponse.followUpPrompt && mcpResponse.missingFields) {
-    return buildFollowUpCard({
-      followUpPrompt: mcpResponse.followUpPrompt,
-      missingFields: mcpResponse.missingFields,
-    });
-  }
-
-  const data = mcpResponse.data;
-
-  switch (mcpResponse.intentType) {
-    case "compliance":
-      return buildComplianceCard({
-        complianceScore: data?.complianceScore ?? 0,
-        passedControls: data?.passedControls ?? 0,
-        warningControls: data?.warningControls ?? 0,
-        failedControls: data?.failedControls ?? 0,
-        response: mcpResponse.response,
-      });
-
-    case "infrastructure":
-      return buildInfrastructureCard({
-        resourceId: data?.resourceId ?? "",
-        response: mcpResponse.response,
-      });
-
-    case "cost":
-      return buildCostCard({
-        estimatedCost: data?.estimatedCost ?? 0,
-        response: mcpResponse.response,
-      });
-
-    case "deployment":
-      return buildDeploymentCard({
-        deploymentStatus: data?.deploymentStatus ?? "Unknown",
-        response: mcpResponse.response,
-      });
-
-    case "resource_discovery":
-      return buildResourceCard({
-        resources: data?.resources ?? [],
-        response: mcpResponse.response,
-      });
-
-    default:
-      return buildGenericCard({
-        response: mcpResponse.response,
-        agentUsed: mcpResponse.agentUsed,
-      });
-  }
+  return selectCard(mcpResponse);
 }
 
 // --- Endpoints ---
 
-// POST /api/messages (FR-037)
+// POST /api/messages (FR-037, FR-014b)
 app.post("/api/messages", async (req: Request, res: Response) => {
   try {
-    const { text, conversation, from } = req.body;
+    const { text, conversation, from, value } = req.body;
 
-    if (!text) {
+    // Handle Action.Submit payloads (FR-014b)
+    const actionPayload = value as
+      | { action?: string; message?: string; conversationId?: string; [key: string]: unknown }
+      | undefined;
+
+    // Determine the message to send — action payloads, quick-reply, or plain text
+    let messageText = text as string | undefined;
+    let action: string | undefined;
+    let actionContext: Record<string, unknown> | undefined;
+
+    if (actionPayload?.action) {
+      action = actionPayload.action;
+      actionContext = { ...actionPayload };
+      delete actionContext.action;
+      messageText = messageText || `Action: ${action}`;
+    } else if (actionPayload?.message) {
+      messageText = actionPayload.message;
+    } else if (actionPayload?.quickReply) {
+      messageText = actionPayload.quickReply as string;
+    }
+
+    if (!messageText) {
       const errorCard = buildErrorCard({
         errorMessage: "No message text provided.",
         helpText: "Please type a question or command to get started.",
@@ -129,15 +95,26 @@ app.post("/api/messages", async (req: Request, res: Response) => {
     }
 
     const conversationId =
-      conversation?.id || ATOApiClient.generateConversationId();
+      actionPayload?.conversationId as string ||
+      conversation?.id ||
+      ATOApiClient.generateConversationId();
     const userId = from?.id || "unknown";
     const userName = from?.name;
 
+    const startTime = Date.now();
+
     const mcpResponse = await apiClient.sendMessage(
-      text,
+      messageText,
       conversationId,
       userId,
-      userName
+      userName,
+      action,
+      actionContext
+    );
+
+    const elapsed = Date.now() - startTime;
+    console.info(
+      `[MCP] ${mcpResponse.intentType ?? "unknown"} | ${conversationId} | ${elapsed}ms | agent=${mcpResponse.agentUsed ?? "none"}`
     );
 
     const card = buildCardForResponse(mcpResponse);

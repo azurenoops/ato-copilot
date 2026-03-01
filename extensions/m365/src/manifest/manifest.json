@@ -2,7 +2,8 @@
   "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
   "manifestVersion": "1.17",
   "version": "1.0.0",
-  "id": "ato-copilot-m365",
+  "id": "02eb4bb5-edef-4192-be23-9fd7b942fd06",
+  "accentColor": "#4F6BED",
   "name": {
     "short": "ATO Copilot",
     "full": "ATO Copilot for Microsoft 365"
@@ -18,12 +19,12 @@
     "termsOfUseUrl": "https://ato-copilot.azurewebsites.us/terms"
   },
   "icons": {
-    "color": "color.png",
-    "outline": "outline.png"
+    "color": "color.svg",
+    "outline": "outline.svg"
   },
   "bots": [
     {
-      "botId": "${BOT_ID}",
+      "botId": "02eb4bb5-edef-4192-be23-9fd7b942fd06",
       "scopes": ["personal", "team", "groupChat"],
       "commandLists": [
         {

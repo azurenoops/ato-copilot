@@ -115,6 +115,9 @@ public class ComplianceMcpTools
     private readonly NistControlSearchTool _nistControlSearchTool;
     private readonly NistControlExplainerTool _nistControlExplainerTool;
 
+    // IaC Compliance Scan tool (Feature 014)
+    private readonly IacComplianceScanTool _iacComplianceScanTool;
+
     public ComplianceMcpTools(
         ComplianceAssessmentTool assessmentTool,
         ControlFamilyTool controlFamilyTool,
@@ -186,7 +189,8 @@ public class ComplianceMcpTools
         WatchCreateAutoRemediationRuleTool watchCreateAutoRemediationRule,
         WatchListAutoRemediationRulesTool watchListAutoRemediationRules,
         NistControlSearchTool nistControlSearchTool,
-        NistControlExplainerTool nistControlExplainerTool)
+        NistControlExplainerTool nistControlExplainerTool,
+        IacComplianceScanTool iacComplianceScanTool)
     {
         _assessmentTool = assessmentTool;
         _controlFamilyTool = controlFamilyTool;
@@ -259,6 +263,7 @@ public class ComplianceMcpTools
         _watchListAutoRemediationRules = watchListAutoRemediationRules;
         _nistControlSearchTool = nistControlSearchTool;
         _nistControlExplainerTool = nistControlExplainerTool;
+        _iacComplianceScanTool = iacComplianceScanTool;
     }
 
     [Description("Run a NIST 800-53 compliance assessment. Scan types: quick, policy, full.")]
@@ -1268,5 +1273,23 @@ public class ComplianceMcpTools
             ["control_id"] = controlId
         };
         return await _nistControlExplainerTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Scan Infrastructure-as-Code files (Bicep, Terraform, ARM) for NIST 800-53 / FedRAMP compliance findings.")]
+    public async Task<string> ScanIacComplianceAsync(
+        string filePath,
+        string fileContent,
+        string fileType,
+        string? framework = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["filePath"] = filePath,
+            ["fileContent"] = fileContent,
+            ["fileType"] = fileType,
+            ["framework"] = framework
+        };
+        return await _iacComplianceScanTool.ExecuteAsync(args, cancellationToken);
     }
 }

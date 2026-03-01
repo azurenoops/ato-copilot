@@ -144,6 +144,20 @@ public class ConfigurationAgent : BaseAgent
                     Result = result,
                     ExecutionTimeMs = sw.Elapsed.TotalMilliseconds
                 }
+            },
+            // T022d: Populate ResponseData with configuration data (FR-007c)
+            ResponseData = new Dictionary<string, object>
+            {
+                ["type"] = "configuration",
+                ["action"] = action
+            },
+            // T022d: Contextual follow-up suggestions (FR-007d)
+            Suggestions = action switch
+            {
+                "get_configuration" => new List<string> { "Update framework", "Change subscription", "Run compliance assessment" },
+                "set_subscription" or "set_framework" or "set_baseline" =>
+                    new List<string> { "Show current settings", "Run compliance assessment" },
+                _ => new List<string> { "Show current settings", "Run compliance assessment" }
             }
         };
     }

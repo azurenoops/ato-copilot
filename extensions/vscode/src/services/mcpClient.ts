@@ -2,6 +2,25 @@ import axios, { AxiosInstance, AxiosError } from "axios";
 import * as vscode from "vscode";
 
 /**
+ * Tool execution record from MCP response (FR-002).
+ */
+export interface ToolExecution {
+  toolName: string;
+  success: boolean;
+  executionTimeMs: number;
+  resultSummary?: string;
+}
+
+/**
+ * Structured error detail (FR-007, Constitution VII).
+ */
+export interface ErrorDetail {
+  errorCode: string;
+  message: string;
+  suggestion?: string;
+}
+
+/**
  * Request payload for POST /mcp/chat
  */
 export interface McpChatRequest {
@@ -22,23 +41,35 @@ export interface McpChatRequest {
       analysisType?: string;
     };
   };
+  /** Action identifier for button-initiated requests (FR-014b) */
+  action?: string;
+  /** Contextual data for actions (FR-014b) */
+  actionContext?: Record<string, unknown>;
 }
 
 /**
- * Response from MCP Server
+ * Enriched response from MCP Server (FR-001 through FR-007, FR-026).
  */
 export interface McpChatResponse {
+  success?: boolean;
   response: string;
+  conversationId?: string;
   agentUsed?: string;
   intentType?: string;
+  processingTimeMs?: number;
   templates?: Array<{
     name: string;
     type: string;
     content: string;
     language: string;
   }>;
+  toolsExecuted?: ToolExecution[];
+  errors?: ErrorDetail[];
+  suggestions?: string[];
   requiresFollowUp?: boolean;
   followUpPrompt?: string;
+  missingFields?: string[];
+  data?: Record<string, unknown>;
 }
 
 /**
@@ -116,21 +147,87 @@ export class McpClient {
   }
 
   /**
+   * Log error-level messages (FR-028). Always logged regardless of enableLogging.
+   */
+  private logError(message: string): void {
+    if (this.outputChannel) {
+      this.outputChannel.appendLine(
+        `[${new Date().toISOString()}] [ERROR] ${message}`
+      );
+    }
+  }
+
+  /**
    * Send a chat request to the MCP Server.
+   * Logs info-level details (FR-027) and error-level errors (FR-028).
    */
   public async sendMessage(request: McpChatRequest): Promise<McpChatResponse> {
-    this.log(`POST /mcp/chat — ${JSON.stringify(request).substring(0, 200)}`);
+    const startTime = Date.now();
+    this.log(
+      `POST /mcp/chat — conversationId=${request.conversationId} messageLen=${request.message.length}`
+    );
 
     try {
       const response = await this.client.post<McpChatResponse>(
         "/mcp/chat",
         request
       );
-      this.log(`Response: ${response.status}`);
+      const elapsed = Date.now() - startTime;
+      this.log(
+        `Response: ${response.status} — intentType=${response.data.intentType ?? "n/a"} agentUsed=${response.data.agentUsed ?? "n/a"} responseTimeMs=${elapsed}`
+      );
+
+      // Log tool execution details (FR-029)
+      if (response.data.toolsExecuted?.length) {
+        const toolNames = response.data.toolsExecuted
+          .map((t) => t.toolName)
+          .join(", ");
+        this.log(
+          `Tools executed: [${toolNames}] — intentType=${response.data.intentType ?? "n/a"}`
+        );
+      }
+
+      // Log errors at error level (FR-028)
+      if (response.data.errors?.length) {
+        for (const err of response.data.errors) {
+          this.logError(
+            `Error: ${err.errorCode} — ${err.message}${err.suggestion ? ` (suggestion: ${err.suggestion})` : ""} — conversationId=${request.conversationId}`
+          );
+        }
+      }
+
       return response.data;
     } catch (error) {
+      const elapsed = Date.now() - startTime;
+      this.logError(
+        `Request failed after ${elapsed}ms — conversationId=${request.conversationId}`
+      );
       throw this.mapError(error);
     }
+  }
+
+  /**
+   * Send an action-initiated request to the MCP Server (FR-014b).
+   */
+  public async sendAction(
+    conversationId: string,
+    action: string,
+    actionContext: Record<string, unknown>,
+    message?: string
+  ): Promise<McpChatResponse> {
+    const request: McpChatRequest = {
+      conversationId,
+      message: message ?? "",
+      conversationHistory: [],
+      context: {
+        source: "vscode-copilot",
+        platform: "VSCode",
+        metadata: {},
+      },
+      action,
+      actionContext,
+    };
+    return this.sendMessage(request);
   }
 
   /**

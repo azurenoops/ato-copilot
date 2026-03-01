@@ -81,8 +81,9 @@ public abstract class BaseAgent
     /// </summary>
     protected void RegisterTool(BaseTool tool)
     {
+        if (tool == null) return;
         Tools.Add(tool);
-        Logger.LogDebug("Registered tool {ToolName} for agent {AgentName}", tool.Name, AgentName);
+        Logger?.LogDebug("Registered tool {ToolName} for agent {AgentName}", tool.Name, AgentName);
     }
 
     /// <summary>
@@ -401,6 +402,35 @@ public class AgentResponse
     public string AgentName { get; set; } = string.Empty;
     public List<ToolExecutionResult> ToolsExecuted { get; set; } = new();
     public double ProcessingTimeMs { get; set; }
+
+    /// <summary>
+    /// Suggested follow-up actions the UI can present as clickable buttons.
+    /// Populated by agents based on the result context (e.g., failing scan → "Generate remediation plan").
+    /// </summary>
+    public List<string> Suggestions { get; set; } = new();
+
+    /// <summary>
+    /// Indicates whether the agent needs additional information from the user to complete the request.
+    /// When true, <see cref="FollowUpPrompt"/> and/or <see cref="MissingFields"/> should be populated.
+    /// </summary>
+    public bool RequiresFollowUp { get; set; }
+
+    /// <summary>
+    /// A human-readable prompt asking the user for missing information when <see cref="RequiresFollowUp"/> is true.
+    /// </summary>
+    public string? FollowUpPrompt { get; set; }
+
+    /// <summary>
+    /// List of field names or descriptions that the agent needs from the user to proceed.
+    /// Used by the UI to render input fields or quick-reply buttons.
+    /// </summary>
+    public List<string> MissingFields { get; set; } = new();
+
+    /// <summary>
+    /// Intent-specific structured data payload (e.g., assessment results, finding details, kanban board).
+    /// The <c>type</c> key in the dictionary determines the Adaptive Card routing on the client side.
+    /// </summary>
+    public Dictionary<string, object>? ResponseData { get; set; }
 }
 
 /// <summary>
