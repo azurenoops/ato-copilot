@@ -47,3 +47,6 @@ build/
 # Test results
 TestResults/
 coverage/
+
+# MkDocs output
+site/

@@ -1,0 +1,209 @@
+# RMF Phase 4: Assess
+
+> Assess the controls to determine if they are implemented correctly, operating as intended, and producing the desired outcome.
+
+---
+
+## Phase Overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Phase Number** | 4 |
+| **NIST Reference** | SP 800-37 Rev. 2, §3.5 |
+| **Lead Persona** | SCA |
+| **Supporting Personas** | ISSO (evidence/remediation), ISSM (POA&M/package), Engineer (remediation) |
+| **Key Outcome** | Controls assessed, SAR and RAR generated, POA&M items created |
+
+---
+
+## Assessment Approaches
+
+The Assess phase uses **two distinct assessment tools** that serve different purposes:
+
+| Tool | Purpose | Who Runs It | How It Works |
+|------|---------|-------------|--------------|
+| `compliance_assess` | **Automated scan** — runs NIST 800-53 assessment against live Azure resources | ISSO or ISSM | Queries Azure Policy, Defender for Cloud, and resource configurations; produces machine-generated findings |
+| `compliance_assess_control` | **Manual determination** — records SCA's formal effectiveness finding per control | SCA | SCA evaluates evidence (test/interview/examine), then records Satisfied or Other Than Satisfied with CAT severity |
+
+**Typical workflow**: The ISSO runs `compliance_assess` first to generate automated findings, then the SCA reviews those findings and records formal determinations using `compliance_assess_control`.
+
+!!! tip "Scan Types for `compliance_assess`"
+    - **quick** — Fast summary of compliance posture (minutes)
+    - **policy** — Azure Policy evaluation with NIST 800-53 control mapping
+    - **full** — Deep scan with remediation recommendations (may take longer)
+
+---
+
+## Persona Responsibilities
+
+### SCA (Lead — Assessment)
+
+**Tasks in this phase**:
+
+1. Assess each control → Tool: `compliance_assess_control`
+2. Take assessment snapshots → Tool: `compliance_take_snapshot`
+3. Verify evidence integrity → Tool: `compliance_verify_evidence`
+4. Check evidence completeness → Tool: `compliance_check_evidence_completeness`
+5. Compare assessment cycles → Tool: `compliance_compare_snapshots`
+6. Generate SAR → Tool: `compliance_generate_sar`
+7. Generate RAR → Tool: `compliance_generate_rar`
+
+**Natural Language Queries**:
+
+> **"Assess control AC-2 as Satisfied using the Test method — account management procedures verified"** → `compliance_assess_control` — records determination with method and justification
+
+> **"Assess control AC-3 as Other Than Satisfied, CAT II — mandatory access control checks missing"** → `compliance_assess_control` — records finding with DoD CAT severity
+
+> **"Take a snapshot of system {id} before assessment begins"** → `compliance_take_snapshot` — creates immutable SHA-256-hashed snapshot
+
+> **"Verify evidence {evidence-id} hasn't been tampered with"** → `compliance_verify_evidence` — recomputes hash, returns verified or tampered
+
+> **"Compare snapshot {snap-1} with snapshot {snap-2}"** → `compliance_compare_snapshots` — shows score delta, new/resolved findings
+
+> **"Generate the Security Assessment Report for system {id}"** → `compliance_generate_sar` — SAR with executive summary and CAT breakdown
+
+> **"Generate the Risk Assessment Report for system {id}"** → `compliance_generate_rar` — RAR with per-family risk breakdown
+
+!!! info "Air-Gapped Note"
+    All SCA assessment tools work fully offline — they operate on locally stored assessment data. Evidence collection (`compliance_collect_evidence`) requires network access to Azure resources; in air-gapped environments, evidence must be imported from prior scans or manual artifact uploads.
+
+### Assessment Methods
+
+| Method | When to Use | Examples |
+|--------|-------------|---------|
+| **Test** | Execute procedures, observe behavior | Run scans, test access controls |
+| **Interview** | Question personnel about practices | Ask admin about account review |
+| **Examine** | Review documentation and artifacts | Review SSP, audit logs, policies |
+
+### DoD CAT Severity Mapping
+
+| CAT Level | Severity | Impact |
+|-----------|----------|--------|
+| **CAT I** | Critical/High | Direct loss of C/I/A — immediate exploitation risk |
+| **CAT II** | Medium | Potential for system compromise |
+| **CAT III** | Low | Administrative or documentation gaps |
+
+### ISSO (Support — Evidence, Automated Scan & Remediation)
+
+**Tasks in this phase**:
+
+1. Run automated compliance assessment → Tool: `compliance_assess`
+2. Collect evidence → Tool: `compliance_collect_evidence`
+3. Create remediation board → Tool: `kanban_create_board`
+4. Assign tasks to engineers → Tool: `kanban_assign_task`
+5. Fix alerts → Tool: `watch_fix_alert`
+
+**Natural Language Queries**:
+
+> **"Run a full NIST 800-53 assessment on subscription {sub-id}"** → `compliance_assess` — automated scan across all control families against live Azure resources
+
+> **"Run a quick compliance scan on subscription {sub-id} for the AC and IA families"** → `compliance_assess` — scoped quick scan for specific families
+
+> **"Collect evidence for the AC family on subscription {sub-id}"** → `compliance_collect_evidence` — collects Azure resource evidence with SHA-256 hashing
+
+> **"Create a remediation board from the latest assessment"** → `kanban_create_board` — creates Kanban board from findings
+
+> **"Assign task REM-003 to engineer Bob Jones"** → `kanban_assign_task` — assigns remediation work
+
+### ISSM (Support — POA&M & Package)
+
+**Tasks in this phase**:
+
+1. Create POA&M items → Tool: `compliance_create_poam`
+2. List/track POA&M → Tool: `compliance_list_poam`
+3. Generate RAR → Tool: `compliance_generate_rar`
+
+**Natural Language Queries**:
+
+> **"Create a POA&M item for the missing MFA finding on IA-2(1) — assign to John Smith, due June 30"** → `compliance_create_poam` — formal POA&M with milestones and CAT severity
+
+> **"List overdue POA&M items for system {id}"** → `compliance_list_poam` — filtered POA&M list
+
+### Engineer (Support — Remediation)
+
+Engineers can remediate findings using **standalone tools** (direct finding remediation) or **Kanban tools** (task-managed remediation). Both paths are valid — Kanban adds task tracking and audit trails.
+
+**Standalone remediation tools**:
+
+1. Generate remediation plan → Tool: `compliance_generate_plan`
+2. Remediate finding → Tool: `compliance_remediate`
+3. Validate fix → Tool: `compliance_validate_remediation`
+
+**Kanban-managed remediation tools**:
+
+4. View assigned tasks → Tool: `kanban_task_list`
+5. Fix findings → Tool: `kanban_remediate_task`
+6. Validate fixes → Tool: `kanban_task_validate`
+7. Collect evidence → Tool: `kanban_collect_evidence`
+
+**Natural Language Queries**:
+
+> **"Generate a remediation plan for subscription {sub-id}"** → `compliance_generate_plan` — prioritized plan across findings
+
+> **"Remediate finding {finding-id} with dry run"** → `compliance_remediate` — preview fix before applying
+
+> **"Validate remediation for finding {finding-id}"** → `compliance_validate_remediation` — re-scan to confirm fix
+
+> **"Show my assigned remediation tasks"** → `kanban_task_list` — filtered to assigned user
+
+> **"Fix task REM-005 with dry run first"** → `kanban_remediate_task` — preview before applying
+
+> **"Validate task REM-005"** → `kanban_task_validate` — re-scan to verify remediation
+
+---
+
+## Typical SCA Assessment Cycle
+
+```
+ 1. compliance_assess              ← ISSO runs automated scan (quick/policy/full)
+ 2. compliance_collect_evidence    ← ISSO collects evidence from Azure
+ 3. compliance_assess_control      ← SCA formally assesses each control (batch)
+ 4. compliance_take_snapshot       ← SCA snapshots current state
+ 5. compliance_verify_evidence     ← SCA spot-checks evidence integrity
+ 6. compliance_check_evidence_completeness ← SCA verifies coverage
+ 7. compliance_generate_sar        ← SCA generates SAR
+    ── (Remediation occurs) ──
+ 8. compliance_assess              ← ISSO re-runs automated scan
+ 9. compliance_assess_control      ← SCA re-assesses remediated controls
+10. compliance_take_snapshot       ← SCA snapshots after remediation
+11. compliance_compare_snapshots   ← SCA shows improvement
+12. compliance_generate_sar        ← SCA produces updated SAR for AO
+13. compliance_generate_rar        ← SCA/ISSM produces final RAR
+```
+
+---
+
+## Documents Produced
+
+| Document | Owner | Format | Gate Dependency |
+|----------|-------|--------|----------------|
+| Security Assessment Report (SAR) | SCA | Markdown | Advisory (Assess → Authorize) |
+| Risk Assessment Report (RAR) | SCA / ISSM | Markdown | Advisory |
+| Plan of Action & Milestones (POA&M) | ISSM | Markdown | Informational |
+| Assessment Snapshots | SCA | Immutable records | Informational |
+
+---
+
+## Phase Gates
+
+| Gate | Condition | Checked By |
+|------|-----------|-----------|
+| Advisory | No hard block — advancement allowed regardless of assessment completion | `compliance_advance_rmf_step` |
+
+---
+
+## Transition to Next Phase
+
+| Trigger | From Phase | To Phase | Handoff |
+|---------|-----------|----------|---------|
+| `compliance_advance_rmf_step` (advisory gate) | Assess | Authorize | SAR, RAR, POA&M bundled for AO decision |
+
+---
+
+## See Also
+
+- [Previous Phase: Implement](implement.md)
+- [Next Phase: Authorize](authorize.md)
+- [SCA Guide](../guides/sca-guide.md) — Full SCA assessment workflow
+- [ISSO Guide](../personas/isso.md) — Evidence collection and remediation
+- [Remediation Kanban Guide](../guides/remediation-kanban.md) — Task management

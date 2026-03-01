@@ -1,0 +1,113 @@
+site_name: ATO Copilot Documentation
+site_description: Comprehensive user documentation for ATO Copilot — AI-powered NIST RMF compliance assistant
+site_url: ""
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - toc.integrate
+    - content.tabs.link
+    - search.suggest
+    - search.highlight
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+use_directory_urls: false
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+  - attr_list
+  - def_list
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Overview: getting-started/index.md
+    - ISSM: getting-started/issm.md
+    - ISSO: getting-started/isso.md
+    - SCA: getting-started/sca.md
+    - AO: getting-started/ao.md
+    - Engineer: getting-started/engineer.md
+  - Personas:
+    - Overview: personas/index.md
+    - ISSM Guide: guides/issm-guide.md
+    - ISSO Guide: personas/isso.md
+    - SCA Guide: guides/sca-guide.md
+    - AO Guide: guides/ao-quick-reference.md
+    - Engineer Guide: guides/engineer-guide.md
+    - Administrator: personas/administrator.md
+  - RMF Phases:
+    - Overview: rmf-phases/index.md
+    - Prepare: rmf-phases/prepare.md
+    - Categorize: rmf-phases/categorize.md
+    - Select: rmf-phases/select.md
+    - Implement: rmf-phases/implement.md
+    - Assess: rmf-phases/assess.md
+    - Authorize: rmf-phases/authorize.md
+    - Monitor: rmf-phases/monitor.md
+  - Guides:
+    - Compliance Watch: guides/compliance-watch.md
+    - Remediation Kanban: guides/remediation-kanban.md
+    - Portfolio Management: guides/portfolio-management.md
+    - Document Catalog: guides/document-catalog.md
+    - NL Query Reference: guides/nl-query-reference.md
+    - Teams Bot: guides/teams-bot-guide.md
+    - Chat App: guides/chat-app.md
+    - Knowledge Base: guides/knowledgebase.md
+  - Reference:
+    - Glossary: reference/glossary.md
+    - Tool Inventory: reference/tool-inventory.md
+    - Troubleshooting: reference/troubleshooting.md
+    - Quick Reference Cards: reference/quick-reference-cards.md
+    - RMF Process: reference/rmf-process.md
+    - NIST Controls: reference/nist-controls.md
+    - NIST Coverage: reference/nist-coverage.md
+    - Impact Levels: reference/impact-levels.md
+    - STIG Coverage: reference/stig-coverage.md
+  - Scenarios:
+    - Full RMF Lifecycle: scenarios/full-lifecycle.md
+  - Developer:
+    - Code Style: dev/code-style.md
+    - Contributing: dev/contributing.md
+    - Testing: dev/testing.md
+    - Release: dev/release.md
+  - Architecture:
+    - Overview: architecture/overview.md
+    - Data Model: architecture/data-model.md
+    - Agent & Tool Catalog: architecture/agent-tool-catalog.md
+    - RMF Step Map: architecture/rmf-step-map.md
+    - Security: architecture/security.md
+  - API:
+    - MCP Server: api/mcp-server.md
+    - VS Code Extension: api/vscode-extension.md
+  - Deployment: deployment.md
