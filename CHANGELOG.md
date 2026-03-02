@@ -4,6 +4,37 @@ All notable changes to ATO Copilot are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.0] - 2026-03-01
+
+### Added
+
+#### Feature 016: AI-Powered Agent Intelligence
+
+- **Intelligent Tool Selection** — `BaseAgent.SelectToolsForMessage()` dynamically selects relevant tools per request, keeping within OpenAI's 128-tool limit (selects ~72 from 130 available based on message keywords and core compliance prefixes)
+- **Tool Category Routing** — `ToolCategoryKeywords` maps tool prefixes (`kanban_`, `cac_`, `pim_`, `jit_`, `watch_`) to message keywords for context-aware tool inclusion; `AlwaysIncludePrefixes` ensures 20 core compliance prefixes are always available
+- **Multi-Turn Conversation Support** — Enhanced system prompt instructs the AI to immediately execute tools when users provide requested data on follow-up turns, eliminating "I will route your request" non-actions
+- **System Name Resolution** — AI automatically calls `compliance_list_systems` to resolve human-friendly system names (e.g., "Eagle Eye") to UUIDs before executing dependent tool calls
+- **AI Path Suggestion Buttons** — `TryProcessWithAiAsync` now populates `Suggestions` via `BuildSuggestions()` so quick-action buttons appear on AI-generated responses
+- **VS Code Chat Participant Icon** — Added `iconPath` to `package.json` chatParticipants definition for proper ATO Copilot branding in VS Code chat
+
+### Changed
+
+- **BaseAgent.BuildToolDefinitions** — Now accepts optional `message` parameter to enable context-aware tool filtering when tool count exceeds `MaxToolsPerRequest` (128)
+- **ComplianceAgent AI Response Path** — AI responses now include contextual follow-up suggestions matching the keyword routing path behavior
+
+### Fixed
+
+- **OpenAI 400 Error** — Resolved HTTP 400 "Expected maximum length 128, but got 130" by adding intelligent tool selection that caps tool definitions per request
+- **Duplicate Attribution Text** — Removed explicit "Processed by: Compliance Agent" rendering in VS Code extension; agent context is conveyed through the Tools Used summary table
+- **Missing Suggestion Buttons** — AI path responses now include suggestion buttons (`Register a New System`, `Define Authorization Boundary`, `Assign RMF Roles`, etc.)
+- **Multi-Turn Tool Execution** — AI no longer summarizes user input back or says "I will route" on follow-up turns; directly executes the appropriate tool with gathered parameters
+
+### Documentation
+
+- **User Documentation** — Feature 016 user guide with mkdocs (`mkdocs build --strict` passing)
+
+---
+
 ## [1.16.0] - 2026-02-20
 
 ### Added
