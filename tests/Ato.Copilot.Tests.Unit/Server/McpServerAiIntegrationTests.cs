@@ -76,6 +76,7 @@ public class McpServerAiIntegrationTests
             configAgent,
             configTool,
             orchestrator,
+            Enumerable.Empty<BaseTool>(),
             Mock.Of<IHttpContextAccessor>(),
             Mock.Of<ILogger<McpServer>>());
     }
@@ -273,6 +274,7 @@ public class McpServerAiIntegrationTests
             new WatchListAutoRemediationRulesTool(w, Mock.Of<ILogger<WatchListAutoRemediationRulesTool>>()),
             new NistControlSearchTool(n, Mock.Of<ILogger<NistControlSearchTool>>()),
             new NistControlExplainerTool(n, Mock.Of<ILogger<NistControlExplainerTool>>()),
+            Enumerable.Empty<BaseTool>(),
             new InMemoryDbContextFactory(dbOptions("Main")),
             sf,
             Mock.Of<ILogger<ComplianceAgent>>(),

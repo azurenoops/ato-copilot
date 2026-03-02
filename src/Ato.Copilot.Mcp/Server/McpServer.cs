@@ -24,6 +24,7 @@ public class McpServer
     private readonly ConfigurationAgent _configurationAgent;
     private readonly ConfigurationTool _configurationTool;
     private readonly AgentOrchestrator _orchestrator;
+    private readonly IEnumerable<BaseTool> _allTools;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<McpServer> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
@@ -35,6 +36,7 @@ public class McpServer
         ConfigurationAgent configurationAgent,
         ConfigurationTool configurationTool,
         AgentOrchestrator orchestrator,
+        IEnumerable<BaseTool> allTools,
         IHttpContextAccessor httpContextAccessor,
         ILogger<McpServer> logger)
     {
@@ -44,6 +46,7 @@ public class McpServer
         _configurationAgent = configurationAgent;
         _configurationTool = configurationTool;
         _orchestrator = orchestrator;
+        _allTools = allTools;
         _httpContextAccessor = httpContextAccessor;
         _logger = logger;
         _jsonOptions = new JsonSerializerOptions
@@ -166,7 +169,7 @@ public class McpServer
                     ExecutionTimeMs = t.ExecutionTimeMs
                 }).ToList(),
                 // T014: Map enrichment fields from AgentResponse
-                Suggestions = response.Suggestions,
+                SuggestedActions = response.Suggestions,
                 RequiresFollowUp = response.RequiresFollowUp,
                 FollowUpPrompt = response.FollowUpPrompt,
                 MissingFields = response.MissingFields,
@@ -324,7 +327,7 @@ public class McpServer
                 Success = t.Success,
                 ExecutionTimeMs = t.ExecutionTimeMs
             }).ToList(),
-            Suggestions = response.Suggestions,
+            SuggestedActions = response.Suggestions,
             RequiresFollowUp = response.RequiresFollowUp,
             FollowUpPrompt = response.FollowUpPrompt,
             MissingFields = response.MissingFields,
@@ -424,252 +427,24 @@ public class McpServer
 
     private McpResponse HandleToolsList(McpRequest request)
     {
-        var tools = new List<McpTool>();
-
-        // Compliance Assessment Tools
-        tools.Add(CreateTool("compliance_assess", "Run a NIST 800-53 compliance assessment against Azure resources. Supports scan types: quick (fast summary), policy (Azure Policy with NIST mapping), full (deep scan with remediation).", new
-        {
-            type = "object",
-            properties = new
-            {
-                subscription_id = new { type = "string", description = "Azure subscription ID" },
-                resource_group = new { type = "string", description = "Optional resource group filter" },
-                impact_level = new { type = "string", description = "FIPS 199 impact level: Low, Moderate, or High" },
-                scan_type = new { type = "string", description = "Scan type: quick, policy, or full" },
-                control_families = new { type = "array", items = new { type = "string" }, description = "Control families to assess (e.g., AC, AU, IA)" }
-            },
-            required = new[] { "subscription_id" }
-        }));
-
-        tools.Add(CreateTool("compliance_get_control_family", "Get detailed information about a NIST 800-53 control family including controls, descriptions, and Azure implementation guidance", new
-        {
-            type = "object",
-            properties = new
-            {
-                family = new { type = "string", description = "Control family (e.g., AC, AU, IA, CM, SC)" },
-                impact_level = new { type = "string", description = "FIPS 199 impact level" }
-            },
-            required = new[] { "family" }
-        }));
-
-        tools.Add(CreateTool("compliance_generate_document", "Generate compliance documentation (SSP, POA&M, SAR) for FedRAMP/ATO authorization", new
-        {
-            type = "object",
-            properties = new
-            {
-                document_type = new { type = "string", description = "Document type: ssp, poam, sar, or assessment" },
-                system_name = new { type = "string", description = "System name" },
-                subscription_id = new { type = "string", description = "Azure subscription for evidence" }
-            },
-            required = new[] { "document_type", "system_name" }
-        }));
-
-        tools.Add(CreateTool("compliance_collect_evidence", "Collect compliance evidence from Azure resources for audit documentation", new
-        {
-            type = "object",
-            properties = new
-            {
-                control_id = new { type = "string", description = "NIST control ID (e.g., AC-2, AU-3)" },
-                subscription_id = new { type = "string", description = "Azure subscription ID" }
-            },
-            required = new[] { "control_id", "subscription_id" }
-        }));
-
-        tools.Add(CreateTool("compliance_remediate", "Remediate a compliance finding with guided or automated fixes", new
-        {
-            type = "object",
-            properties = new
-            {
-                finding_id = new { type = "string", description = "Finding ID to remediate" },
-                auto_fix = new { type = "boolean", description = "Apply fix automatically" },
-                dry_run = new { type = "boolean", description = "Preview without applying (default: true)" }
-            },
-            required = new[] { "finding_id" }
-        }));
-
-        tools.Add(CreateTool("compliance_validate_remediation", "Validate that a remediation was successfully applied", new
-        {
-            type = "object",
-            properties = new
-            {
-                finding_id = new { type = "string", description = "Finding ID to validate" },
-                execution_id = new { type = "string", description = "Execution ID from remediation" }
-            },
-            required = new[] { "finding_id" }
-        }));
-
-        tools.Add(CreateTool("compliance_generate_plan", "Generate a prioritized remediation plan for compliance findings", new
-        {
-            type = "object",
-            properties = new
-            {
-                subscription_id = new { type = "string", description = "Azure subscription" },
-                resource_group = new { type = "string", description = "Resource group filter" }
-            },
-            required = Array.Empty<string>()
-        }));
-
-        tools.Add(CreateTool("compliance_audit_log", "Get the audit trail of compliance assessments", new
-        {
-            type = "object",
-            properties = new
-            {
-                subscription_id = new { type = "string", description = "Azure subscription" },
-                days = new { type = "integer", description = "Days to look back (default: 7)" }
-            },
-            required = Array.Empty<string>()
-        }));
-
-        tools.Add(CreateTool("compliance_history", "Get compliance history and trends over time", new
-        {
-            type = "object",
-            properties = new
-            {
-                subscription_id = new { type = "string", description = "Azure subscription" },
-                days = new { type = "integer", description = "Days to look back (default: 30)" }
-            },
-            required = Array.Empty<string>()
-        }));
-
-        tools.Add(CreateTool("compliance_status", "Get current compliance status and posture summary", new
-        {
-            type = "object",
-            properties = new
-            {
-                subscription_id = new { type = "string", description = "Azure subscription" },
-                framework = new { type = "string", description = "Compliance framework" }
-            },
-            required = Array.Empty<string>()
-        }));
-
-        tools.Add(CreateTool("compliance_monitoring", "Query continuous compliance monitoring: status, scan, alerts, trend", new
-        {
-            type = "object",
-            properties = new
-            {
-                action = new { type = "string", description = "Action: status, scan, alerts, acknowledge, trend, history" },
-                subscription_id = new { type = "string", description = "Azure subscription" },
-                days = new { type = "integer", description = "Days to look back (default: 30)" }
-            },
-            required = new[] { "action" }
-        }));
-
-        // Chat tool for natural language processing
-        tools.Add(CreateTool("compliance_chat", "Process compliance requests through the AI compliance agent for natural language interaction", new
-        {
-            type = "object",
-            properties = new
-            {
-                message = new { type = "string", description = "The compliance question or request" },
-                conversation_id = new { type = "string", description = "Optional conversation ID for context" }
-            },
-            required = new[] { "message" }
-        }));
-
-        // Configuration Management Tool
-        tools.Add(CreateTool("configuration_manage", "Manage ATO Copilot settings: subscription, framework, baseline, and preferences", new
-        {
-            type = "object",
-            properties = new
-            {
-                action = new { type = "string", description = "Action: get_configuration, set_subscription, set_framework, set_baseline, set_preference" },
-                subscriptionId = new { type = "string", description = "Azure subscription GUID (for set_subscription)" },
-                framework = new { type = "string", description = "Compliance framework: NIST80053, FedRAMPHigh, FedRAMPModerate, DoDIL5 (for set_framework)" },
-                baseline = new { type = "string", description = "Security baseline: Low, Moderate, High (for set_baseline)" },
-                preferenceName = new { type = "string", description = "Preference name (for set_preference)" },
-                preferenceValue = new { type = "string", description = "Preference value (for set_preference)" }
-            },
-            required = new[] { "action" }
-        }));
-
-        // Configuration Chat Tool
-        tools.Add(CreateTool("configuration_chat", "Process configuration requests through the AI configuration agent for natural language interaction", new
-        {
-            type = "object",
-            properties = new
-            {
-                message = new { type = "string", description = "The configuration question or request" },
-                conversation_id = new { type = "string", description = "Optional conversation ID for context" }
-            },
-            required = new[] { "message" }
-        }));
-
-        // KnowledgeBase Tools
-        tools.Add(CreateTool("kb_explain_nist_control", "Explain a NIST 800-53 control with description, supplemental guidance, Azure implementation advice, and related controls. Educational/informational only.", new
-        {
-            type = "object",
-            properties = new
-            {
-                control_id = new { type = "string", description = "NIST 800-53 control ID (e.g., AC-2, SI-3, AU-6(1))" }
-            },
-            required = new[] { "control_id" }
-        }));
-
-        tools.Add(CreateTool("kb_search_nist_controls", "Search NIST 800-53 controls by keyword or topic with optional family filtering. Returns matching control IDs, titles, and descriptions.", new
-        {
-            type = "object",
-            properties = new
-            {
-                search_term = new { type = "string", description = "Search term or keyword (e.g., 'encryption', 'access control')" },
-                family = new { type = "string", description = "Optional control family filter (e.g., AC, AU, SC)" },
-                max_results = new { type = "integer", description = "Maximum number of results to return (default: 10)" }
-            },
-            required = new[] { "search_term" }
-        }));
-
-        tools.Add(CreateTool("kb_explain_stig", "Explain a DISA STIG finding with severity, check/fix text, NIST 800-53 control mappings, CCI references, and Azure implementation guidance. Educational/informational only.", new
-        {
-            type = "object",
-            properties = new
-            {
-                stig_id = new { type = "string", description = "STIG identifier (e.g., V-12345, SV-12345r1)" }
-            },
-            required = new[] { "stig_id" }
-        }));
-
-        tools.Add(CreateTool("kb_search_stigs", "Search DISA STIG findings by keyword and/or severity. Severity accepts: high/cat1/cati, medium/cat2/catii, low/cat3/catiii.", new
-        {
-            type = "object",
-            properties = new
-            {
-                search_term = new { type = "string", description = "Search keyword or topic" },
-                severity = new { type = "string", description = "Optional severity filter: high/cat1, medium/cat2, low/cat3" },
-                max_results = new { type = "integer", description = "Maximum number of results (default: 10)" }
-            },
-            required = new[] { "search_term" }
-        }));
-
-        tools.Add(CreateTool("kb_explain_rmf", "Explain the Risk Management Framework (RMF) process, individual steps, service-specific guidance, DoD instructions, and authorization workflows.", new
-        {
-            type = "object",
-            properties = new
-            {
-                topic = new { type = "string", description = "Topic: 'overview', 'step', 'service', 'deliverables', 'instruction', 'workflow'" },
-                step_number = new { type = "integer", description = "RMF step number (1-6) when topic is 'step'" },
-                organization = new { type = "string", description = "Service branch (Navy, Army, Air Force) for 'service' or 'workflow' topics" },
-                instruction_id = new { type = "string", description = "DoD instruction ID (e.g., 'DoDI 8510.01') for 'instruction' topic" }
-            }
-        }));
-
-        tools.Add(CreateTool("kb_explain_impact_level", "Explain DoD Impact Levels (IL2-IL6) and FedRAMP baselines with data classification, security requirements, Azure guidance, and comparison tables.", new
-        {
-            type = "object",
-            properties = new
-            {
-                level = new { type = "string", description = "Impact level (e.g., 'IL5', 'IL-5', '5') or FedRAMP baseline (e.g., 'FedRAMP-High', 'High'). Use 'compare' or 'all' for comparison table." }
-            },
-            required = new[] { "level" }
-        }));
-
-        tools.Add(CreateTool("kb_get_fedramp_template_guidance", "Get FedRAMP authorization package template guidance including SSP sections, POA&M field definitions, CRM/ConMon requirements, and Azure integration mappings.", new
-        {
-            type = "object",
-            properties = new
-            {
-                template_type = new { type = "string", description = "Template type: 'SSP', 'POAM' (or 'POA&M'), 'CRM' (or 'CONMON'). Omit for package overview." },
-                baseline = new { type = "string", description = "FedRAMP baseline: 'Low', 'Moderate', 'High' (default: 'High')." }
-            }
-        }));
+        // Dynamically generate tool list from all registered BaseTool instances
+        var tools = _allTools
+            .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(t => CreateTool(
+                t.Name,
+                t.Description,
+                new
+                {
+                    type = "object",
+                    properties = t.Parameters.ToDictionary(
+                        p => p.Key,
+                        p => new { type = p.Value.Type, description = p.Value.Description }),
+                    required = t.Parameters
+                        .Where(p => p.Value.Required)
+                        .Select(p => p.Key)
+                        .ToArray()
+                }))
+            .ToList();
 
         return new McpResponse { Id = request.Id, Result = new { tools } };
     }
@@ -797,7 +572,8 @@ public class McpServer
                     GetArg<string>(args, "template_type"),
                     GetArg<string>(args, "baseline")),
 
-                _ => $"Unknown tool: {toolName}"
+                // Fallback: dynamically route to any registered BaseTool by name
+                _ => await ExecuteDynamicToolAsync(toolName, args)
             };
 
             return McpToolResult.Success(result);
@@ -813,6 +589,26 @@ public class McpServer
     {
         var result = await ProcessChatRequestAsync(message, conversationId);
         return result.Response;
+    }
+
+    /// <summary>
+    /// Dynamically routes a tool call to a registered BaseTool instance by name.
+    /// Used as a fallback for tools not in the hardcoded dispatch table
+    /// (e.g., RMF, ConMon, eMASS, Document Template tools from Feature 015).
+    /// </summary>
+    private async Task<string> ExecuteDynamicToolAsync(string toolName, Dictionary<string, object> args)
+    {
+        var tool = _allTools.FirstOrDefault(t =>
+            string.Equals(t.Name, toolName, StringComparison.OrdinalIgnoreCase));
+
+        if (tool == null)
+            return $"Unknown tool: {toolName}";
+
+        var nullableArgs = args.ToDictionary(
+            kvp => kvp.Key,
+            kvp => (object?)kvp.Value);
+
+        return await tool.ExecuteAsync(nullableArgs);
     }
 
     private async Task<string> ExecuteConfigurationToolAsync(Dictionary<string, object> args)

@@ -154,10 +154,23 @@ public class ConfigurationAgent : BaseAgent
             // T022d: Contextual follow-up suggestions (FR-007d)
             Suggestions = action switch
             {
-                "get_configuration" => new List<string> { "Update framework", "Change subscription", "Run compliance assessment" },
+                "get_configuration" => new List<AgentSuggestedAction>
+                {
+                    new("Update Framework", "Update framework"),
+                    new("Change Subscription", "Change subscription"),
+                    new("Run Assessment", "Run compliance assessment")
+                },
                 "set_subscription" or "set_framework" or "set_baseline" =>
-                    new List<string> { "Show current settings", "Run compliance assessment" },
-                _ => new List<string> { "Show current settings", "Run compliance assessment" }
+                    new List<AgentSuggestedAction>
+                    {
+                        new("Show Current Settings", "Show current settings"),
+                        new("Run Assessment", "Run compliance assessment")
+                    },
+                _ => new List<AgentSuggestedAction>
+                {
+                    new("Show Current Settings", "Show current settings"),
+                    new("Run Assessment", "Run compliance assessment")
+                }
             }
         };
     }

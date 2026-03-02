@@ -41,7 +41,7 @@ public class ComplianceWatchIntegrationTests : IDisposable
         _db = new AtoCopilotContext(options);
         _dbFactory = new TestDbContextFactory(options);
         var alertOptions = Options.Create(new AlertOptions());
-        _alertManager = new AlertManager(_dbFactory, alertOptions, Mock.Of<ILogger<AlertManager>>());
+        _alertManager = new AlertManager(_dbFactory, alertOptions, Mock.Of<ILogger<AlertManager>>(), Mock.Of<IServiceProvider>());
 
         _showAlertsTool = new WatchShowAlertsTool(_alertManager, Mock.Of<ILogger<WatchShowAlertsTool>>());
         _getAlertTool = new WatchGetAlertTool(_alertManager, Mock.Of<ILogger<WatchGetAlertTool>>());

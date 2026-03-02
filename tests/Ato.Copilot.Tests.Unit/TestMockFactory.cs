@@ -93,11 +93,12 @@ internal static class TestMockFactory
             /* 69  watchListAutoRemed      */ null!,
             /* 70  nistControlSearch       */ null!,
             /* 71  nistControlExplainer    */ null!,
-            /* 72  dbFactory               */ null!,
-            /* 73  scopeFactory            */ null!,
-            /* 74  logger                  */ Mock.Of<ILogger<ComplianceAgent>>(),
-            /* 75  chatClient (optional)   */ (object?)null,
-            /* 76  aiOptions (optional)    */ (object?)null
+            /* 72  allRegisteredTools      */ Enumerable.Empty<BaseTool>(),
+            /* 73  dbFactory               */ null!,
+            /* 74  scopeFactory            */ null!,
+            /* 75  logger                  */ Mock.Of<ILogger<ComplianceAgent>>(),
+            /* 76  chatClient (optional)   */ (object?)null,
+            /* 77  aiOptions (optional)    */ (object?)null
         );
 
         mock.Setup(a => a.AgentId).Returns("compliance-agent");

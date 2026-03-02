@@ -61,6 +61,19 @@ export function activate(context: vscode.ExtensionContext): void {
     )
   );
 
+  // Follow-up suggestion command — wired to suggestion buttons in chat responses
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "ato.followUpSuggestion",
+      async (prompt: string) => {
+        await vscode.commands.executeCommand("workbench.action.chat.open", {
+          query: `@ato ${prompt}`,
+          isPartialQuery: false,
+        });
+      }
+    )
+  );
+
   // Save template internal command (for stream.button() actions)
   context.subscriptions.push(
     vscode.commands.registerCommand(

@@ -4,7 +4,7 @@ All notable changes to ATO Copilot are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.16.0] - 2025-01-15
+## [1.16.0] - 2026-02-20
 
 ### Added
 
@@ -22,7 +22,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **27 New Unit Tests** — AlertManager notification (4), SystemSubscriptionResolver (7), ConMon report enrichment (4), ConMon alert pipeline (7), drift significant change (3), plus integration test coverage (T235, T239, T243, T247, T250)
 - **Documentation Updates** — monitoring pipeline ASCII diagram in `overview.md`, Phase 17 enhancement notes in `agent-tool-catalog.md` and `issm-guide.md` (T251)
 
-## [1.15.0] - 2025-01-15
+## [1.15.0] - 2026-02-15
 
 ### Added
 
@@ -92,85 +92,85 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-## [1.14.0] - 2024-12-15
+## [1.14.0] - 2026-1-15
 
 ### Added
 
 - Feature 014: Agent UI Enrichment — rich tool output formatting and Adaptive Card rendering
 
-## [1.13.0] - 2024-12-01
+## [1.13.0] - 2026-1-12
 
 ### Added
 
 - Feature 013: Copilot Everywhere — multi-channel deployment (VS Code, Teams, CLI)
 
-## [1.12.0] - 2024-11-15
+## [1.12.0] - 2026-1-10
 
 ### Added
 
 - Feature 012: Task Enrichment — Kanban task scripts, validation, and remediation integration
 
-## [1.11.0] - 2024-11-01
+## [1.11.0] - 2026-1-07
 
 ### Added
 
 - Feature 011: Azure OpenAI Agents SDK integration
 
-## [1.10.0] - 2024-10-15
+## [1.10.0] - 2026-1-07
 
 ### Added
 
 - Feature 010: Knowledge Base Agent — RMF, STIG, DoD, impact level services
 
-## [1.9.0] - 2024-10-01
+## [1.9.0] - 2026-1-05
 
 ### Added
 
 - Feature 009: Remediation Engine v2 — AI-powered remediation planning and script execution
 
-## [1.8.0] - 2024-09-15
+## [1.8.0] - 2026-1-05
 
 ### Added
 
 - Feature 008: Compliance Engine — automated scanning, evidence collection, assessment persistence
 
-## [1.7.0] - 2024-09-01
+## [1.7.0] - 2026-1-05
 
 ### Added
 
 - Feature 007: NIST Controls Service — 800-53 Rev 5 catalog with baseline selection
 
-## [1.6.0] - 2024-08-15
+## [1.6.0] - 2026-1-05
 
 ### Added
 
 - Feature 006: Chat Application — web-based chat interface with conversation management
 
-## [1.5.0] - 2024-08-01
+## [1.5.0] - 2026-1-05
 
 ### Added
 
 - Feature 005: Compliance Watch — real-time monitoring, alerting, and auto-remediation rules
 
-## [1.4.0] - 2024-07-15
+## [1.4.0] - 2026-1-05
 
 ### Added
 
 - Feature 004: Kanban User Context — user-scoped task boards with assignment tracking
 
-## [1.3.0] - 2024-07-01
+## [1.3.0] - 2026-1-02
 
 ### Added
 
 - Feature 003: CAC Authentication & PIM — smart card auth, privileged role management, JIT access
 
-## [1.2.0] - 2024-06-15
+## [1.2.0] - 2026-1-02
 
 ### Added
 
 - Feature 002: Remediation Kanban — task board with workflow states and comment system
 
-## [1.1.0] - 2024-06-01
+## [1.1.0] - 2026-1-02
 
 ### Added
 

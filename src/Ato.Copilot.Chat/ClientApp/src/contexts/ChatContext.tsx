@@ -397,6 +397,11 @@ export function ChatProvider({ children }: ChatProviderProps) {
           });
 
           if (response.success) {
+            const meta = response.metadata || {};
+            // Inject suggestedActions into metadata for REST fallback path
+            if (response.suggestedActions?.length) {
+              meta.suggestedActions = response.suggestedActions;
+            }
             const aiMessage: ChatMessage = {
               id: response.messageId,
               conversationId: state.activeConversationId,
@@ -404,7 +409,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
               role: MessageRole.Assistant,
               timestamp: new Date().toISOString(),
               status: MessageStatus.Completed,
-              metadata: response.metadata || {},
+              metadata: meta,
               tools: response.recommendedTools || [],
             };
             dispatch({ type: 'ADD_MESSAGE', payload: aiMessage });

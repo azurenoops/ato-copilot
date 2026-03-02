@@ -57,6 +57,14 @@ public static class ChatMessageMapper
     /// <returns>Channels ChannelMessage.</returns>
     public static ChannelMessage ToChannelMessage(ChatResponse response, string conversationId)
     {
+        var metadata = response.Metadata ?? new Dictionary<string, object>();
+
+        // Inject suggestedActions into metadata so they flow through SignalR to the frontend
+        if (response.SuggestedActions is { Count: > 0 })
+        {
+            metadata["suggestedActions"] = response.SuggestedActions;
+        }
+
         return new ChannelMessage
         {
             MessageId = response.MessageId,
@@ -65,7 +73,7 @@ public static class ChatMessageMapper
             Content = response.Success ? response.Content : response.Error ?? "The request could not be processed",
             Timestamp = DateTimeOffset.UtcNow,
             IsComplete = true,
-            Metadata = response.Metadata ?? new Dictionary<string, object>()
+            Metadata = metadata
         };
     }
 

@@ -152,11 +152,25 @@ function renderFollowUp(
 
 /**
  * Render suggestion buttons as follow-up commands (FR-023).
+ * Supports both structured suggestedActions and legacy string suggestions.
  */
 function renderSuggestions(
   response: McpChatResponse,
   stream: vscode.ChatResponseStream
 ): void {
+  // Prefer structured suggestedActions (title + prompt)
+  if (response.suggestedActions?.length) {
+    for (const action of response.suggestedActions) {
+      stream.button({
+        command: "ato.followUpSuggestion",
+        title: action.title,
+        arguments: [action.prompt],
+      });
+    }
+    return;
+  }
+
+  // Fallback to legacy string suggestions
   if (!response.suggestions?.length) {
     return;
   }
@@ -211,8 +225,12 @@ export function createParticipantHandler(
     };
 
     try {
+      stream.progress("Connecting to ATO Copilot...");
+
       const response: McpChatResponse =
-        await mcpClient.sendMessage(chatRequest);
+        await mcpClient.sendMessageWithProgress(chatRequest, (step) => {
+          stream.progress(step);
+        });
 
       // Render main response as Markdown
       stream.markdown(response.response);
@@ -240,10 +258,8 @@ export function createParticipantHandler(
       // Follow-up prompt (FR-024)
       renderFollowUp(response, stream);
 
-      // Agent attribution (FR-021)
-      if (response.agentUsed) {
-        stream.markdown(`\n\n*Processed by: ${response.agentUsed}*`);
-      }
+      // Agent attribution is conveyed through the tools summary table
+      // and the response metadata — no separate text needed.
 
       // Suggestion buttons (FR-023)
       renderSuggestions(response, stream);

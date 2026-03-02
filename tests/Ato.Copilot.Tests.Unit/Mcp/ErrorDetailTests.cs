@@ -78,7 +78,7 @@ public class ErrorDetailTests
         response.FollowUpPrompt.Should().BeNull();
         response.MissingFields.Should().NotBeNull().And.BeEmpty();
         response.Data.Should().BeNull();
-        response.Suggestions.Should().NotBeNull().And.BeEmpty();
+        response.SuggestedActions.Should().NotBeNull().And.BeEmpty();
         response.RequiresFollowUp.Should().BeFalse();
     }
 }

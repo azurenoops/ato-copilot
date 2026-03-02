@@ -457,6 +457,7 @@ public class ComplianceAgentRoutingTests
             new WatchListAutoRemediationRulesTool(watchService, Mock.Of<ILogger<WatchListAutoRemediationRulesTool>>()),
             new NistControlSearchTool(nistControls, Mock.Of<ILogger<NistControlSearchTool>>()),
             new NistControlExplainerTool(nistControls, Mock.Of<ILogger<NistControlExplainerTool>>()),
+            Enumerable.Empty<BaseTool>(),
             factory,
             scopeFactory,
             logger);

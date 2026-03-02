@@ -200,6 +200,7 @@ public class ComplianceAgentTests
             watchListAutoRemediationRules,
             new NistControlSearchTool(Mock.Of<INistControlsService>(), Mock.Of<ILogger<NistControlSearchTool>>()),
             new NistControlExplainerTool(Mock.Of<INistControlsService>(), Mock.Of<ILogger<NistControlExplainerTool>>()),
+            Enumerable.Empty<BaseTool>(),
             new InMemoryDbContextFactory(
                 new DbContextOptionsBuilder<AtoCopilotContext>()
                     .UseInMemoryDatabase($"AgentTests_{Guid.NewGuid()}")

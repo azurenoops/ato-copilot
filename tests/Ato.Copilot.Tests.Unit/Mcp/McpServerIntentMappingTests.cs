@@ -91,6 +91,7 @@ public class McpServerIntentMappingTests
             (ConfigurationAgent)null!,
             null!,
             orchestrator,
+            Enumerable.Empty<BaseTool>(),
             Mock.Of<IHttpContextAccessor>(),
             Mock.Of<ILogger<McpServer>>());
     }
@@ -104,6 +105,7 @@ public class McpServerIntentMappingTests
             (ConfigurationAgent)null!,
             null!,
             _orchestrator,
+            Enumerable.Empty<BaseTool>(),
             Mock.Of<IHttpContextAccessor>(),
             Mock.Of<ILogger<McpServer>>());
     }

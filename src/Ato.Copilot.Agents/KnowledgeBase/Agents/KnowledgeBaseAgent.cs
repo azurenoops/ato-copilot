@@ -281,22 +281,24 @@ public class KnowledgeBaseAgent : BaseAgent
     /// <summary>
     /// Returns contextual follow-up suggestions based on the knowledge query type (T022c, FR-007d).
     /// </summary>
-    private static List<string> GetKnowledgeBaseSuggestions(KnowledgeQueryType queryType)
+    private static List<AgentSuggestedAction> GetKnowledgeBaseSuggestions(KnowledgeQueryType queryType)
     {
+        static AgentSuggestedAction S(string title, string? prompt = null) => new(title, prompt ?? title);
+
         return queryType switch
         {
             KnowledgeQueryType.NistControl or KnowledgeQueryType.NistSearch =>
-                new List<string> { "View related controls", "Run compliance assessment", "Show implementation guidance" },
+                new List<AgentSuggestedAction> { S("View Related Controls", "View related controls"), S("Run Assessment", "Run compliance assessment"), S("Implementation Guidance", "Show implementation guidance") },
             KnowledgeQueryType.Stig or KnowledgeQueryType.StigSearch =>
-                new List<string> { "View STIG fix guidance", "Run compliance assessment", "Show related NIST controls" },
+                new List<AgentSuggestedAction> { S("View STIG Fix Guidance", "View STIG fix guidance"), S("Run Assessment", "Run compliance assessment"), S("Related NIST Controls", "Show related NIST controls") },
             KnowledgeQueryType.Rmf =>
-                new List<string> { "View RMF step details", "Run compliance assessment", "Generate SSP document" },
+                new List<AgentSuggestedAction> { S("View RMF Step Details", "View RMF step details"), S("Register a System", "Register a new system"), S("Show RMF Status", "Show RMF status") },
             KnowledgeQueryType.ImpactLevel =>
-                new List<string> { "Compare impact levels", "View FedRAMP baseline", "Run compliance assessment" },
+                new List<AgentSuggestedAction> { S("Compare Impact Levels", "Compare impact levels"), S("View FedRAMP Baseline", "View FedRAMP baseline"), S("Run Assessment", "Run compliance assessment") },
             KnowledgeQueryType.FedRamp =>
-                new List<string> { "Generate SSP document", "View FedRAMP requirements", "Run compliance assessment" },
+                new List<AgentSuggestedAction> { S("Generate SSP", "Generate SSP document"), S("View FedRAMP Requirements", "View FedRAMP requirements"), S("Run Assessment", "Run compliance assessment") },
             _ =>
-                new List<string> { "Search NIST controls", "View compliance status", "Run compliance assessment" }
+                new List<AgentSuggestedAction> { S("Search NIST Controls", "Search NIST controls"), S("Show RMF Status", "Show RMF status"), S("Run Assessment", "Run compliance assessment") }
         };
     }
 

@@ -19,39 +19,39 @@ public class AgentResponseDataTests
     // ─── KnowledgeBaseAgent.GetKnowledgeBaseSuggestions Tests ───────────────
 
     [Theory]
-    [InlineData(KnowledgeQueryType.NistControl, "View related controls")]
-    [InlineData(KnowledgeQueryType.NistSearch, "View related controls")]
-    [InlineData(KnowledgeQueryType.Stig, "View STIG fix guidance")]
-    [InlineData(KnowledgeQueryType.StigSearch, "View STIG fix guidance")]
-    [InlineData(KnowledgeQueryType.Rmf, "View RMF step details")]
-    [InlineData(KnowledgeQueryType.ImpactLevel, "Compare impact levels")]
-    [InlineData(KnowledgeQueryType.FedRamp, "Generate SSP document")]
-    [InlineData(KnowledgeQueryType.GeneralKnowledge, "Search NIST controls")]
+    [InlineData(KnowledgeQueryType.NistControl, "View Related Controls")]
+    [InlineData(KnowledgeQueryType.NistSearch, "View Related Controls")]
+    [InlineData(KnowledgeQueryType.Stig, "View STIG Fix Guidance")]
+    [InlineData(KnowledgeQueryType.StigSearch, "View STIG Fix Guidance")]
+    [InlineData(KnowledgeQueryType.Rmf, "View RMF Step Details")]
+    [InlineData(KnowledgeQueryType.ImpactLevel, "Compare Impact Levels")]
+    [InlineData(KnowledgeQueryType.FedRamp, "Generate SSP")]
+    [InlineData(KnowledgeQueryType.GeneralKnowledge, "Search NIST Controls")]
     public void GetKnowledgeBaseSuggestions_ReturnsExpectedSuggestion(
         KnowledgeQueryType queryType, string expectedSuggestion)
     {
         var method = typeof(KnowledgeBaseAgent)
             .GetMethod("GetKnowledgeBaseSuggestions", BindingFlags.NonPublic | BindingFlags.Static)!;
 
-        var suggestions = (List<string>)method.Invoke(null, [queryType])!;
+        var suggestions = (List<AgentSuggestedAction>)method.Invoke(null, [queryType])!;
 
-        suggestions.Should().Contain(expectedSuggestion);
+        suggestions.Should().Contain(s => s.Title == expectedSuggestion);
         suggestions.Should().HaveCountGreaterThanOrEqualTo(2);
     }
 
     [Theory]
     [InlineData(KnowledgeQueryType.NistControl)]
     [InlineData(KnowledgeQueryType.Stig)]
-    [InlineData(KnowledgeQueryType.Rmf)]
+    [InlineData(KnowledgeQueryType.ImpactLevel)]
     [InlineData(KnowledgeQueryType.FedRamp)]
     public void GetKnowledgeBaseSuggestions_AlwaysContainsAssessmentSuggestion(KnowledgeQueryType queryType)
     {
         var method = typeof(KnowledgeBaseAgent)
             .GetMethod("GetKnowledgeBaseSuggestions", BindingFlags.NonPublic | BindingFlags.Static)!;
 
-        var suggestions = (List<string>)method.Invoke(null, [queryType])!;
+        var suggestions = (List<AgentSuggestedAction>)method.Invoke(null, [queryType])!;
 
-        suggestions.Should().Contain("Run compliance assessment");
+        suggestions.Should().Contain(s => s.Title == "Run Assessment");
     }
 
     // ─── AgentResponse Defaults Tests ──────────────────────────────────────
@@ -74,14 +74,14 @@ public class AgentResponseDataTests
     {
         var response = new AgentResponse
         {
-            Suggestions = new List<string> { "Do something" },
+            Suggestions = new List<AgentSuggestedAction> { new("Do something") },
             RequiresFollowUp = true,
             FollowUpPrompt = "What framework?",
             MissingFields = new List<string> { "framework" },
             ResponseData = new Dictionary<string, object> { ["type"] = "test" }
         };
 
-        response.Suggestions.Should().ContainSingle().Which.Should().Be("Do something");
+        response.Suggestions.Should().ContainSingle().Which.Title.Should().Be("Do something");
         response.RequiresFollowUp.Should().BeTrue();
         response.FollowUpPrompt.Should().Be("What framework?");
         response.MissingFields.Should().ContainSingle().Which.Should().Be("framework");

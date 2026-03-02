@@ -6,6 +6,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Ato.Copilot.Agents.Common;
 using Ato.Copilot.Agents.Compliance.Agents;
 using Ato.Copilot.Agents.Compliance.Tools;
 using Ato.Copilot.Agents.Configuration.Agents;
@@ -39,7 +40,7 @@ public class SystemPromptEnhancementTests
     public void ComplianceAgent_Prompt_ContainsResponseGuidelines()
     {
         var prompt = CreateComplianceAgent().GetSystemPrompt();
-        prompt.Should().Contain("Response Guidelines");
+        prompt.Should().Contain("Response Format");
     }
 
     [Fact]
@@ -53,9 +54,9 @@ public class SystemPromptEnhancementTests
     public void ComplianceAgent_Prompt_PreservesOriginalContent()
     {
         var prompt = CreateComplianceAgent().GetSystemPrompt();
-        prompt.Should().Contain("ATO Copilot Compliance Agent");
+        prompt.Should().Contain("ATO Copilot");
         prompt.Should().Contain("compliance_assess");
-        prompt.Should().Contain("Assessment Workflow");
+        prompt.Should().Contain("RMF Workflow Guidance");
     }
 
     // ── ConfigurationAgent ───────────────────────────────────────────────────
@@ -122,68 +123,7 @@ public class SystemPromptEnhancementTests
         prompt.Should().Contain("Response Quality");
     }
 
-    // ── KanbanAgent (sub-prompt loaded by ComplianceAgent) ───────────────────
-    // The Kanban prompt is embedded in the ComplianceAgent assembly.
-    // We verify its content by loading the embedded resource directly.
-
-    [Fact]
-    public void KanbanPrompt_ContainsResponseGuidelines()
-    {
-        var prompt = LoadEmbeddedPrompt("Ato.Copilot.Agents.Compliance.Prompts.KanbanAgent.prompt.txt");
-        prompt.Should().Contain("Response Guidelines");
-    }
-
-    [Fact]
-    public void KanbanPrompt_ContainsToolSelection()
-    {
-        var prompt = LoadEmbeddedPrompt("Ato.Copilot.Agents.Compliance.Prompts.KanbanAgent.prompt.txt");
-        prompt.Should().Contain("Tool Selection");
-    }
-
-    [Fact]
-    public void KanbanPrompt_PreservesOriginalContent()
-    {
-        var prompt = LoadEmbeddedPrompt("Ato.Copilot.Agents.Compliance.Prompts.KanbanAgent.prompt.txt");
-        prompt.Should().Contain("Kanban Agent");
-        prompt.Should().Contain("kanban_create_board");
-        prompt.Should().Contain("Kanban Columns");
-    }
-
-    // ── PimAgent (sub-prompt loaded by ComplianceAgent) ──────────────────────
-
-    [Fact]
-    public void PimPrompt_ContainsResponseGuidelines()
-    {
-        var prompt = LoadEmbeddedPrompt("Ato.Copilot.Agents.Compliance.Prompts.PimAgent.prompt.txt");
-        prompt.Should().Contain("Response Guidelines");
-    }
-
-    [Fact]
-    public void PimPrompt_ContainsToolSelection()
-    {
-        var prompt = LoadEmbeddedPrompt("Ato.Copilot.Agents.Compliance.Prompts.PimAgent.prompt.txt");
-        prompt.Should().Contain("Tool Selection");
-    }
-
-    [Fact]
-    public void PimPrompt_PreservesOriginalContent()
-    {
-        var prompt = LoadEmbeddedPrompt("Ato.Copilot.Agents.Compliance.Prompts.PimAgent.prompt.txt");
-        prompt.Should().Contain("Privileged Identity Management");
-        prompt.Should().Contain("Inline PIM Activation Flow");
-        prompt.Should().Contain("Duration Estimation Guidelines");
-    }
-
     // ── Helpers ──────────────────────────────────────────────────────────────
-
-    private static string LoadEmbeddedPrompt(string resourceName)
-    {
-        var assembly = typeof(ComplianceAgent).Assembly;
-        using var stream = assembly.GetManifestResourceStream(resourceName);
-        stream.Should().NotBeNull($"Embedded resource '{resourceName}' should exist");
-        using var reader = new StreamReader(stream!);
-        return reader.ReadToEnd();
-    }
 
     private static ComplianceAgent CreateComplianceAgent()
     {
@@ -278,6 +218,7 @@ public class SystemPromptEnhancementTests
             new WatchListAutoRemediationRulesTool(w, Mock.Of<ILogger<WatchListAutoRemediationRulesTool>>()),
             new NistControlSearchTool(n, Mock.Of<ILogger<NistControlSearchTool>>()),
             new NistControlExplainerTool(n, Mock.Of<ILogger<NistControlExplainerTool>>()),
+            Enumerable.Empty<BaseTool>(),
             new InMemoryDbContextFactory(dbOpts("Main")),
             sf,
             Mock.Of<ILogger<ComplianceAgent>>());

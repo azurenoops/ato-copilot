@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Ato.Copilot.Agents.Common;
 using Ato.Copilot.Mcp.Models;
 using System.Text.Json;
 
@@ -13,16 +14,19 @@ namespace Ato.Copilot.Mcp.Server;
 public class McpHttpBridge
 {
     private readonly McpServer _mcpServer;
+    private readonly IEnumerable<BaseTool> _tools;
     private readonly ILogger<McpHttpBridge> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
     private readonly JsonSerializerOptions _sseJsonOptions;
 
     /// <summary>Initializes a new instance of the <see cref="McpHttpBridge"/> class.</summary>
     /// <param name="mcpServer">The MCP server to delegate requests to.</param>
+    /// <param name="tools">All registered BaseTool instances for dynamic tool listing.</param>
     /// <param name="logger">Logger instance.</param>
-    public McpHttpBridge(McpServer mcpServer, ILogger<McpHttpBridge> logger)
+    public McpHttpBridge(McpServer mcpServer, IEnumerable<BaseTool> tools, ILogger<McpHttpBridge> logger)
     {
         _mcpServer = mcpServer;
+        _tools = tools;
         _logger = logger;
         _jsonOptions = new JsonSerializerOptions
         {
@@ -254,7 +258,7 @@ public class McpHttpBridge
         {
             status = overallStatus,
             service = "ATO Copilot MCP",
-            version = "1.0.0",
+            version = "1.16.0",
             timestamp = DateTime.UtcNow,
             capabilities = new[] { "compliance-assessment", "nist-800-53", "fedramp", "remediation", "evidence-collection" },
             agents = agentHealthEntries,
@@ -264,61 +268,28 @@ public class McpHttpBridge
         return Results.Json(health, _jsonOptions);
     }
 
-    /// <summary>Returns the list of available compliance tools.</summary>
+    /// <summary>Returns the list of available compliance tools (dynamically generated from registered BaseTool instances).</summary>
     private Task<IResult> HandleToolsListAsync(HttpContext context)
     {
-        var tools = new[]
-        {
-            new { name = "compliance_assess", description = "Run NIST 800-53 compliance assessment" },
-            new { name = "compliance_get_control_family", description = "Get control family details" },
-            new { name = "compliance_generate_document", description = "Generate compliance documentation" },
-            new { name = "compliance_collect_evidence", description = "Collect compliance evidence" },
-            new { name = "compliance_remediate", description = "Remediate compliance findings" },
-            new { name = "compliance_validate_remediation", description = "Validate remediations" },
-            new { name = "compliance_generate_plan", description = "Generate remediation plan" },
-            new { name = "compliance_audit_log", description = "Get assessment audit log" },
-            new { name = "compliance_history", description = "Get compliance history" },
-            new { name = "compliance_status", description = "Get compliance status" },
-            new { name = "compliance_monitoring", description = "Compliance monitoring operations" },
-            new { name = "compliance_chat", description = "Natural language compliance interaction" },
-            // CAC Authentication tools (Tier 2)
-            new { name = "cac_status", description = "Check CAC/PIV session status" },
-            new { name = "cac_sign_out", description = "Terminate CAC/PIV session" },
-            new { name = "cac_set_timeout", description = "Configure session timeout" },
-            new { name = "cac_map_certificate", description = "Map certificate to compliance role" },
-            // PIM tools (Tier 2)
-            new { name = "pim_list_eligible", description = "List eligible PIM roles" },
-            new { name = "pim_activate_role", description = "Activate a PIM role" },
-            new { name = "pim_deactivate_role", description = "Deactivate a PIM role" },
-            new { name = "pim_list_active", description = "List active PIM roles" },
-            new { name = "pim_extend_role", description = "Extend a PIM role activation" },
-            new { name = "pim_approve_request", description = "Approve a PIM activation request" },
-            new { name = "pim_deny_request", description = "Deny a PIM activation request" },
-            new { name = "pim_history", description = "Query PIM activation history" },
-            // JIT VM Access tools (Tier 2)
-            new { name = "jit_request_access", description = "Request JIT VM access" },
-            new { name = "jit_list_sessions", description = "List active JIT sessions" },
-            new { name = "jit_revoke_access", description = "Revoke JIT VM access" },
-            // Kanban tools
-            new { name = "kanban_create_board", description = "Create a remediation kanban board" },
-            new { name = "kanban_board_show", description = "Show a kanban board" },
-            new { name = "kanban_get_task", description = "Get task details" },
-            new { name = "kanban_create_task", description = "Create a remediation task" },
-            new { name = "kanban_assign_task", description = "Assign a task" },
-            new { name = "kanban_move_task", description = "Move a task between columns" },
-            new { name = "kanban_add_task_comment", description = "Add a comment to a task" },
-            new { name = "kanban_search_tasks", description = "Search tasks" },
-            new { name = "kanban_list_boards", description = "List all boards" },
-            new { name = "kanban_overdue_tasks", description = "List overdue tasks" },
-            // KnowledgeBase tools (Feature 010)
-            new { name = "kb_explain_nist_control", description = "Explain a NIST 800-53 control with Azure implementation guidance" },
-            new { name = "kb_search_nist_controls", description = "Search NIST 800-53 controls by keyword" },
-            new { name = "kb_explain_stig", description = "Explain a STIG rule with fix/check guidance" },
-            new { name = "kb_search_stigs", description = "Search STIG rules by keyword or severity" },
-            new { name = "kb_explain_rmf", description = "Explain the RMF process, steps, or DoD instructions" },
-            new { name = "kb_explain_impact_level", description = "Explain DoD impact levels (IL2-IL6) or FedRAMP baselines" },
-            new { name = "kb_get_fedramp_template_guidance", description = "Get FedRAMP authorization package template guidance" }
-        };
+        var tools = _tools
+            .Select(t => new
+            {
+                name = t.Name,
+                description = t.Description,
+                inputSchema = new
+                {
+                    type = "object",
+                    properties = t.Parameters.ToDictionary(
+                        p => p.Key,
+                        p => new { type = p.Value.Type, description = p.Value.Description }),
+                    required = t.Parameters
+                        .Where(p => p.Value.Required)
+                        .Select(p => p.Key)
+                        .ToArray()
+                }
+            })
+            .OrderBy(t => t.name)
+            .ToArray();
 
         return Task.FromResult(Results.Json(new { tools, count = tools.Length }, _jsonOptions));
     }

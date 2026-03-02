@@ -2,6 +2,7 @@ using Xunit;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -135,12 +136,16 @@ public class AlertManagerNotificationTests : IDisposable
 
     private AlertManager CreateAlertManager(IAlertNotificationService? notificationService)
     {
+        var services = new ServiceCollection();
+        if (notificationService != null)
+            services.AddSingleton(notificationService);
+        var sp = services.BuildServiceProvider();
+
         return new AlertManager(
             new TestDbContextFactory(_dbOptions),
             Options.Create(_alertOptions),
             Mock.Of<ILogger<AlertManager>>(),
-            correlationService: null,
-            notificationService: notificationService);
+            sp);
     }
 
     private static ComplianceAlert CreateTestAlert() => new()

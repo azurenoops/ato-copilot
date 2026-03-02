@@ -22,6 +22,7 @@
         "name": "ato",
         "description": "Ask about ATO compliance, NIST 800-53 controls, and infrastructure-as-code",
         "isSticky": true,
+        "iconPath": "media/icon.svg",
         "commands": [
           {
             "name": "compliance",
@@ -57,6 +58,11 @@
       {
         "command": "ato.analyzeWorkspace",
         "title": "ATO Copilot: Analyze Workspace for Compliance",
+        "category": "ATO Copilot"
+      },
+      {
+        "command": "ato.followUpSuggestion",
+        "title": "ATO Copilot: Follow-Up Suggestion",
         "category": "ATO Copilot"
       }
     ],

@@ -45,6 +45,9 @@ services:
       # ── Runtime ────────────────────────────────────────────
       - ATO_RUN_MODE=http
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
+      - ASPNETCORE_URLS=http://+:3001
+      - Logging__LogLevel__Microsoft.AspNetCore=Information
+      - Logging__LogLevel__Microsoft.Hosting=Information
 
       # ── Azure AD (skip for local testing) ──────────────────
       - ATO_AZUREAD__TENANTID=${ATO_AZUREAD__TENANTID}
@@ -81,8 +84,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 15s
+      retries: 5
+      start_period: 60s
     networks:
       - ato-network
 

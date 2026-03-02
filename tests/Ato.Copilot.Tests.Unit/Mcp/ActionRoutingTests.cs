@@ -43,6 +43,7 @@ public class ActionRoutingTests
             (ConfigurationAgent)null!,
             null!,
             _orchestrator,
+            Enumerable.Empty<BaseTool>(),
             Mock.Of<IHttpContextAccessor>(),
             Mock.Of<ILogger<McpServer>>());
     }

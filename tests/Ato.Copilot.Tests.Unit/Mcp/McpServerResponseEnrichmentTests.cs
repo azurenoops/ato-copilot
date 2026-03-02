@@ -66,13 +66,13 @@ public class McpServerResponseEnrichmentTests
                 Success = true,
                 Response = "done",
                 AgentName = "Compliance Agent",
-                Suggestions = new List<string> { "Run full assessment", "Show findings" }
+                Suggestions = new List<AgentSuggestedAction> { new("Run full assessment"), new("Show findings") }
             });
 
         var result = await CreateServer().ProcessChatRequestAsync("test");
 
-        result.Suggestions.Should().Contain("Run full assessment");
-        result.Suggestions.Should().Contain("Show findings");
+        result.SuggestedActions.Should().Contain(a => a.Title == "Run full assessment");
+        result.SuggestedActions.Should().Contain(a => a.Title == "Show findings");
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public class McpServerResponseEnrichmentTests
 
         var result = await CreateServer().ProcessChatRequestAsync("test");
 
-        result.Suggestions.Should().BeEmpty();
+        result.SuggestedActions.Should().BeEmpty();
         result.RequiresFollowUp.Should().BeFalse();
         result.FollowUpPrompt.Should().BeNull();
         result.MissingFields.Should().BeEmpty();
@@ -157,6 +157,7 @@ public class McpServerResponseEnrichmentTests
             (ConfigurationAgent)null!,
             null!,
             _orchestrator,
+            Enumerable.Empty<BaseTool>(),
             Mock.Of<IHttpContextAccessor>(),
             Mock.Of<ILogger<McpServer>>());
     }
