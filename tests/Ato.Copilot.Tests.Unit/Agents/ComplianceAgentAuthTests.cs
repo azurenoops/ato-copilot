@@ -166,6 +166,7 @@ public class ComplianceAgentAuthTests
             watchCreateAutoRemediationRule, watchListAutoRemediationRules,
             new NistControlSearchTool(Mock.Of<INistControlsService>(), Mock.Of<ILogger<NistControlSearchTool>>()),
             new NistControlExplainerTool(Mock.Of<INistControlsService>(), Mock.Of<ILogger<NistControlExplainerTool>>()),
+            Enumerable.Empty<BaseTool>(),
             dbFactory, _scopeFactory,
             Mock.Of<ILogger<ComplianceAgent>>());
     }
@@ -438,6 +439,7 @@ public class ComplianceAgentAuthTests
             new WatchListAutoRemediationRulesTool(Mock.Of<IComplianceWatchService>(), Mock.Of<ILogger<WatchListAutoRemediationRulesTool>>()),
             new NistControlSearchTool(Mock.Of<INistControlsService>(), Mock.Of<ILogger<NistControlSearchTool>>()),
             new NistControlExplainerTool(Mock.Of<INistControlsService>(), Mock.Of<ILogger<NistControlExplainerTool>>()),
+            Enumerable.Empty<BaseTool>(),
             dbFactory, scopeFactory,
             Mock.Of<ILogger<ComplianceAgent>>());
     }

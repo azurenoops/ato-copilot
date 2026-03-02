@@ -236,6 +236,8 @@ public class AtoCopilotContext : DbContext
         modelBuilder.Entity<ComplianceFinding>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(100);
+            entity.Property(e => e.AssessmentId).HasMaxLength(100);
             entity.Property(e => e.ControlId).HasMaxLength(20);
             entity.Property(e => e.ControlFamily).HasMaxLength(5);
             entity.Property(e => e.ResourceType).HasMaxLength(200);
@@ -296,6 +298,7 @@ public class AtoCopilotContext : DbContext
         modelBuilder.Entity<ComplianceEvidence>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
             entity.Property(e => e.ControlId).HasMaxLength(20);
             entity.Property(e => e.SubscriptionId).HasMaxLength(100);
             entity.Property(e => e.EvidenceType).HasMaxLength(50);
@@ -316,6 +319,7 @@ public class AtoCopilotContext : DbContext
         modelBuilder.Entity<ComplianceDocument>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
             entity.Property(e => e.DocumentType).HasMaxLength(10);
             entity.Property(e => e.Framework).HasMaxLength(50);
             entity.Property(e => e.SystemName).HasMaxLength(200);
@@ -334,6 +338,7 @@ public class AtoCopilotContext : DbContext
         modelBuilder.Entity<RemediationPlan>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
             entity.Property(e => e.SubscriptionId).HasMaxLength(100);
             entity.Property(e => e.ApprovedBy).HasMaxLength(200);
             entity.Property(e => e.FailedStepId).HasMaxLength(50);
@@ -344,7 +349,7 @@ public class AtoCopilotContext : DbContext
                 step.WithOwner().HasForeignKey("RemediationPlanId");
                 step.HasKey(s => s.Id);
                 step.Property(s => s.ControlId).HasMaxLength(20);
-                step.Property(s => s.FindingId).HasMaxLength(50);
+                step.Property(s => s.FindingId).HasMaxLength(100);
                 step.Property(s => s.Effort).HasMaxLength(20);
                 step.Property(s => s.ResourceId).HasMaxLength(500);
             });
@@ -354,6 +359,7 @@ public class AtoCopilotContext : DbContext
         modelBuilder.Entity<AuditLogEntry>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
             entity.Property(e => e.UserId).HasMaxLength(200);
             entity.Property(e => e.UserRole).HasMaxLength(50);
             entity.Property(e => e.Action).HasMaxLength(50);
@@ -374,6 +380,7 @@ public class AtoCopilotContext : DbContext
         modelBuilder.Entity<RemediationBoard>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
             entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
             entity.Property(e => e.SubscriptionId).HasMaxLength(100).IsRequired();
             entity.Property(e => e.AssessmentId).HasMaxLength(100);
@@ -402,8 +409,9 @@ public class AtoCopilotContext : DbContext
         modelBuilder.Entity<RemediationTask>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
             entity.Property(e => e.TaskNumber).HasMaxLength(10).IsRequired();
-            entity.Property(e => e.BoardId).IsRequired();
+            entity.Property(e => e.BoardId).HasMaxLength(36).IsRequired();
             entity.Property(e => e.Title).HasMaxLength(500).IsRequired();
             entity.Property(e => e.Description).HasMaxLength(4000);
             entity.Property(e => e.ControlId).HasMaxLength(20).IsRequired();
@@ -446,7 +454,8 @@ public class AtoCopilotContext : DbContext
         modelBuilder.Entity<TaskComment>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.Property(e => e.TaskId).IsRequired();
+            entity.Property(e => e.Id).HasMaxLength(36);
+            entity.Property(e => e.TaskId).HasMaxLength(36).IsRequired();
             entity.Property(e => e.AuthorId).HasMaxLength(200).IsRequired();
             entity.Property(e => e.AuthorName).HasMaxLength(200).IsRequired();
             entity.Property(e => e.Content).HasMaxLength(4000).IsRequired();
@@ -464,7 +473,8 @@ public class AtoCopilotContext : DbContext
         modelBuilder.Entity<TaskHistoryEntry>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.Property(e => e.TaskId).IsRequired();
+            entity.Property(e => e.Id).HasMaxLength(36);
+            entity.Property(e => e.TaskId).HasMaxLength(36).IsRequired();
             entity.Property(e => e.OldValue).HasMaxLength(500);
             entity.Property(e => e.NewValue).HasMaxLength(500);
             entity.Property(e => e.ActingUserId).HasMaxLength(200).IsRequired();
@@ -586,7 +596,7 @@ public class AtoCopilotContext : DbContext
 
             // Optional FK: RegisteredSystemId → RegisteredSystem.Id (Phase 17 §9a.1)
             // Set null on delete so alerts survive system de-registration.
-            entity.Property(e => e.RegisteredSystemId).HasMaxLength(100);
+            entity.Property(e => e.RegisteredSystemId).HasMaxLength(36);
             entity.HasOne(e => e.RegisteredSystem)
                 .WithMany()
                 .HasForeignKey(e => e.RegisteredSystemId)

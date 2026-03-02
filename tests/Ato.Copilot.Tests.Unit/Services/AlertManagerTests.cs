@@ -41,7 +41,8 @@ public class AlertManagerTests : IDisposable
         _alertManager = new AlertManager(
             factory,
             Options.Create(_alertOptions),
-            Mock.Of<ILogger<AlertManager>>());
+            Mock.Of<ILogger<AlertManager>>(),
+            Mock.Of<IServiceProvider>());
     }
 
     public void Dispose()

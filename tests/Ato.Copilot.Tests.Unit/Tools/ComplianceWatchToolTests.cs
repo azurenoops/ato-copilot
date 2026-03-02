@@ -3172,7 +3172,8 @@ public class AlertAutoCloseTests : IDisposable
             var alertManager = new Ato.Copilot.Agents.Compliance.Services.AlertManager(
                 _dbFactory,
                 Microsoft.Extensions.Options.Options.Create(new Ato.Copilot.Core.Configuration.AlertOptions()),
-                Mock.Of<ILogger<Ato.Copilot.Agents.Compliance.Services.AlertManager>>());
+                Mock.Of<ILogger<Ato.Copilot.Agents.Compliance.Services.AlertManager>>(),
+                Mock.Of<IServiceProvider>());
 
             await alertManager.TransitionAlertAsync(
                 alert.Id, AlertStatus.Resolved, "user-1", "Administrator", cancellationToken: CancellationToken.None);
@@ -3206,7 +3207,8 @@ public class AlertAutoCloseTests : IDisposable
         var alertManager = new Ato.Copilot.Agents.Compliance.Services.AlertManager(
             _dbFactory,
             Microsoft.Extensions.Options.Options.Create(new Ato.Copilot.Core.Configuration.AlertOptions()),
-            Mock.Of<ILogger<Ato.Copilot.Agents.Compliance.Services.AlertManager>>());
+            Mock.Of<ILogger<Ato.Copilot.Agents.Compliance.Services.AlertManager>>(),
+            Mock.Of<IServiceProvider>());
 
         // Should complete without error even though no linked task
         var result = await alertManager.TransitionAlertAsync(
@@ -3236,7 +3238,8 @@ public class AlertAutoCloseTests : IDisposable
         var alertManager = new Ato.Copilot.Agents.Compliance.Services.AlertManager(
             _dbFactory,
             Microsoft.Extensions.Options.Options.Create(new Ato.Copilot.Core.Configuration.AlertOptions()),
-            Mock.Of<ILogger<Ato.Copilot.Agents.Compliance.Services.AlertManager>>());
+            Mock.Of<ILogger<Ato.Copilot.Agents.Compliance.Services.AlertManager>>(),
+            Mock.Of<IServiceProvider>());
 
         await alertManager.TransitionAlertAsync(
             alert.Id, AlertStatus.Resolved, "auditor-user", "Administrator", cancellationToken: CancellationToken.None);

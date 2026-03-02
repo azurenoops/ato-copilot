@@ -3,6 +3,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using Ato.Copilot.Agents.Common;
 using Ato.Copilot.Agents.Compliance.Agents;
 
 namespace Ato.Copilot.Tests.Unit.Agents;
@@ -142,12 +143,11 @@ public class ComplianceAgentResponseDataTests
     {
         var json = """{"failedControls": 3}""";
 
-        var result = InvokeBuildSuggestions("assess", json);
+        var result = InvokeBuildSuggestions("Assessment", json);
 
-        result.Should().Contain("Generate remediation plan");
-        result.Should().Contain("View detailed findings");
-        result.Should().Contain("Show kanban board");
-        result.Should().Contain("Collect compliance evidence");
+        result.Should().Contain(s => s.Title == "Generate Remediation Plan");
+        result.Should().Contain(s => s.Title == "View Detailed Findings");
+        result.Should().Contain(s => s.Title == "Show Kanban Board");
     }
 
     [Fact]
@@ -155,19 +155,19 @@ public class ComplianceAgentResponseDataTests
     {
         var json = """{"passedControls": 85}""";
 
-        var result = InvokeBuildSuggestions("assess", json);
+        var result = InvokeBuildSuggestions("Assessment", json);
 
-        result.Should().Contain("Export compliance report");
-        result.Should().Contain("Collect compliance evidence");
+        result.Should().Contain(s => s.Title == "Export Compliance Report");
+        result.Should().Contain(s => s.Title == "View Compliance Trend");
     }
 
     [Fact]
     public void BuildSuggestions_RemediationAction_IncludesAssessmentSuggestion()
     {
-        var result = InvokeBuildSuggestions("remediate", "{}");
+        var result = InvokeBuildSuggestions("Remediation", "{}");
 
-        result.Should().Contain("Run compliance assessment");
-        result.Should().Contain("Show kanban board");
+        result.Should().Contain(s => s.Title == "Run Assessment");
+        result.Should().Contain(s => s.Title == "Show Kanban Board");
     }
 
     [Fact]
@@ -175,8 +175,8 @@ public class ComplianceAgentResponseDataTests
     {
         var result = InvokeBuildSuggestions("unknown_action", "{}");
 
-        result.Should().Contain("Run compliance assessment");
-        result.Should().Contain("View compliance status");
+        result.Should().Contain(s => s.Title == "Register a New System");
+        result.Should().Contain(s => s.Title == "Show RMF Status");
     }
 
     // ─── Helpers ───────────────────────────────────────────────────────────
@@ -184,8 +184,8 @@ public class ComplianceAgentResponseDataTests
     private Dictionary<string, object>? InvokeBuildResponseData(string actionType, string toolResult)
         => _buildResponseData.Invoke(_agent, [actionType, toolResult]) as Dictionary<string, object>;
 
-    private List<string> InvokeBuildSuggestions(string actionType, string toolResult)
-        => (List<string>)_buildResponseData.DeclaringType!
+    private List<AgentSuggestedAction> InvokeBuildSuggestions(string actionType, string toolResult)
+        => (List<AgentSuggestedAction>)_buildResponseData.DeclaringType!
             .GetMethod("BuildSuggestions", BindingFlags.NonPublic | BindingFlags.Instance)!
             .Invoke(_agent, [actionType, toolResult])!;
 }

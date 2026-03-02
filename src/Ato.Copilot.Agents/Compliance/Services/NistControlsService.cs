@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ato.Copilot.Agents.Compliance.Configuration;
@@ -47,6 +48,7 @@ public class NistControlsService : INistControlsService
     /// <summary>
     /// Initializes a new instance of the <see cref="NistControlsService"/> class.
     /// </summary>
+    [ActivatorUtilitiesConstructor]
     public NistControlsService(
         ILogger<NistControlsService> logger,
         IMemoryCache cache,

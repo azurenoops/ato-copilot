@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Ato.Copilot.Agents.Common;
 
 namespace Ato.Copilot.Mcp.Models;
 
@@ -91,7 +92,12 @@ public class McpChatResponse
     /// </summary>
     public List<ErrorDetail> Errors { get; set; } = new();
 
-    public List<string> Suggestions { get; set; } = new();
+    /// <summary>
+    /// Suggested follow-up actions with display title and pre-filled prompt.
+    /// Serialized as "suggestedActions" to match ChatService expectations.
+    /// </summary>
+    [JsonPropertyName("suggestedActions")]
+    public List<AgentSuggestedAction> SuggestedActions { get; set; } = new();
     public bool RequiresFollowUp { get; set; }
 
     /// <summary>

@@ -159,6 +159,7 @@ public class ComplianceAgentAiTests
             watchCreateTaskFromAlert, watchCollectEvidenceFromAlert,
             watchCreateAutoRemediationRule, watchListAutoRemediationRules,
             nistSearchTool, nistExplainerTool,
+            Enumerable.Empty<BaseTool>(),
             dbFactory, _scopeFactory,
             Mock.Of<ILogger<ComplianceAgent>>(),
             chatClient,

@@ -73,11 +73,22 @@ export async function analyzeCurrentFile(mcpClient: McpClient): Promise<void> {
         title: `Analyzing ${fileName} for compliance...`,
         cancellable: false,
       },
-      async () => {
-        const response = await mcpClient.sendMessage(request);
+      async (progress) => {
+        progress.report({ message: "Connecting to MCP server..." });
+
+        const response = await mcpClient.sendMessageWithProgress(
+          request,
+          (step) => {
+            progress.report({ message: step });
+          }
+        );
+
+        progress.report({ message: "Parsing findings..." });
 
         // Try to parse findings from the response
         const findings = parseFindings(response.response);
+
+        progress.report({ message: "Rendering results..." });
 
         createAnalysisPanel(
           `Compliance Analysis: ${fileName}`,

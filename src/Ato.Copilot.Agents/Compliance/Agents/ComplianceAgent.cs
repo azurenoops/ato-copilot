@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
@@ -211,6 +212,7 @@ public class ComplianceAgent : BaseAgent
         WatchListAutoRemediationRulesTool watchListAutoRemediationRules,
         NistControlSearchTool nistControlSearchTool,
         NistControlExplainerTool nistControlExplainerTool,
+        IEnumerable<BaseTool> allRegisteredTools,
         IDbContextFactory<AtoCopilotContext> dbFactory,
         IServiceScopeFactory scopeFactory,
         ILogger<ComplianceAgent> logger,
@@ -386,6 +388,22 @@ public class ComplianceAgent : BaseAgent
         // Register NIST Controls knowledge tools (Feature 007)
         RegisterTool(_nistControlSearchTool);
         RegisterTool(_nistControlExplainerTool);
+
+        // Auto-register any remaining BaseTool instances (e.g. RMF, ConMon, eMASS,
+        // Document Template tools) that were added to DI but not explicitly listed
+        // above. This ensures new tools become available to the AI without requiring
+        // individual constructor parameters.
+        var registeredNames = new HashSet<string>(
+            Tools.Select(t => t.Name), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var tool in allRegisteredTools)
+        {
+            if (!registeredNames.Contains(tool.Name))
+            {
+                RegisterTool(tool);
+                registeredNames.Add(tool.Name);
+            }
+        }
     }
 
     /// <inheritdoc />
@@ -409,6 +427,49 @@ public class ComplianceAgent : BaseAgent
         var lower = message.ToLowerInvariant();
         var score = 0.0;
 
+        // RMF lifecycle action keywords — strongest indicators (0.9)
+        string[] rmfActionKeywords = [
+            "register system", "register a new system", "register a system", "new system called",
+            "list systems", "show systems", "registered systems", "my systems", "all systems",
+            "define boundary", "authorization boundary", "exclude from boundary",
+            "assign rmf role", "assign issm", "assign isso", "assign ao", "rmf role",
+            "list rmf roles", "role assignments", "who is assigned",
+            "advance rmf", "advance phase", "advance step", "next phase",
+            "categorize system", "security categorization", "fips 199", "impact level",
+            "get categorization", "show categorization",
+            "suggest info types", "information types",
+            "select baseline", "control baseline", "tailor baseline", "customize baseline",
+            "control inheritance", "set inheritance", "inherited controls", "common controls",
+            "get baseline", "show baseline", "view baseline",
+            "generate crm", "customer responsibility matrix",
+            "stig mapping", "show stig",
+            "write narrative", "control narrative", "suggest narrative", "batch narrative",
+            "narrative progress", "ssp progress",
+            "assess control", "control assessment", "test control",
+            "take snapshot", "compliance snapshot", "compare snapshot",
+            "verify evidence", "evidence completeness", "evidence gaps", "missing evidence",
+            "generate sar", "security assessment report",
+            "issue authorization", "issue ato", "grant ato", "authorize system",
+            "accept risk", "risk acceptance", "risk register", "show risks",
+            "create poam", "list poam", "show poam", "poam items",
+            "generate rar", "risk assessment report",
+            "bundle package", "authorization package", "ato package",
+            "conmon plan", "continuous monitoring plan", "conmon report", "monitoring report",
+            "significant change", "system change",
+            "ato expiration", "track expiration",
+            "multi system dashboard", "portfolio dashboard",
+            "reauthorization", "reauthorize",
+            "rmf status", "rmf phase", "rmf progress"
+        ];
+        foreach (var keyword in rmfActionKeywords)
+        {
+            if (lower.Contains(keyword))
+            {
+                score = Math.Max(score, 0.9);
+                break;
+            }
+        }
+
         // Action-intent keywords — strong indicators for compliance agent
         string[] actionKeywords = ["scan", "assess", "check my", "validate", "run ", "monitor",
             "remediate", "fix ", "deploy", "evaluate", "audit", "generate report",
@@ -428,7 +489,8 @@ public class ComplianceAgent : BaseAgent
 
         // Domain terms without action intent — moderate score
         string[] domainTerms = ["compliance", "assessment", "finding", "poam", "ssp",
-            "authorization", "ato", "remediation", "control family", "baseline"];
+            "authorization", "ato", "remediation", "control family", "baseline",
+            "system", "boundary", "categorize", "narrative", "snapshot", "conmon"];
         foreach (var term in domainTerms)
         {
             if (lower.Contains(term) && score < 0.5)
@@ -438,7 +500,7 @@ public class ComplianceAgent : BaseAgent
         }
 
         // Framework mentions — moderate
-        if ((lower.Contains("nist") || lower.Contains("fedramp") || lower.Contains("dod")) && score < 0.4)
+        if ((lower.Contains("nist") || lower.Contains("fedramp") || lower.Contains("dod") || lower.Contains("rmf")) && score < 0.4)
             score = Math.Max(score, 0.4);
 
         // Default baseline for unrecognized messages
@@ -515,6 +577,13 @@ public class ComplianceAgent : BaseAgent
             if (aiResponse != null)
             {
                 progress?.Report("Generating response...");
+
+                // Populate suggestions so quick-action buttons appear after AI responses
+                if (aiResponse.Suggestions.Count == 0)
+                {
+                    aiResponse.Suggestions = BuildSuggestions(actionType, aiResponse.Response);
+                }
+
                 // Log successful AI-processed action to audit trail
                 await LogAuditEntryAsync(actionType, GetContextValue(context, "subscription_id"),
                     AuditOutcome.Success, $"AI-processed: {message[..Math.Min(200, message.Length)]}",
@@ -525,10 +594,16 @@ public class ComplianceAgent : BaseAgent
             progress?.Report("Analyzing intent...");
 
             // Analyze intent and route to appropriate tool
+            progress?.Report("Executing tool...");
             var toolResult = await RouteToToolAsync(message, context, cancellationToken);
+            progress?.Report("Processing results...");
 
             // ── Post-operation deactivation offer (FR-020/FR-021) ────────────
             toolResult = await AppendDeactivationOfferAsync(toolResult, message, context, cancellationToken);
+
+            // ── Format raw JSON tool results into human-readable markdown ────
+            progress?.Report("Formatting response...");
+            var formattedResult = FormatToolResultAsMarkdown(toolResult, actionType);
 
             stopwatch.Stop();
 
@@ -540,7 +615,7 @@ public class ComplianceAgent : BaseAgent
             return new AgentResponse
             {
                 Success = true,
-                Response = toolResult,
+                Response = formattedResult,
                 AgentName = AgentName,
                 ProcessingTimeMs = stopwatch.ElapsedMilliseconds,
                 // T022a/T022b: Populate ResponseData and Suggestions from tool results
@@ -664,81 +739,444 @@ public class ComplianceAgent : BaseAgent
     }
 
     /// <summary>
-    /// Builds contextually relevant follow-up suggestions based on the action type and result (T022b, FR-007d).
+    /// Builds contextually relevant RMF-phase-aware follow-up suggestions based on
+    /// the classified intent and tool result (T022b, FR-007d).
+    /// Each suggestion has a display title and a pre-filled prompt sent on click.
     /// </summary>
-    private List<string> BuildSuggestions(string actionType, string toolResult)
+    private List<AgentSuggestedAction> BuildSuggestions(string actionType, string toolResult)
     {
-        var suggestions = new List<string>();
+        var suggestions = new List<AgentSuggestedAction>();
+
+        // Helper to shorten construction
+        static AgentSuggestedAction S(string title, string? prompt = null) => new(title, prompt ?? title);
+
         if (string.IsNullOrEmpty(toolResult))
         {
-            suggestions.Add("Run compliance assessment");
-            suggestions.Add("View compliance status");
+            suggestions.Add(S("Register a New System", "Register a new system"));
+            suggestions.Add(S("Show RMF Status", "Show RMF status"));
             return suggestions;
         }
 
-        var hasFailures = toolResult.Contains("\"failed\"", StringComparison.OrdinalIgnoreCase)
-                       || toolResult.Contains("failedControls", StringComparison.OrdinalIgnoreCase)
-                       || toolResult.Contains("\"severity\":\"Critical\"", StringComparison.OrdinalIgnoreCase)
-                       || toolResult.Contains("\"severity\":\"High\"", StringComparison.OrdinalIgnoreCase);
+        // Try to extract a system name from the tool result for contextual prompts
+        var systemName = ExtractSystemNameFromResult(toolResult);
+        var forSystem = !string.IsNullOrEmpty(systemName) ? $" for {systemName}" : "";
 
-        switch (actionType.ToLowerInvariant())
+        switch (actionType)
         {
-            case "assess":
-            case "scan":
-            case "audit":
+            // ── RMF Phase 1: Prepare ─────────────────────────────────────
+            case "RmfRegistration":
+                suggestions.Add(S("Define Authorization Boundary", $"Define the authorization boundary{forSystem}"));
+                suggestions.Add(S("Assign RMF Roles", $"Assign RMF roles{forSystem}"));
+                suggestions.Add(S("Show System Details", $"Show system details{forSystem}"));
+                break;
+
+            case "RmfListSystems":
+                suggestions.Add(S("Register a New System", "Register a new system"));
+                suggestions.Add(S("Define Authorization Boundary", $"Define the authorization boundary{forSystem}"));
+                suggestions.Add(S("Assign RMF Roles", $"Assign RMF roles{forSystem}"));
+                break;
+
+            case "RmfBoundary":
+                suggestions.Add(S("Assign RMF Roles", $"Assign RMF roles{forSystem}"));
+                suggestions.Add(S("Categorize System", $"Categorize{forSystem}"));
+                suggestions.Add(S("List Boundary Components", $"Show authorization boundary{forSystem}"));
+                break;
+
+            case "RmfRoleAssignment":
+                suggestions.Add(S("Define Authorization Boundary", $"Define the authorization boundary{forSystem}"));
+                suggestions.Add(S("Advance to Categorize", $"Advance to Categorize phase{forSystem}"));
+                suggestions.Add(S("Show RMF Status", $"Show RMF status{forSystem}"));
+                break;
+
+            // ── RMF Phase 2: Categorize ──────────────────────────────────
+            case "RmfCategorize":
+                suggestions.Add(S("Select Control Baseline", $"Select control baseline{forSystem}"));
+                suggestions.Add(S("Suggest Information Types", $"Suggest information types{forSystem}"));
+                suggestions.Add(S("Advance to Select Phase", $"Advance to Select phase{forSystem}"));
+                break;
+
+            // ── RMF Phase 3: Select ──────────────────────────────────────
+            case "RmfBaseline":
+                suggestions.Add(S("Tailor Baseline Controls", $"Tailor baseline{forSystem}"));
+                suggestions.Add(S("Generate CRM", $"Generate CRM{forSystem}"));
+                suggestions.Add(S("Advance to Implement Phase", $"Advance to Implement phase{forSystem}"));
+                break;
+
+            // ── RMF Phase 4: Implement ───────────────────────────────────
+            case "RmfImplement":
+                suggestions.Add(S("Write Control Narrative", $"Write control narrative{forSystem}"));
+                suggestions.Add(S("Check Narrative Progress", $"Show narrative progress{forSystem}"));
+                suggestions.Add(S("Advance to Assess Phase", $"Advance to Assess phase{forSystem}"));
+                break;
+
+            // ── RMF Phase 5: Assess ──────────────────────────────────────
+            case "RmfAssess":
+                suggestions.Add(S("Verify Evidence", $"Verify evidence{forSystem}"));
+                suggestions.Add(S("Check Evidence Completeness", $"Check evidence completeness{forSystem}"));
+                suggestions.Add(S("Generate SAR", $"Generate SAR{forSystem}"));
+                break;
+
+            // ── RMF Phase 6: Authorize ───────────────────────────────────
+            case "RmfAuthorize":
+                suggestions.Add(S("Create POAM", $"Create POAM{forSystem}"));
+                suggestions.Add(S("Bundle Authorization Package", $"Bundle authorization package{forSystem}"));
+                suggestions.Add(S("Advance to Monitor Phase", $"Advance to Monitor phase{forSystem}"));
+                break;
+
+            case "RmfRisk":
+                suggestions.Add(S("View Risk Register", $"Show risk register{forSystem}"));
+                suggestions.Add(S("Issue Authorization", $"Issue authorization{forSystem}"));
+                suggestions.Add(S("Create POAM", $"Create POAM{forSystem}"));
+                break;
+
+            // ── RMF Phase 7: Monitor ─────────────────────────────────────
+            case "RmfMonitor":
+                suggestions.Add(S("Generate ConMon Report", $"Generate ConMon report{forSystem}"));
+                suggestions.Add(S("Check ATO Expiration", $"Check ATO expiration{forSystem}"));
+                suggestions.Add(S("Trigger Reauthorization", $"Start reauthorization{forSystem}"));
+                break;
+
+            case "RmfAdvance":
+                suggestions.Add(S("Show RMF Status", $"Show RMF status{forSystem}"));
+                suggestions.Add(S("Show System Details", $"Show system details{forSystem}"));
+                break;
+
+            case "RmfStatus":
+                suggestions.Add(S("Register a New System", "Register a new system"));
+                suggestions.Add(S("Run Compliance Assessment", $"Run compliance assessment{forSystem}"));
+                suggestions.Add(S("Show All Systems", "Show all registered systems"));
+                break;
+
+            // ── Legacy compliance actions ─────────────────────────────────
+            case "Assessment":
+                var hasFailures = toolResult.Contains("\"failed\"", StringComparison.OrdinalIgnoreCase)
+                               || toolResult.Contains("failedControls", StringComparison.OrdinalIgnoreCase)
+                               || toolResult.Contains("\"severity\":\"Critical\"", StringComparison.OrdinalIgnoreCase)
+                               || toolResult.Contains("\"severity\":\"High\"", StringComparison.OrdinalIgnoreCase);
                 if (hasFailures)
                 {
-                    suggestions.Add("Generate remediation plan");
-                    suggestions.Add("View detailed findings");
-                    suggestions.Add("Show kanban board");
+                    suggestions.Add(S("Generate Remediation Plan", "Generate remediation plan"));
+                    suggestions.Add(S("View Detailed Findings", "Show detailed findings"));
+                    suggestions.Add(S("Show Kanban Board", "Show kanban board"));
                 }
                 else
                 {
-                    suggestions.Add("Export compliance report");
-                    suggestions.Add("View compliance trend");
+                    suggestions.Add(S("Export Compliance Report", "Export compliance report"));
+                    suggestions.Add(S("View Compliance Trend", "View compliance trend"));
                 }
-                suggestions.Add("Collect compliance evidence");
                 break;
 
-            case "remediate":
-            case "remediation_plan":
-                suggestions.Add("Run compliance assessment");
-                suggestions.Add("View remediation status");
-                suggestions.Add("Show kanban board");
+            case "Remediation":
+                suggestions.Add(S("Run Assessment", "Run compliance assessment"));
+                suggestions.Add(S("View Remediation Status", "View remediation status"));
+                suggestions.Add(S("Show Kanban Board", "Show kanban board"));
                 break;
 
-            case "evidence":
-                suggestions.Add("Run compliance assessment");
-                suggestions.Add("Generate SSP document");
+            case "EvidenceCollection":
+                suggestions.Add(S("Run Assessment", "Run compliance assessment"));
+                suggestions.Add(S("Generate SSP", "Generate SSP document"));
                 break;
 
-            case "kanban_show":
-            case "kanban_list":
-                suggestions.Add("Run compliance assessment");
-                suggestions.Add("View overdue tasks");
+            case "DocumentGeneration":
+                suggestions.Add(S("Run Assessment", "Run compliance assessment"));
+                suggestions.Add(S("Show RMF Status", "Show RMF status"));
                 break;
 
-            case "monitor":
-            case "alert":
-                suggestions.Add("View alert details");
-                suggestions.Add("Acknowledge alerts");
-                suggestions.Add("View compliance trend");
+            case "Monitoring":
+                suggestions.Add(S("View Alert Details", "View alert details"));
+                suggestions.Add(S("View Compliance Trend", "View compliance trend"));
                 break;
 
-            case "history":
-            case "trend":
-                suggestions.Add("Run compliance assessment");
-                suggestions.Add("Generate remediation plan");
+            case "KanbanQuery":
+            case "KanbanTask":
+                suggestions.Add(S("Run Assessment", "Run compliance assessment"));
+                suggestions.Add(S("View Overdue Tasks", "Show overdue tasks"));
+                break;
+
+            case "HistoryQuery":
+                suggestions.Add(S("Run Assessment", "Run compliance assessment"));
+                suggestions.Add(S("Generate Remediation Plan", "Generate remediation plan"));
                 break;
 
             default:
-                suggestions.Add("Run compliance assessment");
-                suggestions.Add("View compliance status");
+                suggestions.Add(S("Register a New System", "Register a new system"));
+                suggestions.Add(S("Show RMF Status", "Show RMF status"));
+                suggestions.Add(S("Show All Systems", "Show all registered systems"));
                 break;
         }
 
         return suggestions;
     }
+
+    /// <summary>
+    /// Attempts to extract a system name from a JSON tool result for contextual prompts.
+    /// Looks for common property names: systemName, name, system_name.
+    /// </summary>
+    private static string? ExtractSystemNameFromResult(string toolResult)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(toolResult);
+            var root = doc.RootElement;
+
+            // Direct properties
+            if (root.TryGetProperty("systemName", out var sn) && sn.ValueKind == JsonValueKind.String)
+                return sn.GetString();
+            if (root.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String)
+                return n.GetString();
+
+            // Inside "data" envelope
+            if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object)
+            {
+                if (data.TryGetProperty("systemName", out var dsn) && dsn.ValueKind == JsonValueKind.String)
+                    return dsn.GetString();
+                if (data.TryGetProperty("name", out var dn) && dn.ValueKind == JsonValueKind.String)
+                    return dn.GetString();
+            }
+
+            // First item in array (e.g. list_systems with single result)
+            if (root.TryGetProperty("data", out var arr) && arr.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in arr.EnumerateArray())
+                {
+                    if (item.TryGetProperty("systemName", out var isn) && isn.ValueKind == JsonValueKind.String)
+                        return isn.GetString();
+                    if (item.TryGetProperty("name", out var iname) && iname.ValueKind == JsonValueKind.String)
+                        return iname.GetString();
+                    break; // Only check first
+                }
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Converts a raw JSON tool result into a human-readable markdown response.
+    /// Falls back to the original string if parsing fails or the format is unrecognized.
+    /// </summary>
+    private static string FormatToolResultAsMarkdown(string toolResult, string actionType)
+    {
+        if (string.IsNullOrWhiteSpace(toolResult))
+            return "No data returned.";
+
+        // If not JSON, return as-is (already formatted or plain text)
+        var trimmed = toolResult.TrimStart();
+        if (!trimmed.StartsWith("{") && !trimmed.StartsWith("["))
+            return toolResult;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(toolResult);
+            var root = doc.RootElement;
+
+            // Check for error responses
+            if (root.TryGetProperty("status", out var statusProp) &&
+                statusProp.GetString() == "error")
+            {
+                var errorMsg = root.TryGetProperty("message", out var msgProp)
+                    ? msgProp.GetString() : "An error occurred.";
+                var errorCode = root.TryGetProperty("errorCode", out var codeProp)
+                    ? codeProp.GetString() : null;
+                return errorCode != null
+                    ? $"**Error** ({errorCode}): {errorMsg}"
+                    : $"**Error**: {errorMsg}";
+            }
+
+            // Check for disambiguation / validation errors (success=false)
+            if (root.TryGetProperty("success", out var successProp) &&
+                successProp.ValueKind == JsonValueKind.False &&
+                root.TryGetProperty("message", out var disambigMsg))
+            {
+                var msg = disambigMsg.GetString() ?? "An error occurred.";
+                var errorCode = root.TryGetProperty("error", out var errCodeProp)
+                    ? errCodeProp.GetString() : null;
+                // The message already contains markdown formatting — return as-is
+                return errorCode != null
+                    ? $"**{errorCode}**: {msg}"
+                    : msg;
+            }
+
+            // Check for conversational prompts (asking user for more info)
+            if (root.TryGetProperty("conversational", out var convProp) &&
+                convProp.ValueKind == JsonValueKind.True &&
+                root.TryGetProperty("message", out var convMsg))
+            {
+                return convMsg.GetString() ?? "I need more information to proceed.";
+            }
+
+            var sb = new System.Text.StringBuilder();
+
+            // ── compliance_register_system ─────────────────────────────────
+            if (root.TryGetProperty("data", out var data) &&
+                data.TryGetProperty("id", out _) &&
+                data.TryGetProperty("current_rmf_step", out _) &&
+                data.TryGetProperty("system_type", out _))
+            {
+                sb.AppendLine("### ✅ System Registered Successfully\n");
+                sb.AppendLine("| Field | Value |");
+                sb.AppendLine("|-------|-------|");
+                AppendField(sb, data, "id", "System ID");
+                AppendField(sb, data, "name", "Name");
+                AppendField(sb, data, "acronym", "Acronym");
+                AppendField(sb, data, "system_type", "System Type");
+                AppendField(sb, data, "mission_criticality", "Mission Criticality");
+                AppendField(sb, data, "hosting_environment", "Hosting Environment");
+                AppendField(sb, data, "current_rmf_step", "Current RMF Step");
+                AppendField(sb, data, "is_active", "Active");
+                AppendField(sb, data, "created_at", "Created");
+                AppendField(sb, data, "created_by", "Created By");
+                sb.AppendLine();
+                sb.AppendLine("**Next step:** Define the authorization boundary and assign RMF roles, then advance to the **Categorize** phase.");
+                return sb.ToString();
+            }
+
+            // ── compliance_list_systems ────────────────────────────────────
+            if (root.TryGetProperty("data", out var listData) &&
+                listData.TryGetProperty("systems", out var systems) &&
+                systems.ValueKind == JsonValueKind.Array)
+            {
+                var count = systems.GetArrayLength();
+                sb.AppendLine($"### 📋 Registered Systems ({count})\n");
+
+                if (count == 0)
+                {
+                    sb.AppendLine("No systems registered yet. Use **\"Register a new system\"** to get started.");
+                    return sb.ToString();
+                }
+
+                sb.AppendLine("| Name | Type | RMF Phase | Active | Created |");
+                sb.AppendLine("|------|------|-----------|--------|---------|");
+                foreach (var sys in systems.EnumerateArray())
+                {
+                    var name = GetStr(sys, "name") ?? "—";
+                    var sysType = GetStr(sys, "system_type") ?? "—";
+                    var rmfStep = GetStr(sys, "current_rmf_step") ?? "—";
+                    var active = sys.TryGetProperty("is_active", out var act) && act.GetBoolean() ? "✅" : "❌";
+                    var created = GetStr(sys, "created_at") ?? "—";
+                    if (created.Length > 10) created = created[..10]; // date only
+                    sb.AppendLine($"| {name} | {sysType} | {rmfStep} | {active} | {created} |");
+                }
+
+                if (listData.TryGetProperty("pagination", out var pag))
+                {
+                    var total = pag.TryGetProperty("total_count", out var tc) ? tc.GetInt32() : count;
+                    if (total > count)
+                        sb.AppendLine($"\n*Showing {count} of {total} systems.*");
+                }
+                return sb.ToString();
+            }
+
+            // ── compliance_get_system ──────────────────────────────────────
+            if (root.TryGetProperty("data", out var sysData) &&
+                sysData.TryGetProperty("id", out _) &&
+                sysData.TryGetProperty("current_rmf_step", out _) &&
+                !sysData.TryGetProperty("system_type", out _) == false)
+            {
+                sb.AppendLine("### 📄 System Details\n");
+                sb.AppendLine("| Field | Value |");
+                sb.AppendLine("|-------|-------|");
+                AppendField(sb, sysData, "id", "System ID");
+                AppendField(sb, sysData, "name", "Name");
+                AppendField(sb, sysData, "acronym", "Acronym");
+                AppendField(sb, sysData, "system_type", "System Type");
+                AppendField(sb, sysData, "mission_criticality", "Mission Criticality");
+                AppendField(sb, sysData, "hosting_environment", "Hosting Environment");
+                AppendField(sb, sysData, "current_rmf_step", "Current RMF Step");
+                AppendField(sb, sysData, "is_active", "Active");
+                AppendField(sb, sysData, "created_at", "Created");
+                AppendField(sb, sysData, "created_by", "Created By");
+                return sb.ToString();
+            }
+
+            // ── Generic success with data ──────────────────────────────────
+            if (root.TryGetProperty("status", out var genStatus) &&
+                genStatus.GetString() == "success" &&
+                root.TryGetProperty("data", out var genData))
+            {
+                sb.AppendLine("### ✅ Operation Completed\n");
+                FormatJsonObjectAsTable(sb, genData);
+
+                if (root.TryGetProperty("metadata", out var meta) &&
+                    meta.TryGetProperty("tool", out var toolProp))
+                {
+                    sb.AppendLine($"\n*Tool: `{toolProp.GetString()}`*");
+                }
+                return sb.ToString();
+            }
+
+            // ── Generic unknown status ─────────────────────────────────────
+            if (root.TryGetProperty("status", out var unkStatus) &&
+                unkStatus.GetString() == "unknown")
+            {
+                var msg = root.TryGetProperty("message", out var unkMsg)
+                    ? unkMsg.GetString() : "Unknown status.";
+                return $"ℹ️ {msg}";
+            }
+
+            // Fallback: wrap entire JSON in a code block for readability
+            return $"```json\n{toolResult}\n```";
+        }
+        catch (JsonException)
+        {
+            // Not valid JSON — return as-is
+            return toolResult;
+        }
+    }
+
+    /// <summary>Appends a table row for a JSON field if it exists.</summary>
+    private static void AppendField(System.Text.StringBuilder sb, JsonElement element, string property, string label)
+    {
+        if (element.TryGetProperty(property, out var prop) && prop.ValueKind != JsonValueKind.Null)
+        {
+            var value = prop.ValueKind switch
+            {
+                JsonValueKind.True => "✅ Yes",
+                JsonValueKind.False => "❌ No",
+                JsonValueKind.String => prop.GetString() ?? "—",
+                _ => prop.ToString()
+            };
+            // Truncate long IDs for display
+            if (property == "id" && value.Length > 8)
+                value = $"`{value[..8]}…`";
+            if (property.EndsWith("_at") && value.Length > 19)
+                value = value[..19].Replace("T", " ");
+            sb.AppendLine($"| {label} | {value} |");
+        }
+    }
+
+    /// <summary>Formats a JSON object as a markdown table of key-value pairs.</summary>
+    private static void FormatJsonObjectAsTable(System.Text.StringBuilder sb, JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            sb.AppendLine("| Field | Value |");
+            sb.AppendLine("|-------|-------|");
+            foreach (var prop in element.EnumerateObject())
+            {
+                if (prop.Value.ValueKind == JsonValueKind.Object || prop.Value.ValueKind == JsonValueKind.Array)
+                    continue; // Skip nested objects in the simple table
+                var value = prop.Value.ValueKind switch
+                {
+                    JsonValueKind.Null => "—",
+                    JsonValueKind.True => "✅",
+                    JsonValueKind.False => "❌",
+                    JsonValueKind.String => prop.Value.GetString() ?? "—",
+                    _ => prop.Value.ToString()
+                };
+                sb.AppendLine($"| {prop.Name} | {value} |");
+            }
+        }
+    }
+
+    /// <summary>Gets a string property from a JsonElement, or null if missing.</summary>
+    private static string? GetStr(JsonElement element, string property) =>
+        element.TryGetProperty(property, out var prop) && prop.ValueKind == JsonValueKind.String
+            ? prop.GetString() : null;
 
     /// <summary>
     /// Attempts to extract a JSON property value from a tool result string.
@@ -1171,6 +1609,508 @@ public class ComplianceAgent : BaseAgent
             }, cancellationToken);
         }
 
+        // ─── RMF Lifecycle routing (Feature 015) ─────────────────────────
+
+        // Some commands don't need a system_id — route them first before disambiguation.
+        // Phase 0: Prepare — Register, Boundary, Roles
+        if (ContainsAny(lowerMessage, "register system", "register a new system", "new system called", "register a system"))
+        {
+            var tool = FindToolByName("compliance_register_system");
+            if (tool != null)
+            {
+                var systemName = ExtractQuotedValue(lowerMessage) ?? "New System";
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["name"] = systemName,
+                    ["system_type"] = ExtractEnumValue(lowerMessage, new[] { "majorapplication", "enclave", "platformit" }, "MajorApplication"),
+                    ["mission_criticality"] = ExtractEnumValue(lowerMessage, new[] { "missioncritical", "mission-critical", "missionessential", "mission-essential", "missionsupport", "mission-support" }, "MissionEssential"),
+                    ["hosting_environment"] = ExtractEnumValue(lowerMessage, new[] { "azuregovernment", "azure government", "azurecommercial", "azure commercial", "onpremises", "on-premises", "hybrid" }, "AzureGovernment")
+                }, cancellationToken);
+            }
+        }
+
+        if (ContainsAny(lowerMessage, "list systems", "show systems", "registered systems", "all systems", "my systems"))
+        {
+            var tool = FindToolByName("compliance_list_systems");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>(), cancellationToken);
+        }
+
+        // ── Resolve system_id for routes that need it ────────────────────
+        // Suggestion buttons emit prompts like "Define the authorization boundary for ACME Portal"
+        // — we extract the system name and look it up in the DB.
+        // When no name is given, auto-selects if exactly one active system exists.
+        // If multiple exist, returns a disambiguation prompt.
+        _pendingSystemChoices = null;
+        if (string.IsNullOrEmpty(GetContextValue(context, "system_id")))
+        {
+            var resolvedId = await ResolveSystemIdFromMessageAsync(lowerMessage, cancellationToken);
+            if (resolvedId != null)
+            {
+                context.WorkflowState["system_id"] = resolvedId;
+            }
+            else if (_pendingSystemChoices is { Count: > 0 })
+            {
+                return BuildSystemDisambiguationResponse(lowerMessage, _pendingSystemChoices);
+            }
+        }
+
+        if (ContainsAny(lowerMessage, "get system", "system details", "show system", "system info"))
+        {
+            var tool = FindToolByName("compliance_get_system");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "define boundary", "authorization boundary", "add to boundary", "set boundary"))
+        {
+            var systemId = GetContextValue(context, "system_id");
+            // The tool requires resources — ask the user what to include
+            return BuildConversationalPrompt(
+                "Define Authorization Boundary",
+                "I need to know which resources to include in the authorization boundary.",
+                new[]
+                {
+                    "**Resource ID** — e.g. Azure subscription ID, VNet, Storage Account, etc.",
+                    "**Resource Type** — e.g. Subscription, VirtualNetwork, StorageAccount, VM",
+                    "**Resource Name** — a friendly name for each resource"
+                },
+                "Define boundary for eagle eye with resources: sub-001 (Subscription, 'Main Subscription'), vnet-prod (VirtualNetwork, 'Production VNet')",
+                systemId);
+        }
+
+        if (ContainsAny(lowerMessage, "exclude from boundary", "remove from boundary", "exclude resource"))
+        {
+            var systemId = GetContextValue(context, "system_id");
+            return BuildConversationalPrompt(
+                "Exclude from Authorization Boundary",
+                "I need to know which resource to exclude from the boundary.",
+                new[]
+                {
+                    "**Resource ID** — the ID of the resource to exclude",
+                    "**Justification** — why it should be excluded"
+                },
+                "Exclude resource sub-dev-01 from boundary for eagle eye, justification: dev-only environment",
+                systemId);
+        }
+
+        if (ContainsAny(lowerMessage, "assign rmf role", "assign role", "assign issm", "assign isso", "assign ao"))
+        {
+            var systemId = GetContextValue(context, "system_id");
+            return BuildConversationalPrompt(
+                "Assign RMF Role",
+                "I need to know which role to assign and to whom.",
+                new[]
+                {
+                    "**Role** — AuthorizingOfficial, Issm, Isso, Sca, or SystemOwner",
+                    "**User ID** — the user's identity (e.g. email or UPN)",
+                    "**Display Name** — (optional) the user's display name"
+                },
+                "Assign ISSO role to john.doe@agency.gov for eagle eye",
+                systemId);
+        }
+
+        if (ContainsAny(lowerMessage, "list rmf roles", "rmf roles", "who is assigned", "role assignments", "show roles"))
+        {
+            var tool = FindToolByName("compliance_list_rmf_roles");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "advance rmf", "advance phase", "advance step", "next phase", "move to categorize", "move to select", "move to implement", "move to assess", "move to authorize", "move to monitor"))
+        {
+            var systemId = GetContextValue(context, "system_id");
+            return BuildConversationalPrompt(
+                "Advance RMF Phase",
+                "I need to know which RMF phase to advance to.",
+                new[]
+                {
+                    "**Target Phase** — Prepare, Categorize, Select, Implement, Assess, Authorize, or Monitor"
+                },
+                "Advance eagle eye to Categorize phase",
+                systemId);
+        }
+
+        // Phase 1: Categorize
+        if (ContainsAny(lowerMessage, "categorize system", "security categorization", "set categorization", "fips 199", "impact level"))
+        {
+            var systemId = GetContextValue(context, "system_id");
+            return BuildConversationalPrompt(
+                "Categorize System (FIPS 199)",
+                "I need the information types and their impact levels to categorize this system.",
+                new[]
+                {
+                    "**Information Types** — SP 800-60 types (e.g. C.2.8.1 Personnel Security)",
+                    "**Confidentiality Impact** — Low, Moderate, or High",
+                    "**Integrity Impact** — Low, Moderate, or High",
+                    "**Availability Impact** — Low, Moderate, or High"
+                },
+                "Categorize eagle eye with info type C.2.8.1 'Personnel Security' confidentiality=Moderate integrity=Moderate availability=Low",
+                systemId);
+        }
+
+        if (ContainsAny(lowerMessage, "get categorization", "show categorization", "current categorization"))
+        {
+            var tool = FindToolByName("compliance_get_categorization");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "suggest info types", "information types", "suggest info", "info type"))
+        {
+            var tool = FindToolByName("compliance_suggest_info_types");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        // Phase 2: Select Controls
+        if (ContainsAny(lowerMessage, "select baseline", "control baseline", "choose baseline"))
+        {
+            var tool = FindToolByName("compliance_select_baseline");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "tailor baseline", "tailor controls", "customize baseline"))
+        {
+            var tool = FindToolByName("compliance_tailor_baseline");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "control inheritance", "set inheritance", "inherited controls", "common controls"))
+        {
+            var tool = FindToolByName("compliance_set_inheritance");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "get baseline", "show baseline", "current baseline", "view baseline"))
+        {
+            var tool = FindToolByName("compliance_get_baseline");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "generate crm", "customer responsibility matrix", "crm report"))
+        {
+            var tool = FindToolByName("compliance_generate_crm");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "stig mapping", "stig", "show stig"))
+        {
+            var tool = FindToolByName("compliance_show_stig_mapping");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        // Phase 3: Implement Controls — SSP Authoring
+        if (ContainsAny(lowerMessage, "write narrative", "control narrative", "implementation narrative"))
+        {
+            var systemId = GetContextValue(context, "system_id");
+            return BuildConversationalPrompt(
+                "Write Control Narrative",
+                "I need to know which control and the implementation narrative text.",
+                new[]
+                {
+                    "**Control ID** — NIST 800-53 control (e.g. AC-1, SI-2)",
+                    "**Narrative** — the implementation description",
+                    "**Status** — (optional) Implemented, PartiallyImplemented, Planned, or NotApplicable"
+                },
+                "Write narrative for AC-1: 'The organization develops an access control policy reviewed annually by the ISSO'",
+                systemId);
+        }
+
+        if (ContainsAny(lowerMessage, "suggest narrative", "auto-generate narrative", "ai narrative"))
+        {
+            var systemId = GetContextValue(context, "system_id");
+            return BuildConversationalPrompt(
+                "AI-Suggest Control Narrative",
+                "I need to know which control to generate a narrative for.",
+                new[]
+                {
+                    "**Control ID** — NIST 800-53 control (e.g. AC-1, SI-2)"
+                },
+                "Suggest narrative for AC-1",
+                systemId);
+        }
+
+        if (ContainsAny(lowerMessage, "batch narrative", "populate narratives", "batch populate"))
+        {
+            var tool = FindToolByName("compliance_batch_populate_narratives");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "narrative progress", "ssp progress", "how many narratives"))
+        {
+            var tool = FindToolByName("compliance_narrative_progress");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        // Phase 4: Assess Controls
+        if (ContainsAny(lowerMessage, "assess control", "control assessment", "test control"))
+        {
+            var systemId = GetContextValue(context, "system_id");
+            return BuildConversationalPrompt(
+                "Assess Security Control",
+                "I need the assessment details for the control.",
+                new[]
+                {
+                    "**Control ID** — NIST 800-53 control (e.g. AC-2)",
+                    "**Determination** — Satisfied, OtherThanSatisfied, or NotApplicable",
+                    "**Findings** — (optional) assessment findings or evidence reference"
+                },
+                "Assess control AC-2 as Satisfied with findings 'Validated via STIG scan 2025-06-15'",
+                systemId);
+        }
+
+        if (ContainsAny(lowerMessage, "take snapshot", "compliance snapshot", "capture snapshot"))
+        {
+            var tool = FindToolByName("compliance_take_snapshot");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "compare snapshot", "snapshot diff", "snapshot comparison"))
+        {
+            var tool = FindToolByName("compliance_compare_snapshots");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "verify evidence", "evidence verification", "check evidence"))
+        {
+            var tool = FindToolByName("compliance_verify_evidence");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "evidence completeness", "evidence gaps", "missing evidence"))
+        {
+            var tool = FindToolByName("compliance_check_evidence_completeness");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "generate sar", "security assessment report"))
+        {
+            var tool = FindToolByName("compliance_generate_sar");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        // Phase 5: Authorize
+        if (ContainsAny(lowerMessage, "issue authorization", "issue ato", "grant ato", "authorize system"))
+        {
+            var systemId = GetContextValue(context, "system_id");
+            return BuildConversationalPrompt(
+                "Issue Authorization Decision",
+                "I need the authorization details to issue the decision.",
+                new[]
+                {
+                    "**Decision Type** — ATO, AtoWithConditions, IATT, or DATO",
+                    "**Residual Risk Level** — Low, Medium, High, or Critical",
+                    "**Expiration Date** — ISO 8601 date (e.g. 2027-03-01)",
+                    "**Terms and Conditions** — (optional) authorization conditions"
+                },
+                "Issue ATO for eagle eye, residual risk Low, expires 2027-03-01",
+                systemId);
+        }
+
+        if (ContainsAny(lowerMessage, "accept risk", "risk acceptance", "risk decision"))
+        {
+            var tool = FindToolByName("compliance_accept_risk");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "risk register", "show risks", "view risks"))
+        {
+            var tool = FindToolByName("compliance_show_risk_register");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "create poam", "new poam", "add poam item"))
+        {
+            var systemId = GetContextValue(context, "system_id");
+            return BuildConversationalPrompt(
+                "Create POA&M Item",
+                "I need the weakness details to create a Plan of Action & Milestones entry.",
+                new[]
+                {
+                    "**Weakness** — description of the weakness",
+                    "**Control ID** — NIST 800-53 control (e.g. AC-2)",
+                    "**Severity** — CatI, CatII, or CatIII",
+                    "**Point of Contact** — responsible person",
+                    "**Scheduled Completion** — target date (e.g. 2026-06-01)"
+                },
+                "Create POA&M for eagle eye: weakness 'No MFA on admin accounts', control AC-2, severity CatII, POC john.doe@agency.gov, due 2026-06-01",
+                systemId);
+        }
+
+        if (ContainsAny(lowerMessage, "list poam", "show poam", "poam items", "view poam"))
+        {
+            var tool = FindToolByName("compliance_list_poam");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "generate rar", "risk assessment report"))
+        {
+            var tool = FindToolByName("compliance_generate_rar");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "bundle package", "authorization package", "ato package"))
+        {
+            var tool = FindToolByName("compliance_bundle_authorization_package");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        // Phase 6: Monitor
+        if (ContainsAny(lowerMessage, "conmon plan", "continuous monitoring plan", "create monitoring plan"))
+        {
+            var systemId = GetContextValue(context, "system_id");
+            return BuildConversationalPrompt(
+                "Create Continuous Monitoring Plan",
+                "I need the monitoring plan details.",
+                new[]
+                {
+                    "**Assessment Frequency** — Monthly, Quarterly, or Annually",
+                    "**Annual Review Date** — ISO 8601 date (e.g. 2026-12-15)"
+                },
+                "Create ConMon plan for eagle eye, frequency Monthly, annual review 2026-12-15",
+                systemId);
+        }
+
+        if (ContainsAny(lowerMessage, "conmon report", "monitoring report", "generate conmon"))
+        {
+            var tool = FindToolByName("compliance_generate_conmon_report");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "significant change", "report change", "system change"))
+        {
+            var tool = FindToolByName("compliance_report_significant_change");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "ato expiration", "track expiration", "when does ato expire"))
+        {
+            var tool = FindToolByName("compliance_track_ato_expiration");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "multi system dashboard", "all systems dashboard", "portfolio dashboard"))
+        {
+            var tool = FindToolByName("compliance_multi_system_dashboard");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>(), cancellationToken);
+        }
+
+        if (ContainsAny(lowerMessage, "reauthorization", "reauthorize", "re-authorize"))
+        {
+            var tool = FindToolByName("compliance_reauthorization_workflow");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>
+                {
+                    ["system_id"] = GetContextValue(context, "system_id")
+                }, cancellationToken);
+        }
+
+        // RMF status (cross-phase)
+        if (ContainsAny(lowerMessage, "rmf status", "rmf phase", "rmf progress", "where are we in rmf"))
+        {
+            var tool = FindToolByName("compliance_list_systems");
+            if (tool != null)
+                return await tool.ExecuteAsync(new Dictionary<string, object?>(), cancellationToken);
+        }
+
         // Default: return compliance status
         return await _statusTool.ExecuteAsync(new Dictionary<string, object?>
         {
@@ -1468,6 +2408,190 @@ public class ComplianceAgent : BaseAgent
         return null;
     }
 
+    /// <summary>Finds a registered tool by name from the Tools collection.</summary>
+    private BaseTool? FindToolByName(string toolName) =>
+        Tools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Resolves a system_id from the user message by extracting a system name
+    /// (e.g. "for ACME Portal") and looking it up in the database.
+    /// When no system name is found in the message, falls back to querying all
+    /// active systems — auto-selects if exactly one exists.
+    /// Returns the GUID string if found, null otherwise.
+    /// </summary>
+    private async Task<string?> ResolveSystemIdFromMessageAsync(string message, CancellationToken ct)
+    {
+        // 1. Try quoted value first: 'My System' or "My System"
+        var name = ExtractQuotedValue(message);
+
+        // 2. Try "for <SystemName>" pattern (case-insensitive)
+        if (string.IsNullOrEmpty(name))
+        {
+            var forMatch = Regex.Match(message, @"\bfor\s+(.+?)(?:\s*$)", RegexOptions.IgnoreCase);
+            if (forMatch.Success)
+                name = forMatch.Groups[1].Value.Trim();
+        }
+
+        try
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+            // If we extracted a name, look it up directly
+            if (!string.IsNullOrEmpty(name))
+            {
+                var system = await db.RegisteredSystems
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.Name.ToLower() == name.ToLower() && s.IsActive, ct);
+
+                if (system != null)
+                {
+                    Logger.LogInformation("Resolved system name '{Name}' to ID {Id}", name, system.Id);
+                    return system.Id.ToString();
+                }
+
+                Logger.LogDebug("Could not resolve system name '{Name}' — no matching active system found", name);
+            }
+
+            // No name in message — query all active systems
+            var activeSystems = await db.RegisteredSystems
+                .AsNoTracking()
+                .Where(s => s.IsActive)
+                .OrderByDescending(s => s.CreatedAt)
+                .Take(10)
+                .ToListAsync(ct);
+
+            if (activeSystems.Count == 1)
+            {
+                // Only one system — auto-select
+                Logger.LogInformation("Auto-selected single active system '{Name}' ({Id})",
+                    activeSystems[0].Name, activeSystems[0].Id);
+                return activeSystems[0].Id.ToString();
+            }
+
+            if (activeSystems.Count > 1)
+            {
+                // Multiple systems — store them for the error-formatting layer to
+                // produce a user-friendly "which system?" prompt.
+                _pendingSystemChoices = activeSystems
+                    .Select(s => new { s.Id, s.Name, s.CurrentRmfStep })
+                    .Cast<object>()
+                    .ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Error resolving system from message");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// When multiple active systems exist and no system was specified,
+    /// this list is populated so the response can prompt the user to choose.
+    /// Reset after each call to RouteToToolAsync.
+    /// </summary>
+    private List<object>? _pendingSystemChoices;
+
+    /// <summary>
+    /// Builds a friendly JSON response listing active systems so the user can
+    /// re-issue the command with a specific system name.
+    /// </summary>
+    private static string BuildSystemDisambiguationResponse(string originalMessage, List<object> systems)
+    {
+        // Extract the action verb from the message for the prompt examples
+        var actionPhrase = originalMessage.Trim();
+
+        var systemLines = new List<string>();
+        foreach (var s in systems)
+        {
+            // Use reflection to get Name/RmfStep from anonymous type
+            var type = s.GetType();
+            var name = type.GetProperty("Name")?.GetValue(s)?.ToString() ?? "Unknown";
+            var step = type.GetProperty("CurrentRmfStep")?.GetValue(s)?.ToString() ?? "Prepare";
+            systemLines.Add($"- **{name}** (Phase: {step})");
+        }
+
+        var firstName = systems.First().GetType().GetProperty("Name")?.GetValue(systems.First())?.ToString() ?? "MySystem";
+
+        return JsonSerializer.Serialize(new
+        {
+            success = false,
+            error = "SYSTEM_REQUIRED",
+            message = $"You have multiple registered systems. Please specify which system you mean.\n\n" +
+                      string.Join("\n", systemLines) +
+                      $"\n\nTry: *\"{actionPhrase} for {firstName}\"*"
+        });
+    }
+
+    /// <summary>Returns a conversational JSON response asking the user for required parameters.</summary>
+    private static string BuildConversationalPrompt(
+        string title,
+        string description,
+        string[] requiredFields,
+        string example,
+        string? systemId)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"## {title}\n");
+        sb.AppendLine(description + "\n");
+        sb.AppendLine("**I need the following information:**\n");
+        foreach (var field in requiredFields)
+            sb.AppendLine($"- {field}");
+
+        if (string.IsNullOrEmpty(systemId))
+            sb.AppendLine("\n- **System Name** — which system this applies to");
+
+        sb.AppendLine($"\n**Example:** *\"{example}\"*");
+
+        return JsonSerializer.Serialize(new
+        {
+            success = true,
+            conversational = true,
+            message = sb.ToString()
+        });
+    }
+
+    /// <summary>Extracts a single-quoted or double-quoted value from the message.</summary>
+    private static string? ExtractQuotedValue(string message)
+    {
+        // Try single quotes first, then double quotes
+        var match = Regex.Match(message, @"[''](.*?)['']|[""](.*?)[""]");
+        if (match.Success)
+            return match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;
+        return null;
+    }
+
+    /// <summary>Extracts an enum value from the message by matching known keywords.</summary>
+    private static string ExtractEnumValue(string message, string[] knownValues, string defaultValue)
+    {
+        // Normalize hyphens/spaces
+        var normalized = message.Replace("-", "").Replace(" ", "");
+        foreach (var v in knownValues)
+        {
+            var normV = v.Replace("-", "").Replace(" ", "");
+            if (normalized.Contains(normV, StringComparison.OrdinalIgnoreCase))
+            {
+                // Return PascalCase version
+                return v switch
+                {
+                    "majorapplication" => "MajorApplication",
+                    "enclave" => "Enclave",
+                    "platformit" => "PlatformIt",
+                    "missioncritical" or "mission-critical" => "MissionCritical",
+                    "missionessential" or "mission-essential" => "MissionEssential",
+                    "missionsupport" or "mission-support" => "MissionSupport",
+                    "azuregovernment" or "azure government" => "AzureGovernment",
+                    "azurecommercial" or "azure commercial" => "AzureCommercial",
+                    "onpremises" or "on-premises" => "OnPremises",
+                    "hybrid" => "Hybrid",
+                    _ => defaultValue
+                };
+            }
+        }
+        return defaultValue;
+    }
+
     /// <summary>Extracts the document type (ssp, poam, sar) from the user message.</summary>
     private static string ExtractDocumentType(string message)
     {
@@ -1653,6 +2777,19 @@ public class ComplianceAgent : BaseAgent
     private static string ClassifyIntent(string message)
     {
         var lower = message.ToLowerInvariant();
+        if (ContainsAny(lower, "register system", "register a new system", "new system")) return "RmfRegistration";
+        if (ContainsAny(lower, "list systems", "show systems", "registered systems", "my systems")) return "RmfListSystems";
+        if (ContainsAny(lower, "categorize", "categorization", "fips 199")) return "RmfCategorize";
+        if (ContainsAny(lower, "select baseline", "control baseline", "tailor baseline")) return "RmfBaseline";
+        if (ContainsAny(lower, "narrative", "ssp progress")) return "RmfImplement";
+        if (ContainsAny(lower, "assess control", "snapshot", "evidence completeness")) return "RmfAssess";
+        if (ContainsAny(lower, "issue authorization", "issue ato", "grant ato", "authorize system")) return "RmfAuthorize";
+        if (ContainsAny(lower, "accept risk", "risk register", "risk acceptance")) return "RmfRisk";
+        if (ContainsAny(lower, "conmon", "significant change", "ato expiration", "reauthoriz")) return "RmfMonitor";
+        if (ContainsAny(lower, "advance rmf", "advance phase", "next phase")) return "RmfAdvance";
+        if (ContainsAny(lower, "rmf status", "rmf phase", "rmf progress")) return "RmfStatus";
+        if (ContainsAny(lower, "boundary", "authorization boundary")) return "RmfBoundary";
+        if (ContainsAny(lower, "rmf role", "assign issm", "assign isso", "assign ao")) return "RmfRoleAssignment";
         if (ContainsAny(lower, "assess", "scan")) return "Assessment";
         if (ContainsAny(lower, "remediat", "fix")) return "Remediation";
         if (ContainsAny(lower, "evidence", "collect")) return "EvidenceCollection";

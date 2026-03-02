@@ -109,7 +109,7 @@ public abstract class BaseAgent
                 AgentName, context.ConversationId);
 
             var chatMessages = BuildChatContext(message, context);
-            var toolDefinitions = BuildToolDefinitions();
+            var toolDefinitions = BuildToolDefinitions(message);
 
             var chatOptions = new ChatOptions
             {
@@ -308,13 +308,123 @@ public abstract class BaseAgent
     }
 
     /// <summary>
+    /// Maximum number of tools that can be sent in a single Azure OpenAI request.
+    /// The API returns HTTP 400 if this limit is exceeded (array_above_max_length).
+    /// </summary>
+    private const int MaxToolsPerRequest = 128;
+
+    /// <summary>
+    /// Tool category prefixes mapped to message keywords.
+    /// When tool count exceeds <see cref="MaxToolsPerRequest"/>, only categories
+    /// matching the user's message are included, keeping the request within limits
+    /// and improving LLM focus.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> ToolCategoryKeywords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Kanban / task board tools
+        ["kanban_"] = new[] { "kanban", "board", "task", "sprint", "ticket", "assign", "backlog", "column" },
+        // CAC / PIV authentication tools
+        ["cac_"] = new[] { "cac", "piv", "certificate", "smart card", "smartcard", "sign out", "signout" },
+        // Privileged Identity Management tools
+        ["pim_"] = new[] { "pim", "privileged", "eligible", "activate role", "deactivate role", "role assignment", "approval" },
+        // Just-in-Time access tools
+        ["jit_"] = new[] { "jit", "just-in-time", "just in time", "access request", "session", "revoke access" },
+        // Continuous monitoring / watch tools
+        ["watch_"] = new[] { "watch", "alert", "monitor", "rule", "suppress", "notification", "escalation", "quiet hour", "trend", "auto-remediation", "auto remediation" },
+    };
+
+    /// <summary>
+    /// Prefixes for tools that are always included regardless of message content.
+    /// These are core compliance tools essential for general RMF/ATO workflows.
+    /// </summary>
+    private static readonly string[] AlwaysIncludePrefixes = new[]
+    {
+        "compliance_", "assessment_", "control_", "document_", "evidence_",
+        "remediation_", "audit_", "nist_", "rmf_", "conmon_", "emass_",
+        "system_", "poam_", "ssp_", "ato_", "authorization_", "categorize_",
+        "role_", "narrative_", "boundary_",
+    };
+
+    /// <summary>
     /// Converts registered BaseTool instances into AITool definitions for the LLM.
     /// Creates ToolAIFunction wrappers that provide Azure OpenAI-compliant
     /// schemas (with additionalProperties: false) from tool metadata.
+    /// When the total tool count exceeds <see cref="MaxToolsPerRequest"/>,
+    /// selects relevant tools based on the user's message keywords.
     /// </summary>
-    private List<AITool> BuildToolDefinitions()
+    private List<AITool> BuildToolDefinitions(string? message = null)
     {
-        return Tools.Select(tool => (AITool)new ToolAIFunction(tool)).ToList();
+        var selectedTools = Tools.Count <= MaxToolsPerRequest
+            ? Tools
+            : SelectToolsForMessage(message);
+
+        return selectedTools.Select(tool => (AITool)new ToolAIFunction(tool)).ToList();
+    }
+
+    /// <summary>
+    /// Selects a subset of tools relevant to the user's message.
+    /// Always includes core compliance tools; adds category-specific tools
+    /// only when the message matches their keywords. Falls back to
+    /// truncating at <see cref="MaxToolsPerRequest"/> if still over limit.
+    /// </summary>
+    private List<BaseTool> SelectToolsForMessage(string? message)
+    {
+        var lowerMessage = message?.ToLowerInvariant() ?? string.Empty;
+        var selected = new List<BaseTool>();
+        var addedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Phase 1: Always include core compliance tools
+        foreach (var tool in Tools)
+        {
+            var name = tool.Name.ToLowerInvariant();
+            var isCore = Array.Exists(AlwaysIncludePrefixes,
+                prefix => name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+
+            // Also include tools that don't match ANY category prefix (uncategorized = core)
+            if (!isCore)
+            {
+                var matchesAnyCategory = ToolCategoryKeywords.Keys.Any(
+                    prefix => name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+                if (!matchesAnyCategory)
+                    isCore = true;
+            }
+
+            if (isCore && addedNames.Add(tool.Name))
+                selected.Add(tool);
+        }
+
+        // Phase 2: Add category-specific tools when message matches keywords
+        foreach (var (prefix, keywords) in ToolCategoryKeywords)
+        {
+            var categoryMatches = keywords.Any(kw =>
+                lowerMessage.Contains(kw, StringComparison.OrdinalIgnoreCase));
+
+            if (!categoryMatches) continue;
+
+            foreach (var tool in Tools)
+            {
+                if (tool.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+                    addedNames.Add(tool.Name))
+                {
+                    selected.Add(tool);
+                }
+            }
+        }
+
+        Logger.LogInformation(
+            "Tool selection: {SelectedCount}/{TotalCount} tools selected for message (max {Max})",
+            selected.Count, Tools.Count, MaxToolsPerRequest);
+
+        // Phase 3: Hard cap — if still over limit, truncate
+        if (selected.Count > MaxToolsPerRequest)
+        {
+            Logger.LogWarning(
+                "Tool selection still exceeds limit ({Count}/{Max}), truncating",
+                selected.Count, MaxToolsPerRequest);
+            selected = selected.Take(MaxToolsPerRequest).ToList();
+        }
+
+        return selected;
     }
 }
 
@@ -405,9 +515,10 @@ public class AgentResponse
 
     /// <summary>
     /// Suggested follow-up actions the UI can present as clickable buttons.
+    /// Each action has a display title and a pre-filled prompt sent when clicked.
     /// Populated by agents based on the result context (e.g., failing scan → "Generate remediation plan").
     /// </summary>
-    public List<string> Suggestions { get; set; } = new();
+    public List<AgentSuggestedAction> Suggestions { get; set; } = new();
 
     /// <summary>
     /// Indicates whether the agent needs additional information from the user to complete the request.
@@ -458,4 +569,30 @@ public class AgentConversationContext
     {
         MessageHistory.Add((isUser ? "user" : "assistant", content));
     }
+}
+
+/// <summary>
+/// A suggested follow-up action with a display title and a pre-filled prompt.
+/// Serialized as <c>{ "title": "…", "prompt": "…" }</c> for the frontend.
+/// </summary>
+public class AgentSuggestedAction
+{
+    /// <summary>Short display label shown on the button.</summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>Pre-filled prompt text sent when the user clicks the button.</summary>
+    public string Prompt { get; set; } = string.Empty;
+
+    /// <summary>Creates a new suggested action.</summary>
+    public AgentSuggestedAction() { }
+
+    /// <summary>Creates a new suggested action with the given title and prompt.</summary>
+    public AgentSuggestedAction(string title, string prompt)
+    {
+        Title = title;
+        Prompt = prompt;
+    }
+
+    /// <summary>Creates a suggested action where the title is also used as the prompt.</summary>
+    public AgentSuggestedAction(string title) : this(title, title) { }
 }

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -49,7 +50,8 @@ public static class ServiceCollectionExtensions
         services.AddMemoryCache();
 
         // Register compliance services (Phase 4)
-        services.AddSingleton<INistControlsService, NistControlsService>();
+        // NOTE: NistControlsService is registered later via AddHttpClient<NistControlsService>()
+        // (typed HttpClient with Polly resilience). The interface is forwarded as a singleton.
         services.AddSingleton<IAzurePolicyComplianceService, AzurePolicyComplianceService>();
         services.AddSingleton<IDefenderForCloudService, DefenderForCloudService>();
         services.AddSingleton<IAtoComplianceEngine, AtoComplianceEngine>();
@@ -120,8 +122,8 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IDbContextFactory<AtoCopilotContext>>(),
             sp.GetRequiredService<IOptions<AlertOptions>>(),
             sp.GetRequiredService<ILogger<AlertManager>>(),
-            sp.GetService<IAlertCorrelationService>(),
-            sp.GetService<IAlertNotificationService>()));
+            sp,
+            sp.GetService<IAlertCorrelationService>()));
         services.AddSingleton<IAlertManager>(sp => sp.GetRequiredService<AlertManager>());
         services.AddSingleton<ComplianceWatchService>();
         services.AddSingleton<IComplianceWatchService>(sp => sp.GetRequiredService<ComplianceWatchService>());
@@ -130,7 +132,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<ComplianceWatchHostedService>();
 
         // HttpClient for NistControlsService with Polly resilience
-        services.AddHttpClient<NistControlsService>()
+        services.AddHttpClient(nameof(NistControlsService))
             .AddResilienceHandler("nist-catalog", builder =>
             {
                 builder.AddRetry(new HttpRetryStrategyOptions
@@ -141,6 +143,20 @@ public static class ServiceCollectionExtensions
                     UseJitter = true,
                 });
             });
+
+        // Register NistControlsService as a singleton using the named HttpClient
+        // from the factory above (with Polly resilience handlers configured).
+        services.AddSingleton<INistControlsService>(sp =>
+        {
+            var factory = sp.GetRequiredService<IHttpClientFactory>();
+            var httpClient = factory.CreateClient(nameof(NistControlsService));
+            return new NistControlsService(
+                sp.GetRequiredService<ILogger<NistControlsService>>(),
+                sp.GetRequiredService<IMemoryCache>(),
+                sp.GetRequiredService<IOptions<NistControlsOptions>>(),
+                httpClient,
+                sp.GetRequiredService<IConfiguration>());
+        });
 
         // NIST Controls cache warmup background service
         services.AddHostedService<NistControlsCacheWarmupService>();
@@ -237,7 +253,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ShowStigMappingTool>();
 
         // SSP Authoring service and tools (Feature 015 - US5)
-        services.AddScoped<ISspService, SspService>();
+        services.AddSingleton<ISspService, SspService>();
         services.AddSingleton<WriteNarrativeTool>();
         services.AddSingleton<SuggestNarrativeTool>();
         services.AddSingleton<BatchPopulateNarrativesTool>();
@@ -245,7 +261,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<GenerateSspTool>();
 
         // Assessment Artifact service and tools (Feature 015 - US7)
-        services.AddScoped<IAssessmentArtifactService, AssessmentArtifactService>();
+        services.AddSingleton<IAssessmentArtifactService, AssessmentArtifactService>();
         services.AddSingleton<AssessControlTool>();
         services.AddSingleton<TakeSnapshotTool>();
         services.AddSingleton<CompareSnapshotsTool>();
@@ -254,7 +270,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<GenerateSarTool>();
 
         // Authorization Decision service and tools (Feature 015 - US8)
-        services.AddScoped<IAuthorizationService, AuthorizationService>();
+        services.AddSingleton<IAuthorizationService, AuthorizationService>();
         services.AddSingleton<IssueAuthorizationTool>();
         services.AddSingleton<AcceptRiskTool>();
         services.AddSingleton<ShowRiskRegisterTool>();
@@ -264,7 +280,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<BundleAuthorizationPackageTool>();
 
         // ─── US9: Continuous Monitoring tools ────────────────────────────────
-        services.AddScoped<IConMonService, ConMonService>();
+        services.AddSingleton<IConMonService, ConMonService>();
         services.AddSingleton<CreateConMonPlanTool>();
         services.AddSingleton<GenerateConMonReportTool>();
         services.AddSingleton<ReportSignificantChangeTool>();
@@ -274,7 +290,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<NotificationDeliveryTool>();
 
         // ─── US10: eMASS & OSCAL Interoperability tools ──────────────────────
-        services.AddScoped<IEmassExportService, EmassExportService>();
+        services.AddSingleton<IEmassExportService, EmassExportService>();
         services.AddSingleton<ExportEmassTool>();
         services.AddSingleton<ImportEmassTool>();
         services.AddSingleton<ExportOscalTool>();
@@ -305,6 +321,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ComplianceHistoryTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ComplianceStatusTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ComplianceMonitoringTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ComplianceChatTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<IacComplianceScanTool>());
 
         // Compliance Watch tools as BaseTool
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WatchEnableMonitoringTool>());

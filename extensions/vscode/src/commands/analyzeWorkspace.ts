@@ -101,7 +101,14 @@ export async function analyzeWorkspace(mcpClient: McpClient): Promise<void> {
           };
 
           try {
-            const response = await mcpClient.sendMessage(request);
+            const response = await mcpClient.sendMessageWithProgress(
+              request,
+              (step) => {
+                progress.report({
+                  message: `${fileName}: ${step}`,
+                });
+              }
+            );
             const findings = parseFindings(response.response);
             allFindings.push(...findings);
           } catch {

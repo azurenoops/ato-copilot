@@ -17,24 +17,26 @@ const MAX_FILE_SIZE = 10_485_760;
 
 const WELCOME_SUGGESTIONS = [
   {
+    icon: '\u{1F4DD}',
+    title: 'Register a New System',
+    prompt:
+      "Register a new system called 'ACME Portal' as a Major Application with mission-critical designation in Azure Government",
+  },
+  {
     icon: '\u{1F50D}',
     title: 'Run a Compliance Assessment',
-    prompt: 'Run a NIST 800-53 compliance assessment on my Azure subscription',
-  },
-  {
-    icon: '\u{1F4CA}',
-    title: 'Check Compliance Score',
-    prompt: 'What is my current compliance score and what are the top findings?',
-  },
-  {
-    icon: '\u{1F6E1}\uFE0F',
-    title: 'FedRAMP Guidance',
-    prompt: 'What do I need to do to achieve FedRAMP Moderate authorization?',
+    prompt:
+      'Run a NIST 800-53 compliance assessment on my Azure subscription and show me the top findings',
   },
   {
     icon: '\u{1F4CB}',
     title: 'Generate SSP Document',
-    prompt: 'Help me generate a System Security Plan (SSP) for my system',
+    prompt: 'Generate a System Security Plan (SSP) for my registered system',
+  },
+  {
+    icon: '\u{1F4CA}',
+    title: 'Show RMF Status',
+    prompt: 'Show me all registered systems and their current RMF phase',
   },
 ];
 
@@ -156,7 +158,7 @@ export default function ChatWindow() {
                 message={message}
                 isToolExpanded={expandedTools.has(message.id)}
                 onToggleTool={() => toggleTool(message.id)}
-                onSuggestionClick={handleSuggestionClick}
+                onSuggestionClick={handleSuggestionSend}
               />
             ))}
 
@@ -279,7 +281,7 @@ function WelcomeScreen({ onSuggestionClick }: { onSuggestionClick: (prompt: stri
       </div>
       <h2 className="text-2xl font-bold text-gray-800 mb-2">How can I help you?</h2>
       <p className="text-gray-500 text-sm mb-8 max-w-lg text-center">
-        {"I'm your ATO compliance assistant. I can run assessments, analyze findings, generate documents, and guide you through the authorization process."}
+        {"I'm your ATO Copilot. I guide DoD teams through every step of the NIST Risk Management Framework — from system registration through continuous monitoring."}
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl w-full">
         {WELCOME_SUGGESTIONS.map((suggestion, idx) => (

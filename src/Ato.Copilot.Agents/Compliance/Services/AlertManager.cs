@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ato.Copilot.Core.Configuration;
@@ -20,9 +21,15 @@ public class AlertManager : IAlertManager
 {
     private readonly IDbContextFactory<AtoCopilotContext> _dbFactory;
     private readonly IAlertCorrelationService? _correlationService;
-    private readonly IAlertNotificationService? _notificationService;
+    private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<AlertManager> _logger;
     private readonly AlertOptions _alertOptions;
+
+    // Lazy-resolved to break circular dependency:
+    // AlertManager → IAlertNotificationService → AlertNotificationService → IComplianceWatchService
+    //   → ComplianceWatchService → IAlertManager → AlertManager
+    private IAlertNotificationService? _notificationService;
+    private bool _notificationServiceResolved;
 
     /// <summary>
     /// Valid alert status transitions. Key = current status, Value = allowed next statuses.
@@ -69,14 +76,27 @@ public class AlertManager : IAlertManager
         IDbContextFactory<AtoCopilotContext> dbFactory,
         IOptions<AlertOptions> alertOptions,
         ILogger<AlertManager> logger,
-        IAlertCorrelationService? correlationService = null,
-        IAlertNotificationService? notificationService = null)
+        IServiceProvider serviceProvider,
+        IAlertCorrelationService? correlationService = null)
     {
         _dbFactory = dbFactory;
         _alertOptions = alertOptions.Value;
         _logger = logger;
+        _serviceProvider = serviceProvider;
         _correlationService = correlationService;
-        _notificationService = notificationService;
+    }
+
+    /// <summary>
+    /// Lazily resolves IAlertNotificationService to break the singleton circular dependency.
+    /// </summary>
+    private IAlertNotificationService? EnsureNotificationServiceResolved()
+    {
+        if (!_notificationServiceResolved)
+        {
+            _notificationService = _serviceProvider.GetService<IAlertNotificationService>();
+            _notificationServiceResolved = true;
+        }
+        return _notificationService;
     }
 
     /// <inheritdoc />
@@ -123,11 +143,13 @@ public class AlertManager : IAlertManager
 
         // Phase 17 §9a.2 — fire notification after successful persistence.
         // Optional dependency: null → silent (backward-compatible).
-        if (_notificationService != null)
+        // Lazily resolved to break circular dependency chain.
+        var notificationService = EnsureNotificationServiceResolved();
+        if (notificationService != null)
         {
             try
             {
-                await _notificationService.SendNotificationAsync(alert, cancellationToken);
+                await notificationService.SendNotificationAsync(alert, cancellationToken);
             }
             catch (Exception ex)
             {
