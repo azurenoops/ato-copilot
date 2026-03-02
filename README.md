@@ -1,91 +1,131 @@
 # ATO Copilot
 
-Compliance-only MCP agent server for NIST 800-53 / FedRAMP authorization support on Azure Government.
+AI-powered compliance copilot that guides DoD teams through every step of the NIST Risk Management Framework (RMF) — from system registration through continuous monitoring and ATO authorization.
 
-Built from the [Platform Engineering Copilot](https://github.com/azurenoops/platform-engineering-copilot) architecture using the BaseAgent/BaseTool pattern.
+Built on the Model Context Protocol (MCP) with Azure OpenAI function calling, 130 compliance tools, and multi-channel delivery (VS Code, web chat, stdio).
 
 ## Features
 
-- **NIST 800-53 Compliance Assessment** — Run quick, policy, or full scans against Azure subscriptions
-- **Control Family Browser** — Get detailed info on AC, AU, IA, CM, SC, and all 20 control families
-- **Document Generation** — Generate SSP, POA&M, SAR, and assessment reports
-- **Evidence Collection** — Collect and store compliance evidence for audit
-- **Automated Remediation** — Guided or automated fixes with dry-run support
-- **Continuous Monitoring** — Real-time compliance posture tracking and alerting
-- **Audit Trail** — Full history of compliance assessments and remediations
-- **Configuration Agent** — Manage Azure subscription, framework, and scan settings via natural language
-- **Agent Handoff** — Automatic intent-based routing between Configuration and Compliance agents
-- **RBAC Enforcement** — Role-based access control (Viewer, Operator, Administrator, Auditor)
-- **Dual-Mode MCP** — Stdio (GitHub Copilot, Claude Desktop) + HTTP REST API
+### RMF Lifecycle Automation
+
+- **Prepare** — Register systems, define authorization boundaries, assign ISSO/ISSM/AO roles
+- **Categorize** — FIPS 199 impact levels with NIST SP 800-60 information type mapping
+- **Select** — Baseline selection, control tailoring, CRM inheritance, STIG cross-reference
+- **Implement** — Control narratives, batch SSP population, IaC compliance scanning
+- **Assess** — Automated compliance assessment, evidence collection, SAR generation
+- **Authorize** — ATO/IATT/DATO decisions, risk acceptance, POA&M management, authorization packages
+- **Monitor** — Continuous monitoring plans, drift detection, ConMon reports, expiration alerts
+
+### AI-Powered Intelligence
+
+- **Azure OpenAI Function Calling** — GPT-4o with intelligent tool selection (72/130 tools per request)
+- **Multi-Turn Conversations** — Conversational context across turns with automatic tool execution
+- **System Name Resolution** — Natural language system references resolved to UUIDs automatically
+- **Contextual Suggestions** — Follow-up action buttons based on conversation context
+
+### Enterprise Security
+
+- **CAC/PIV Authentication** — DoD smart card authentication with certificate role mapping
+- **Privileged Identity Management** — Azure PIM integration with JIT role activation
+- **RBAC Enforcement** — Viewer, Operator, Administrator, Auditor, AuthorizingOfficial roles
+- **Audit Logging** — Full correlation-tracked audit trail with 7-year retention
+
+### Multi-Channel Delivery
+
+- **VS Code Extension** — GitHub Copilot Chat participant with `/compliance`, `/knowledge`, `/config` commands
+- **Web Chat** — React + Tailwind SPA with SignalR streaming and suggestion buttons
+- **Stdio Mode** — Direct MCP integration for GitHub Copilot and Claude Desktop
+- **HTTP REST API** — SSE streaming endpoint for custom integrations
+
+### Document Generation & Interoperability
+
+- **SSP, POA&M, SAR, RAR** — QuestPDF and ClosedXML document generation
+- **eMASS Export** — Controls, POA&M, and OSCAL format export
+- **Template Engine** — Customizable document templates with save/reuse
 
 ## Quick Start
 
 ### Prerequisites
 
 - [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- [Docker](https://www.docker.com/) (recommended for full deployment)
 - Azure subscription (Azure Government preferred)
-- Azure CLI (`az login`)
+
+### Docker (Recommended)
+
+```bash
+cp .env.example .env
+# Edit .env with your Azure credentials and OpenAI settings
+docker compose -f docker-compose.mcp.yml up --build
+```
+
+This starts three services:
+
+| Service | Port | Description |
+|---------|------|-------------|
+| `ato-copilot-mcp` | 3001 | MCP server with 130 compliance tools |
+| `ato-copilot-chat` | 5001 | Web chat application |
+| `ato-copilot-sql` | 1433 | SQL Server 2022 database |
 
 ### Build & Test
 
 ```bash
 dotnet build Ato.Copilot.sln
-dotnet test Ato.Copilot.sln
+dotnet test Ato.Copilot.sln    # 3,164 tests
 ```
 
-### Run (HTTP mode)
+### Run Locally (HTTP mode)
 
 ```bash
 cd src/Ato.Copilot.Mcp
 dotnet run -- --http
 ```
 
-Server starts at `http://localhost:3001`. Try:
-- `GET /health` — Health check with capabilities
-- `GET /mcp/tools` — List available compliance tools
-- `POST /mcp/chat` — Send a compliance or configuration question
-- `POST /mcp` — MCP JSON-RPC endpoint (tools/list, tools/call)
+Server starts at `http://localhost:3001`:
 
-### Run (stdio mode)
+| Endpoint | Description |
+|----------|-------------|
+| `GET /health` | Health check with capability report |
+| `GET /mcp/tools` | List all 130 available tools |
+| `POST /mcp/chat/stream` | SSE streaming chat with AI function calling |
+| `POST /mcp/chat` | Synchronous chat endpoint |
+| `POST /mcp` | MCP JSON-RPC (tools/list, tools/call) |
+
+### Run Locally (Stdio mode)
 
 ```bash
 cd src/Ato.Copilot.Mcp
 dotnet run -- --stdio
 ```
 
-### Docker
+## MCP Tools (130)
 
-```bash
-cp .env.example .env
-# Edit .env with your Azure credentials
-docker compose -f docker-compose.mcp.yml up --build
-```
+### RMF Lifecycle Tools
 
-## MCP Tools
+| Category | Tools | Examples |
+|----------|-------|---------|
+| **Registration** (8) | System registration, boundaries, roles | `compliance_register_system`, `compliance_define_boundary`, `compliance_assign_role` |
+| **Categorization** (3) | FIPS 199, information types | `compliance_categorize_system`, `compliance_add_info_types` |
+| **Baseline Selection** (6) | Baselines, tailoring, inheritance, STIG | `compliance_select_baseline`, `compliance_tailor_baseline`, `compliance_show_stig_mapping` |
+| **SSP Authoring** (5) | Narratives, batch populate, SSP generation | `compliance_write_narrative`, `compliance_batch_populate`, `compliance_generate_ssp` |
+| **Assessment** (6) | Control assessment, evidence, SAR | `compliance_assess_control`, `compliance_record_effectiveness`, `compliance_generate_sar` |
+| **Authorization** (7) | ATO decisions, risk, POA&M, packages | `compliance_issue_authorization`, `compliance_create_poam`, `compliance_bundle_authorization_package` |
+| **Continuous Monitoring** (7) | ConMon plans, reports, reauthorization | `compliance_create_conmon_plan`, `compliance_generate_conmon_report`, `compliance_reauthorization_workflow` |
+| **Compliance Scanning** (11) | Assessments, remediation, evidence, audit | `compliance_assess`, `compliance_remediate`, `compliance_collect_evidence` |
+| **Templates** (4) | Document template management | `compliance_list_templates`, `compliance_generate_from_template` |
+| **eMASS/OSCAL** (3) | Interoperability exports | `compliance_emass_export_controls`, `compliance_emass_export_oscal` |
 
-### Compliance Tools
+### Platform Tools
 
-| Tool | Description |
-|------|-------------|
-| `compliance_assess` | Run NIST 800-53 compliance assessment |
-| `compliance_get_control_family` | Get control family details and Azure mapping |
-| `compliance_generate_document` | Generate SSP, POA&M, SAR documents |
-| `compliance_collect_evidence` | Collect compliance evidence from Azure |
-| `compliance_remediate` | Remediate compliance findings |
-| `compliance_validate_remediation` | Validate applied remediations |
-| `compliance_generate_plan` | Generate prioritized remediation plan |
-| `compliance_audit_log` | Get assessment audit trail |
-| `compliance_history` | Get compliance history and trends |
-| `compliance_status` | Get current compliance posture |
-| `compliance_monitoring` | Continuous compliance monitoring |
-| `compliance_chat` | Natural language compliance interaction |
-
-### Configuration Tools
-
-| Tool | Description |
-|------|-------------|
-| `configuration_manage` | Manage Azure subscription, framework, and scan settings |
-| `configuration_chat` | Natural language configuration interaction |
+| Category | Tools | Examples |
+|----------|-------|---------|
+| **Compliance Watch** (23) | Monitoring, alerts, drift, auto-remediation | `watch_enable_monitoring`, `watch_detect_drift`, `watch_manage_alerts` |
+| **Kanban** (21) | Remediation task boards | `kanban_create_task`, `kanban_update_status`, `kanban_get_board` |
+| **Auth & PIM** (15) | CAC auth, PIM roles, JIT access | `cac_authenticate`, `pim_activate_role`, `jit_request_access` |
+| **Knowledge Base** (7) | NIST, STIG, RMF, FedRAMP guidance | `compliance_explain_nist_control`, `compliance_search_stigs` |
+| **IaC Scanning** (1) | Infrastructure-as-Code compliance | `compliance_iac_scan` |
+| **Configuration** (1) | Settings management | `configuration_manage` |
+| **Chat** (1) | Open-ended compliance interaction | `compliance_chat` |
 
 ## Project Structure
 
@@ -93,88 +133,125 @@ docker compose -f docker-compose.mcp.yml up --build
 ato-copilot/
 ├── Ato.Copilot.sln
 ├── src/
-│   ├── Ato.Copilot.Core/          # Models, interfaces, configuration, EF Core
-│   ├── Ato.Copilot.State/         # In-memory state management
-│   ├── Ato.Copilot.Agents/        # BaseAgent/BaseTool + agents & services
-│   │   ├── Common/                # BaseAgent, BaseTool
-│   │   └── Compliance/            # ComplianceAgent, ConfigurationAgent
-│   │       ├── Agents/            # Agent implementations
-│   │       ├── Tools/             # 14 tool implementations
-│   │       └── Configuration/     # Agent options
-│   └── Ato.Copilot.Mcp/           # MCP server (stdio + HTTP)
-│       ├── Server/                # McpServer, McpHttpBridge, McpStdioService
-│       ├── Middleware/            # Auth, audit logging
-│       └── Tools/                 # ComplianceMcpTools (MCP tool definitions)
+│   ├── Ato.Copilot.Core/              # Domain models, EF Core (40 entities), interfaces
+│   │   ├── Data/Context/              # AtoCopilotContext — SQL Server / SQLite
+│   │   ├── Models/Compliance/         # RMF, assessment, authorization models
+│   │   └── Interfaces/Compliance/     # Service contracts
+│   ├── Ato.Copilot.Agents/            # AI agents with 130 tool implementations
+│   │   ├── Common/                    # BaseAgent (AI + keyword routing), BaseTool
+│   │   └── Compliance/
+│   │       ├── Agents/                # ComplianceAgent, ConfigurationAgent, KnowledgeBaseAgent
+│   │       ├── Tools/                 # 25 tool files across RMF lifecycle
+│   │       ├── Services/              # Business logic (40+ service implementations)
+│   │       └── Prompts/               # AI system prompts
+│   ├── Ato.Copilot.Mcp/              # MCP server (stdio + HTTP + SSE streaming)
+│   │   ├── Server/                    # McpServer, McpHttpBridge, McpStdioService
+│   │   ├── Middleware/                # CAC auth, RBAC, audit logging, correlation
+│   │   └── Prompts/                   # Prompt registry
+│   ├── Ato.Copilot.Chat/             # Web chat application
+│   │   ├── Controllers/              # Chat API endpoints
+│   │   ├── Hubs/                     # SignalR real-time streaming
+│   │   └── ClientApp/                # React + Tailwind CSS SPA
+│   └── Ato.Copilot.State/            # In-memory state management
+├── extensions/
+│   └── vscode/                        # VS Code extension (Chat participant + diagnostics)
 ├── tests/
-│   ├── Ato.Copilot.Tests.Unit/        # 170 unit tests (xUnit + FluentAssertions + Moq)
-│   └── Ato.Copilot.Tests.Integration/ # 20 integration tests (TestServer)
-├── specs/                          # Specify toolkit specs
+│   └── Ato.Copilot.Tests.Unit/        # 3,164 unit tests (xUnit + FluentAssertions + Moq)
+├── docs/                              # MkDocs Material documentation site
 ├── Dockerfile
-└── docker-compose.mcp.yml
+└── docker-compose.mcp.yml             # 3-service deployment
 ```
 
 ## Architecture
 
 ```
-MCP Client (GitHub Copilot / Claude Desktop / HTTP REST)
-    │
-    ▼
-┌────────────────────────────────────────┐
-│  Ato.Copilot.Mcp                       │
-│  ├── McpServer (stdio JSON-RPC)        │
-│  │   └── Agent Handoff (intent routing)│
-│  ├── McpHttpBridge (REST API)          │
-│  ├── ComplianceMcpTools (tool defs)    │
-│  └── Middleware (Auth + Audit)         │
-└────────────┬───────────────────────────┘
-             │
-     ┌───────┴───────┐
-     ▼               ▼
-┌────────────┐  ┌──────────────────┐
-│ Config     │  │ Compliance Agent │
-│ Agent      │  │ (12 tools)       │
-│ (2 tools)  │  │  ├── Assessment  │
-└────────────┘  │  ├── Remediation │
-                │  ├── Evidence    │
-                │  ├── Documents   │
-                │  └── Monitoring  │
-                └──────┬───────────┘
-                       │
-             ┌─────────┼──────────┐
-             ▼         ▼          ▼
-┌──────────────┐ ┌──────────┐ ┌────────────┐
-│ Core Services│ │ State    │ │ Azure SDKs │
-│ ├── Models   │ │ ├── Agent│ │ ├── ARG    │
-│ ├── DbContext│ │ ├── Conv │ │ ├── Policy │
-│ └── Config   │ │ └── RBAC │ │ └── MDfC   │
-└──────────────┘ └──────────┘ └────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                        MCP Clients                                  │
+│  VS Code Extension │ Web Chat (React) │ Stdio (Copilot/Claude)     │
+└────────┬────────────────────┬───────────────────┬───────────────────┘
+         │                    │                   │
+         ▼                    ▼                   ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  Ato.Copilot.Mcp — MCP Server (HTTP :3001 + stdio)                 │
+│  ├── SSE Streaming (POST /mcp/chat/stream)                         │
+│  ├── JSON-RPC (POST /mcp)                                          │
+│  ├── Middleware: CAC Auth → RBAC → Audit Logging → Correlation     │
+│  └── Agent Router: Intent classification → agent dispatch           │
+└────────────────────────────────┬────────────────────────────────────┘
+                                 │
+         ┌───────────────────────┼───────────────────────┐
+         ▼                       ▼                       ▼
+┌─────────────────┐  ┌────────────────────┐  ┌────────────────────┐
+│ Knowledge Base  │  │ Compliance Agent   │  │ Configuration      │
+│ Agent           │  │ (130 tools)        │  │ Agent              │
+│ (7 tools)       │  │                    │  │ (1 tool)           │
+│                 │  │ AI Path:           │  │                    │
+│ NIST, STIG,     │  │  Azure OpenAI      │  │ Settings           │
+│ RMF, FedRAMP    │  │  GPT-4o function   │  │ management         │
+│ guidance        │  │  calling           │  │                    │
+│                 │  │                    │  │                    │
+│                 │  │ Keyword Path:      │  │                    │
+│                 │  │  40+ route rules   │  │                    │
+│                 │  │  w/ conversational │  │                    │
+│                 │  │  fallback          │  │                    │
+└─────────────────┘  └────────┬───────────┘  └────────────────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              ▼               ▼               ▼
+┌──────────────────┐ ┌──────────────┐ ┌────────────────┐
+│ Core Services    │ │ EF Core      │ │ Azure SDKs     │
+│ ├── 40+ services │ │ ├── 40 DbSets│ │ ├── Resource    │
+│ ├── RMF workflow │ │ ├── SQL Server│ │ │    Graph       │
+│ ├── AI prompts   │ │ └── SQLite   │ │ ├── Policy      │
+│ └── Doc gen      │ │              │ │ ├── Defender     │
+│    (QuestPDF,    │ └──────────────┘ │ ├── PIM          │
+│     ClosedXML)   │                  │ └── Key Vault    │
+└──────────────────┘                  └────────────────┘
 ```
 
 ## Configuration
 
-Copy `.env.example` to `.env` and configure:
+### Environment Variables
 
 ```bash
-ATO_RUN_MODE=http                               # stdio | http
+# Server mode
+ATO_RUN_MODE=http                                        # stdio | http
+
+# Azure AD / Entra ID
 ATO_AZURE_AD__TENANT_ID=your-tenant-id
 ATO_AZURE_AD__CLIENT_ID=your-client-id
+
+# Azure Government
 ATO_GATEWAY__AZURE__SUBSCRIPTION_ID=your-sub-id
 ATO_GATEWAY__AZURE__CLOUD_ENVIRONMENT=AzureGovernment
+
+# Azure OpenAI (AI-powered tool calling)
+ATO_GATEWAY__AZUREOPENAI__ENDPOINT=https://your-endpoint.openai.azure.us/
+ATO_GATEWAY__AZUREOPENAI__APIKEY=your-api-key
+ATO_GATEWAY__AZUREOPENAI__CHATDEPLOYMENTNAME=gpt-4o
+ATO_GATEWAY__AZUREOPENAI__AGENTAIENABLED=true
+
+# Database
+ATO_CONNECTIONSTRINGS__DEFAULTCONNECTION="Server=localhost,1433;..."
 ```
 
-Key configuration sections in [appsettings.json](src/Ato.Copilot.Mcp/appsettings.json):
+### Key Configuration Sections
 
 | Section | Description |
 |---------|-------------|
-| `AzureAd` | Azure AD / Entra ID authentication settings |
-| `Gateway` | Azure connection settings (tenant, subscription, managed identity) |
-| `Database` | SQLite (dev) / SQL Server (prod) provider and timeouts |
-| `NistCatalog` | NIST SP 800-53 catalog source (online/offline, cache) |
-| `Agents:Compliance` | Default framework, impact level, supported frameworks |
-| `RateLimits` | Per-service rate limits (Resource Graph, Policy, Defender) |
-| `FeatureFlags` | Enable/disable scans, evidence, documents, remediation |
-| `Performance` | Concurrency, timeouts, memory budget, page sizes |
-| `Serilog` | Structured logging (console + rolling file) |
+| `Gateway:AzureOpenAI` | Azure OpenAI endpoint, model, temperature (0.3), max tool rounds (5) |
+| `AzureAd` | Azure AD / Entra ID with CAC/MFA toggle |
+| `Gateway:Azure` | Subscription, managed identity, Gov cloud |
+| `ConnectionStrings` | SQLite (dev) / SQL Server (prod) |
+| `NistCatalog` | NIST SP 800-53 Rev 5 OSCAL source with 30-day cache |
+| `Agents:Compliance` | Default framework, impact level, 20 control families |
+| `Agents:KnowledgeBaseAgent` | Token limits, confidence threshold |
+| `Agents:Kanban` | SLA tiers (24h–90d), notification channels |
+| `Pim` | Activation durations, high-privilege role definitions |
+| `CacAuth` | Session timeout (8h / 24h max) |
+| `Retention` | Assessments 3yr, audit logs 7yr |
+| `FeatureFlags` | 8 toggles for scans, evidence, remediation, docs |
+| `Performance` | 10 concurrent ops, 512MB budget, 300s timeout |
 
 ## Compliance Frameworks
 
@@ -187,39 +264,57 @@ Key configuration sections in [appsettings.json](src/Ato.Copilot.Mcp/appsettings
 | DoD IL4 | Supported |
 | DoD IL5 | Supported |
 
+## VS Code Extension
+
+The VS Code extension integrates as a GitHub Copilot Chat participant:
+
+```
+@ato register a new system called Eagle Eye
+@ato /compliance assess my system
+@ato /knowledge explain AC-2
+@ato /config set framework FedRAMP High
+```
+
+Features:
+- Chat participant with RMF workflow commands
+- IaC compliance diagnostics with CAT severity mapping
+- Code actions for STIG remediation suggestions
+- RMF Overview webview panel
+- Follow-up suggestion buttons
+
+Install from `extensions/vscode/` — see the extension README for details.
+
 ## Testing
 
 ```bash
-# Run all tests
+# Run all 3,164 tests
 dotnet test Ato.Copilot.sln
 
 # Run unit tests only
 dotnet test tests/Ato.Copilot.Tests.Unit/
-
-# Run integration tests only
-dotnet test tests/Ato.Copilot.Tests.Integration/
 ```
 
-- **170 unit tests** — Services, agents, tools, middleware, state management
-- **20 integration tests** — End-to-end HTTP endpoint testing with TestServer
+Test coverage spans:
+- **Tools** (32 files) — All 130 tool implementations
+- **Services** (40+ files) — Business logic, alert pipelines, PIM
+- **Agents** (20+ files) — Routing, AI path, prompt handling
+- **Middleware** (5 files) — CAC auth, RBAC, audit, correlation
+- **Scanners** (12 files) — All NIST control family scanners
+- **Evidence Collectors** (12 files) — Per-family evidence collection
+- **Models** (6 files) — Domain model validation
+- **MCP/Server** (6 files) — SSE streaming, error handling, intent routing
+- **Chat** (9 files) — Chat service, SignalR hub, message mapping
 
-## Specify Toolkit
+## Documentation
 
-This project uses the [Specify](https://github.com/specify-dev/specify) spec-driven development workflow:
+Full documentation is built with [MkDocs Material](https://squidfunk.github.io/mkdocs-material/):
 
 ```bash
-# Create a new feature
-.specify/scripts/bash/create-new-feature.sh "Add evidence API"
-
-# Set up implementation plan
-.specify/scripts/bash/setup-plan.sh
-
-# Check prerequisites
-.specify/scripts/bash/check-prerequisites.sh
-
-# Update agent context files
-.specify/scripts/bash/update-agent-context.sh copilot
+pip install mkdocs-material
+mkdocs serve
 ```
+
+Sections: Getting Started (6 role-specific guides), Personas (ISSM, ISSO, SCA, AO, Platform Engineer), RMF Phases (Prepare through Monitor), Reference (tool catalog, API, configuration).
 
 ## License
 
