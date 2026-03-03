@@ -4,6 +4,8 @@ AI-powered compliance copilot that guides DoD teams through every step of the NI
 
 Built on the Model Context Protocol (MCP) with Azure OpenAI function calling, 130 compliance tools, and multi-channel delivery (VS Code, web chat, stdio).
 
+ATO Copilot is where you DO the work, eMASS is where you SUBMIT the work.
+
 ## Features
 
 ### RMF Lifecycle Automation
