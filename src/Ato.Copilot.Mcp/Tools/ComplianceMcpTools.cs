@@ -194,6 +194,13 @@ public class ComplianceMcpTools
     private readonly ListImportsTool _listImportsTool;
     private readonly GetImportSummaryTool _getImportSummaryTool;
 
+    // ─── Feature 018: SAP Generation tools ─────────────────────────────────
+    private readonly GenerateSapTool _generateSapTool;
+    private readonly UpdateSapTool _updateSapTool;
+    private readonly FinalizeSapTool _finalizeSapTool;
+    private readonly GetSapTool _getSapTool;
+    private readonly ListSapsTool _listSapsTool;
+
     public ComplianceMcpTools(
         ComplianceAssessmentTool assessmentTool,
         ControlFamilyTool controlFamilyTool,
@@ -324,7 +331,13 @@ public class ComplianceMcpTools
         ImportXccdfTool importXccdfTool,
         ExportCklTool exportCklTool,
         ListImportsTool listImportsTool,
-        GetImportSummaryTool getImportSummaryTool)
+        GetImportSummaryTool getImportSummaryTool,
+        // Feature 018: SAP Generation tools
+        GenerateSapTool generateSapTool,
+        UpdateSapTool updateSapTool,
+        FinalizeSapTool finalizeSapTool,
+        GetSapTool getSapTool,
+        ListSapsTool listSapsTool)
     {
         _assessmentTool = assessmentTool;
         _controlFamilyTool = controlFamilyTool;
@@ -460,6 +473,13 @@ public class ComplianceMcpTools
         _exportCklTool = exportCklTool;
         _listImportsTool = listImportsTool;
         _getImportSummaryTool = getImportSummaryTool;
+
+        // Feature 018: SAP Generation
+        _generateSapTool = generateSapTool;
+        _updateSapTool = updateSapTool;
+        _finalizeSapTool = finalizeSapTool;
+        _getSapTool = getSapTool;
+        _listSapsTool = listSapsTool;
     }
 
     [Description("Run a NIST 800-53 compliance assessment. Scan types: quick, policy, full.")]
@@ -2372,5 +2392,101 @@ public class ComplianceMcpTools
             ["import_id"] = importId
         };
         return await _getImportSummaryTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Feature 018: SAP Generation Tools
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    [Description("Generate a Security Assessment Plan (SAP) for a registered system. " +
+        "Auto-populates from control baseline, OSCAL assessment objectives, STIG mappings, " +
+        "and evidence data. Returns Markdown SAP document with 15 sections.")]
+    public async Task<string> GenerateSapAsync(
+        string system_id,
+        string? assessment_id = null,
+        string? schedule_start = null,
+        string? schedule_end = null,
+        string? team_members = null,
+        string? scope_notes = null,
+        string? method_overrides = null,
+        string? rules_of_engagement = null,
+        string? format = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = system_id,
+            ["assessment_id"] = assessment_id,
+            ["schedule_start"] = schedule_start,
+            ["schedule_end"] = schedule_end,
+            ["team_members"] = team_members,
+            ["scope_notes"] = scope_notes,
+            ["method_overrides"] = method_overrides,
+            ["rules_of_engagement"] = rules_of_engagement,
+            ["format"] = format
+        };
+        return await _generateSapTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Update a Draft SAP's schedule, scope, team, assessment methods, or rules of engagement. Team replacement is atomic. Method overrides are additive. Finalized SAPs cannot be modified.")]
+    public async Task<string> UpdateSapAsync(
+        string sap_id,
+        string? schedule_start = null,
+        string? schedule_end = null,
+        string? scope_notes = null,
+        string? rules_of_engagement = null,
+        string? team_members = null,
+        string? method_overrides = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["sap_id"] = sap_id,
+            ["schedule_start"] = schedule_start,
+            ["schedule_end"] = schedule_end,
+            ["scope_notes"] = scope_notes,
+            ["rules_of_engagement"] = rules_of_engagement,
+            ["team_members"] = team_members,
+            ["method_overrides"] = method_overrides
+        };
+        return await _updateSapTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Finalize a Draft SAP — locks it with SHA-256 content hash. Finalized SAPs are immutable: no updates, no re-finalization.")]
+    public async Task<string> FinalizeSapAsync(
+        string sap_id,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["sap_id"] = sap_id
+        };
+        return await _finalizeSapTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Retrieve a specific SAP by ID or the latest SAP for a system. If both sap_id and system_id are provided, sap_id takes precedence. By system_id, prefers Finalized over Draft.")]
+    public async Task<string> GetSapAsync(
+        string? sap_id = null,
+        string? system_id = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["sap_id"] = sap_id,
+            ["system_id"] = system_id
+        };
+        return await _getSapTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("List all SAPs for a system, including Draft and Finalized history. Returns status, dates, and scope summary per SAP. Content is omitted.")]
+    public async Task<string> ListSapsAsync(
+        string system_id,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = system_id
+        };
+        return await _listSapsTool.ExecuteAsync(args, cancellationToken);
     }
 }

@@ -77,6 +77,13 @@ public partial class DocumentTemplateService : IDocumentTemplateService
             "SystemName", "SystemAcronym", "OverallRisk", "ResidualRisk",
             "Recommendation", "FindingsSummary", "RiskAcceptances",
             "PreparedBy", "PreparedDate"
+        ],
+        ["sap"] = [
+            "SystemName", "SystemAcronym", "BaselineLevel",
+            "TotalControls", "CustomerControls", "InheritedControls", "SharedControls",
+            "ControlMatrix", "StigBenchmarks", "AssessmentTeam",
+            "ScheduleStart", "ScheduleEnd", "RulesOfEngagement",
+            "PreparedBy", "PreparedDate"
         ]
     };
 
@@ -564,6 +571,9 @@ public partial class DocumentTemplateService : IDocumentTemplateService
             case "rar":
                 await PopulateRarData(db, systemId, data, cancellationToken);
                 break;
+            case "sap":
+                await PopulateSapData(db, systemId, data, cancellationToken);
+                break;
         }
 
         return data;
@@ -736,6 +746,60 @@ public partial class DocumentTemplateService : IDocumentTemplateService
         if (findings.Any(f => f.Severity == FindingSeverity.High)) return "High";
         if (findings.Any(f => f.Severity == FindingSeverity.Medium)) return "Moderate";
         return findings.Count > 0 ? "Low" : "None";
+    }
+
+    /// <summary>T038: Populate SAP-specific merge fields from persisted SAP data.</summary>
+    private static async Task PopulateSapData(
+        AtoCopilotContext db, string systemId,
+        Dictionary<string, string> data, CancellationToken ct)
+    {
+        var sap = await db.SecurityAssessmentPlans
+            .AsNoTracking()
+            .Include(s => s.ControlEntries)
+            .Include(s => s.TeamMembers)
+            .Where(s => s.RegisteredSystemId == systemId)
+            .OrderByDescending(s => s.Status == SapStatus.Finalized ? 1 : 0)
+            .ThenByDescending(s => s.GeneratedAt)
+            .FirstOrDefaultAsync(ct);
+
+        if (sap == null) return;
+
+        data["BaselineLevel"] = sap.BaselineLevel;
+        data["TotalControls"] = sap.TotalControls.ToString();
+        data["CustomerControls"] = sap.CustomerControls.ToString();
+        data["InheritedControls"] = sap.InheritedControls.ToString();
+        data["SharedControls"] = sap.SharedControls.ToString();
+        data["ScheduleStart"] = sap.ScheduleStart?.ToString("yyyy-MM-dd") ?? "Not scheduled";
+        data["ScheduleEnd"] = sap.ScheduleEnd?.ToString("yyyy-MM-dd") ?? "Not scheduled";
+        data["RulesOfEngagement"] = sap.RulesOfEngagement ?? "Not specified";
+
+        // Control matrix summary
+        var families = sap.ControlEntries
+            .GroupBy(e => e.ControlFamily)
+            .OrderBy(g => g.Key)
+            .Select(g => $"{g.Key}: {g.Count()} controls ({string.Join(", ", g.SelectMany(e => e.AssessmentMethods).Distinct().OrderBy(m => m))})")
+            .ToList();
+        data["ControlMatrix"] = families.Count > 0
+            ? string.Join("; ", families)
+            : "No controls";
+
+        // STIG benchmarks
+        var stigs = sap.ControlEntries
+            .SelectMany(e => e.StigBenchmarks)
+            .Distinct()
+            .OrderBy(s => s)
+            .ToList();
+        data["StigBenchmarks"] = stigs.Count > 0
+            ? string.Join(", ", stigs)
+            : "No STIG benchmarks";
+
+        // Assessment team
+        var team = sap.TeamMembers
+            .Select(m => $"{m.Name} ({m.Role}, {m.Organization})")
+            .ToList();
+        data["AssessmentTeam"] = team.Count > 0
+            ? string.Join("; ", team)
+            : "No team assigned";
     }
 
     // ═════════════════════════════════════════════════════════════════════════
