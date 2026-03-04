@@ -232,6 +232,59 @@ All evidence collected by ATO Copilot is integrity-protected:
 
 ---
 
+## SCAP/STIG Import for Assessment
+
+> Feature 017: SCAP/STIG Viewer Import
+
+As an SCA, you can leverage imported CKL and XCCDF data to inform your control assessments. Imported scan results automatically create compliance findings with STIG-to-NIST mappings, providing evidence for your assessment determinations.
+
+### Using Imported Scan Data
+
+After the ISSM imports CKL/XCCDF files, findings are automatically created with:
+- **CAT severity** mapped from STIG rules
+- **NIST control mapping** via CCI cross-references
+- **Control effectiveness** auto-determined based on aggregate finding status
+
+### Reviewing Import Results
+
+```
+Tool: compliance_list_imports
+Parameters:
+  system_id: "<system-guid>"
+```
+
+For per-finding detail:
+
+```
+Tool: compliance_get_import_summary
+Parameters:
+  import_id: "<import-record-id>"
+```
+
+### Assessment Workflow with STIG Imports
+
+```
+1. Review imported findings via compliance_list_imports
+2. compliance_assess_control  ← Use imported STIG data as evidence
+3. compliance_take_snapshot   ← Capture state including imported findings
+4. compliance_generate_sar    ← SAR includes STIG-based severity data
+```
+
+### Exporting Assessment State
+
+Export the current assessment state as a CKL checklist for external review:
+
+```
+Tool: compliance_export_ckl
+Parameters:
+  system_id: "<system-guid>"
+  benchmark_id: "Windows_Server_2022_STIG"
+```
+
+The exported CKL file is compatible with DISA STIG Viewer and eMASS.
+
+---
+
 ## See Also
 
 - [SCA Getting Started](../getting-started/sca.md) — First-time setup and first 3 commands

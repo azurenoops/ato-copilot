@@ -187,6 +187,13 @@ public class ComplianceMcpTools
     private readonly UpdateTemplateTool _updateTemplateTool;
     private readonly DeleteTemplateTool _deleteTemplateTool;
 
+    // ─── Feature 017: SCAP/STIG Import tools ──────────────────────────────
+    private readonly ImportCklTool _importCklTool;
+    private readonly ImportXccdfTool _importXccdfTool;
+    private readonly ExportCklTool _exportCklTool;
+    private readonly ListImportsTool _listImportsTool;
+    private readonly GetImportSummaryTool _getImportSummaryTool;
+
     public ComplianceMcpTools(
         ComplianceAssessmentTool assessmentTool,
         ControlFamilyTool controlFamilyTool,
@@ -311,7 +318,13 @@ public class ComplianceMcpTools
         UploadTemplateTool uploadTemplateTool,
         ListTemplatesTool listTemplatesTool,
         UpdateTemplateTool updateTemplateTool,
-        DeleteTemplateTool deleteTemplateTool)
+        DeleteTemplateTool deleteTemplateTool,
+        // Feature 017: SCAP/STIG Import tools
+        ImportCklTool importCklTool,
+        ImportXccdfTool importXccdfTool,
+        ExportCklTool exportCklTool,
+        ListImportsTool listImportsTool,
+        GetImportSummaryTool getImportSummaryTool)
     {
         _assessmentTool = assessmentTool;
         _controlFamilyTool = controlFamilyTool;
@@ -440,6 +453,13 @@ public class ComplianceMcpTools
         _listTemplatesTool = listTemplatesTool;
         _updateTemplateTool = updateTemplateTool;
         _deleteTemplateTool = deleteTemplateTool;
+
+        // Feature 017: SCAP/STIG Import
+        _importCklTool = importCklTool;
+        _importXccdfTool = importXccdfTool;
+        _exportCklTool = exportCklTool;
+        _listImportsTool = listImportsTool;
+        _getImportSummaryTool = getImportSummaryTool;
     }
 
     [Description("Run a NIST 800-53 compliance assessment. Scan types: quick, policy, full.")]
@@ -2256,5 +2276,101 @@ public class ComplianceMcpTools
             ["template_id"] = templateId
         };
         return await _deleteTemplateTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Feature 017: SCAP/STIG Viewer Import
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [Description("Import a DISA STIG Viewer CKL checklist file. Creates compliance findings, control effectiveness records, and evidence. Accepts base64-encoded file content (max 5 MB).")]
+    public async Task<string> ImportCklAsync(
+        string systemId,
+        string fileContent,
+        string fileName,
+        string? conflictResolution = null,
+        bool dryRun = false,
+        string? assessmentId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["file_content"] = fileContent,
+            ["file_name"] = fileName,
+            ["conflict_resolution"] = conflictResolution,
+            ["dry_run"] = dryRun,
+            ["assessment_id"] = assessmentId
+        };
+        return await _importCklTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Import a SCAP Compliance Checker XCCDF results file. Creates compliance findings and control effectiveness records from automated scan results.")]
+    public async Task<string> ImportXccdfAsync(
+        string systemId,
+        string fileContent,
+        string fileName,
+        string? conflictResolution = null,
+        bool dryRun = false,
+        string? assessmentId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["file_content"] = fileContent,
+            ["file_name"] = fileName,
+            ["conflict_resolution"] = conflictResolution,
+            ["dry_run"] = dryRun,
+            ["assessment_id"] = assessmentId
+        };
+        return await _importXccdfTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Export a CKL checklist file for a system and STIG benchmark. Returns base64-encoded XML content suitable for DISA STIG Viewer or eMASS upload.")]
+    public async Task<string> ExportCklAsync(
+        string systemId,
+        string benchmarkId,
+        string? assessmentId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["benchmark_id"] = benchmarkId,
+            ["assessment_id"] = assessmentId
+        };
+        return await _exportCklTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("List import history for a registered system. Shows CKL and XCCDF imports with summary statistics.")]
+    public async Task<string> ListImportsAsync(
+        string systemId,
+        int page = 1,
+        int pageSize = 20,
+        string? benchmarkId = null,
+        bool includeDryRuns = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = systemId,
+            ["page"] = page,
+            ["page_size"] = pageSize,
+            ["benchmark_id"] = benchmarkId,
+            ["include_dry_runs"] = includeDryRuns
+        };
+        return await _listImportsTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Get detailed summary of a specific import operation, including per-finding breakdown and unmatched rules.")]
+    public async Task<string> GetImportSummaryAsync(
+        string importId,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["import_id"] = importId
+        };
+        return await _getImportSummaryTool.ExecuteAsync(args, cancellationToken);
     }
 }

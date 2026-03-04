@@ -11,7 +11,7 @@ ATO Copilot is the first tool that:
 - Integrates with Azure for automated compliance evidence
 - Exports to eMASS so it fits into the existing DoD workflow instead of replacing it
 
-ATO Copilot is where you DO the work, eMASS is where you SUBMIT the work.
+ATO Copilot is where you DO the work, eMASS is where you SUBMIT the work. 
 
 ## Features
 

@@ -27,4 +27,8 @@
     <ProjectReference Include="..\..\src\Ato.Copilot.Channels\Ato.Copilot.Channels.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="TestData\**\*.*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

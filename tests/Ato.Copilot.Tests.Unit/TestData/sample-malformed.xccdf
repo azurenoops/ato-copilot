@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TestResult xmlns="http://checklists.nist.gov/xccdf/1.2"
+            id="xccdf_mil.disa.stig_testresult_default">
+  <benchmark href="xccdf_mil.disa.stig_benchmark_BROKEN"/>
+  <target>broken-host</target>
+  <!-- Malformed: missing closing tags, truncated XML -->
+  <rule-result idref="xccdf_mil.disa.stig_rule_SV-999999r1_rule"
+               severity="high" weight="10.0">
+    <result>fail</result>

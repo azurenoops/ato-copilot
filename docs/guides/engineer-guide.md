@@ -298,6 +298,57 @@ ATO Copilot integrates compliance checking directly into your VS Code editing ex
 
 ---
 
+## CKL Import & Export from VS Code
+
+> Feature 017: SCAP/STIG Viewer Import
+
+Engineers can import CKL checklist files and XCCDF scan results directly through the `@ato` Chat Participant in VS Code, and export CKL files for DISA STIG Viewer review.
+
+### Importing a CKL File
+
+Use the chat participant to import a CKL checklist:
+
+```
+@ato Import this CKL file for my Windows Server system
+```
+
+The AI will invoke `compliance_import_ckl` with the file content and map STIG findings to NIST controls in your baseline.
+
+### Importing XCCDF Scan Results
+
+```
+@ato Import SCAP scan results for system Eagle Eye
+```
+
+The AI resolves the system name to a UUID and invokes `compliance_import_xccdf`.
+
+### Exporting a CKL Checklist
+
+```
+@ato Export a CKL checklist for the Windows Server 2022 STIG on Eagle Eye
+```
+
+The exported CKL file can be opened in DISA STIG Viewer or uploaded to eMASS.
+
+### Reviewing Import History
+
+```
+@ato Show import history for Eagle Eye
+@ato Show details of import <import-id>
+```
+
+### Available Import Tools
+
+| Tool | Description |
+|------|-------------|
+| `compliance_import_ckl` | Import DISA STIG Viewer CKL checklist |
+| `compliance_import_xccdf` | Import SCAP Compliance Checker XCCDF results |
+| `compliance_export_ckl` | Export CKL for STIG Viewer / eMASS upload |
+| `compliance_list_imports` | List import history for a system |
+| `compliance_get_import_summary` | Detailed per-finding import breakdown |
+
+---
+
 ## See Also
 
 - [Engineer Getting Started](../getting-started/engineer.md) — First-time setup and first 3 commands

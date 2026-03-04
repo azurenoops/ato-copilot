@@ -453,7 +453,13 @@ public class McpServerAiIntegrationTests
             new UploadTemplateTool(Mock.Of<IDocumentTemplateService>(), Mock.Of<ILogger<UploadTemplateTool>>()),
             new ListTemplatesTool(Mock.Of<IDocumentTemplateService>(), Mock.Of<ILogger<ListTemplatesTool>>()),
             new UpdateTemplateTool(Mock.Of<IDocumentTemplateService>(), Mock.Of<ILogger<UpdateTemplateTool>>()),
-            new DeleteTemplateTool(Mock.Of<IDocumentTemplateService>(), Mock.Of<ILogger<DeleteTemplateTool>>()));
+            new DeleteTemplateTool(Mock.Of<IDocumentTemplateService>(), Mock.Of<ILogger<DeleteTemplateTool>>()),
+            // Feature 017: SCAP/STIG Import tools
+            new ImportCklTool(Mock.Of<IScanImportService>(), sf, Mock.Of<ILogger<ImportCklTool>>()),
+            new ImportXccdfTool(Mock.Of<IScanImportService>(), Mock.Of<ILogger<ImportXccdfTool>>()),
+            new ExportCklTool(Mock.Of<IScanImportService>(), Mock.Of<ILogger<ExportCklTool>>()),
+            new ListImportsTool(Mock.Of<IScanImportService>(), Mock.Of<ILogger<ListImportsTool>>()),
+            new GetImportSummaryTool(Mock.Of<IScanImportService>(), Mock.Of<ILogger<GetImportSummaryTool>>()));
     }
 
     private KnowledgeBaseMcpTools CreateKnowledgeBaseMcpTools()

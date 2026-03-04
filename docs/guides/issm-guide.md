@@ -742,6 +742,91 @@ custom template for DOCX generation.
 
 ---
 
+## SCAP/STIG Viewer Import Workflow
+
+> Feature 017: SCAP/STIG Viewer Import
+
+ATO Copilot supports importing DISA STIG Viewer CKL checklists and SCAP Compliance Checker XCCDF results directly into the compliance database. Imported data auto-creates compliance findings, assessment evidence, and control effectiveness records.
+
+### Import CKL Checklists
+
+Use `compliance_import_ckl` to import manual STIG checklist results from DISA STIG Viewer:
+
+```
+Tool: compliance_import_ckl
+Parameters:
+  system_id: "<system-guid>"
+  file_content: "<base64-encoded .ckl file>"
+  file_name: "windows_server_2022.ckl"
+  conflict_resolution: "Skip"
+  dry_run: "true"
+```
+
+!!! tip "Dry Run First"
+    Always run with `dry_run: true` first to preview changes. Review the summary, then re-run with `dry_run: false` to persist.
+
+### Import XCCDF Scan Results
+
+Use `compliance_import_xccdf` to import automated SCAP scan results:
+
+```
+Tool: compliance_import_xccdf
+Parameters:
+  system_id: "<system-guid>"
+  file_content: "<base64-encoded .xccdf file>"
+  file_name: "scan_results.xccdf"
+  conflict_resolution: "Overwrite"
+```
+
+### Export CKL for eMASS Upload
+
+Export current assessment state as a CKL checklist for upload to eMASS or review in DISA STIG Viewer:
+
+```
+Tool: compliance_export_ckl
+Parameters:
+  system_id: "<system-guid>"
+  benchmark_id: "Windows_Server_2022_STIG"
+```
+
+### Conflict Resolution Strategies
+
+| Strategy | Behavior |
+|----------|----------|
+| `Skip` | Keep existing findings unchanged (default) |
+| `Overwrite` | Replace existing findings with new import data |
+| `Merge` | Keep whichever finding has the higher severity |
+
+### Review Import History
+
+```
+Tool: compliance_list_imports
+Parameters:
+  system_id: "<system-guid>"
+  benchmark_id: "Windows_Server_2022_STIG"  (optional filter)
+```
+
+For detailed per-finding breakdown of a specific import:
+
+```
+Tool: compliance_get_import_summary
+Parameters:
+  import_id: "<import-record-id>"
+```
+
+### Typical ISSM STIG Import Workflow
+
+```
+1. Receive CKL/XCCDF files from assessors or scanning team
+2. compliance_import_ckl (dry_run: true)  ← Preview findings
+3. compliance_import_ckl (dry_run: false) ← Persist findings
+4. compliance_list_imports               ← Verify import record
+5. compliance_get_import_summary         ← Review per-finding details
+6. compliance_export_ckl                 ← Export for eMASS upload
+```
+
+---
+
 ## See Also
 
 - [ISSM Getting Started](../getting-started/issm.md) — First-time setup and first 3 commands

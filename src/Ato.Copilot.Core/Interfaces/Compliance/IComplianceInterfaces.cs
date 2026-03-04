@@ -1020,6 +1020,24 @@ public interface IStigKnowledgeService
     Task<List<CciMapping>> GetCciMappingsAsync(
         string controlId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get a STIG control by its Rule ID (e.g., "SV-254239r849090_rule").
+    /// Used by scan import for XCCDF rule-result resolution and CKL fallback matching.
+    /// </summary>
+    /// <param name="ruleId">STIG Rule ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The matching STIG control, or null if not found.</returns>
+    Task<StigControl?> GetStigControlByRuleIdAsync(string ruleId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get all STIG controls belonging to a specific benchmark.
+    /// Used by CKL export to enumerate the full STIG checklist.
+    /// </summary>
+    /// <param name="benchmarkId">Benchmark identifier (e.g., "Windows_Server_2022_STIG").</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of STIG controls for the benchmark (empty if none found).</returns>
+    Task<List<StigControl>> GetStigControlsByBenchmarkAsync(string benchmarkId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

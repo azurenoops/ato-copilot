@@ -13,6 +13,7 @@ using Ato.Copilot.Agents.Compliance.EvidenceCollectors;
 using Ato.Copilot.Agents.Compliance.Scanners;
 using Ato.Copilot.Agents.Compliance.Services;
 using Ato.Copilot.Agents.Compliance.Services.KnowledgeBase;
+using Ato.Copilot.Agents.Compliance.Services.ScanImport;
 using Ato.Copilot.Agents.Compliance.Tools;
 using Ato.Copilot.Agents.Configuration.Agents;
 using Ato.Copilot.Agents.Configuration.Tools;
@@ -302,6 +303,17 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<UpdateTemplateTool>();
         services.AddSingleton<DeleteTemplateTool>();
 
+        // ─── Feature 017: SCAP/STIG Viewer Import tools ─────────────────────
+        services.AddSingleton<ICklParser, CklParser>();
+        services.AddSingleton<IXccdfParser, XccdfParser>();
+        services.AddSingleton<ICklGenerator, CklGenerator>();
+        services.AddSingleton<IScanImportService, ScanImportService>();
+        services.AddSingleton<ImportCklTool>();
+        services.AddSingleton<ImportXccdfTool>();
+        services.AddSingleton<ExportCklTool>();
+        services.AddSingleton<ListImportsTool>();
+        services.AddSingleton<GetImportSummaryTool>();
+
         // Compliance Watch notification & escalation services (US4)
         services.AddSingleton<AlertNotificationService>();
         services.AddSingleton<IAlertNotificationService>(sp => sp.GetRequiredService<AlertNotificationService>());
@@ -421,6 +433,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ListTemplatesTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<UpdateTemplateTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<DeleteTemplateTool>());
+
+        // Feature 017: SCAP/STIG Import BaseTool wrappers
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ImportCklTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ImportXccdfTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ExportCklTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ListImportsTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<GetImportSummaryTool>());
 
         // Register the agent
         services.AddSingleton<ComplianceAgent>();
