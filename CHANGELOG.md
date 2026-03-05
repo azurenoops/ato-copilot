@@ -4,6 +4,37 @@ All notable changes to ATO Copilot are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.0] - 2026-03-05
+
+### Added
+
+#### Feature 018: Security Assessment Plan (SAP) Generation
+
+- **SAP Generation** (`compliance_generate_sap`) — Generate RMF Step 4 Security Assessment Plans from control baselines, OSCAL assessment objectives, STIG mappings, and evidence data. Auto-populates 15 sections with ~325 control entries (Moderate), assessment objectives, all three default methods (Examine/Interview/Test), STIG benchmark coverage, and evidence gap summaries. Supports Markdown, DOCX, and PDF output formats.
+- **SAP Customization** (`compliance_update_sap`) — Update Draft SAP schedule, team, scope notes, rules of engagement, and per-control assessment method overrides with SCA justification tracking.
+- **SAP Finalization** (`compliance_finalize_sap`) — Lock Draft SAPs with SHA-256 content integrity hash. Finalized SAPs are immutable and cannot be modified or re-finalized.
+- **SAP Retrieval** (`compliance_get_sap`) — Retrieve a specific SAP by ID or the latest SAP for a system. System lookups prefer Finalized over Draft status.
+- **SAP Listing** (`compliance_list_saps`) — List all SAPs for a system with status, dates, and scope summaries. Returns Draft and Finalized history ordered by generation date.
+- **SAP Validation** — Completeness checks for assessment objectives, methods, team assignment, and schedule dates. Returns `SapValidationResult` with `IsComplete` flag, warning list, and coverage counts. Advisory only — does not block finalization.
+- **SAP Status Summary** — `GetSapStatusAsync` returns latest SAP state (None/Draft/Finalized) with scope coverage for RMF lifecycle dashboard queries.
+- **SAP-to-SAR Alignment** — `GetSapSarAlignmentAsync` cross-references finalized SAP controls with `ComplianceAssessment` findings to identify planned-but-unassessed and assessed-but-unplanned controls for SAR generation integration.
+- **SAP Data Model** — `SecurityAssessmentPlan`, `SapControlEntry`, `SapTeamMember` entities with `SapStatus` enum, composite indexes on `(SystemId, Status)`, JSON columns for list properties, and cascade delete for team members.
+- **SAP DTOs** — `SapGenerationInput`, `SapUpdateInput`, `SapDocument`, `SapFamilySummary`, `SapValidationResult`, `SapSarAlignmentResult`, `SapMethodOverrideInput`, `SapTeamMemberInput`.
+- **DOCX/PDF Export** — `DocumentTemplateService` extended with `sap` merge field schema (15 fields) and `PopulateSapData` method for template-based document rendering.
+- **170 Unit Tests** — 38 model tests, 67 service tests, 56 tool tests, 2 performance benchmarks (Moderate 325 controls < 15s, High 421 controls < 30s), plus 7 additional service tests for validation, status, and alignment.
+
+### Fixed
+
+- **ato-compliance-gate Action** — Fixed 6 bugs in `.github/actions/ato-compliance-gate/action.yml`:
+  - `BLOCKING` and `ACCEPTED` counters were never incremented, causing the gate to always pass
+  - `jq | while read` pipe ran findings loop in a subshell, losing counter state; replaced with process substitution
+  - `compgen -G "**/*.tf"` required `globstar` which was never enabled; replaced with direct `find` commands
+  - File list passed via `GITHUB_OUTPUT` risked size limits and word-splitting; now uses a temp file read line-by-line
+  - `fail-on-error` input was declared but never referenced in the gate step
+  - ARM template grep used double-escaped `$schema` pattern
+
+---
+
 ## [1.18.0] - 2026-03-15
 
 ### Added

@@ -459,7 +459,12 @@ public class McpServerAiIntegrationTests
             new ImportXccdfTool(Mock.Of<IScanImportService>(), Mock.Of<ILogger<ImportXccdfTool>>()),
             new ExportCklTool(Mock.Of<IScanImportService>(), Mock.Of<ILogger<ExportCklTool>>()),
             new ListImportsTool(Mock.Of<IScanImportService>(), Mock.Of<ILogger<ListImportsTool>>()),
-            new GetImportSummaryTool(Mock.Of<IScanImportService>(), Mock.Of<ILogger<GetImportSummaryTool>>()));
+            new GetImportSummaryTool(Mock.Of<IScanImportService>(), Mock.Of<ILogger<GetImportSummaryTool>>()),
+            new GenerateSapTool(Mock.Of<ISapService>(), Mock.Of<ILogger<GenerateSapTool>>()),
+            new UpdateSapTool(Mock.Of<ISapService>(), Mock.Of<ILogger<UpdateSapTool>>()),
+            new FinalizeSapTool(Mock.Of<ISapService>(), Mock.Of<ILogger<FinalizeSapTool>>()),
+            new GetSapTool(Mock.Of<ISapService>(), Mock.Of<ILogger<GetSapTool>>()),
+            new ListSapsTool(Mock.Of<ISapService>(), Mock.Of<ILogger<ListSapsTool>>()));
     }
 
     private KnowledgeBaseMcpTools CreateKnowledgeBaseMcpTools()

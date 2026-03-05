@@ -157,6 +157,16 @@ public class AtoCopilotContext : DbContext
     /// <summary>Per-finding audit trail linking raw parsed data to ComplianceFindings.</summary>
     public DbSet<ScanImportFinding> ScanImportFindings => Set<ScanImportFinding>();
 
+    // ─── SAP Generation DbSets (Feature 018) ────────────────────────────────
+    /// <summary>Security Assessment Plans (RMF Step 4 deliverables).</summary>
+    public DbSet<SecurityAssessmentPlan> SecurityAssessmentPlans => Set<SecurityAssessmentPlan>();
+
+    /// <summary>Per-control assessment plan entries within SAPs.</summary>
+    public DbSet<SapControlEntry> SapControlEntries => Set<SapControlEntry>();
+
+    /// <summary>Assessment team members assigned to SAPs.</summary>
+    public DbSet<SapTeamMember> SapTeamMembers => Set<SapTeamMember>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -1305,6 +1315,89 @@ public class AtoCopilotContext : DbContext
             // Indexes
             entity.HasIndex(e => e.ScanImportRecordId).HasDatabaseName("IX_ScanImportFinding_ImportRecordId");
             entity.HasIndex(e => new { e.ScanImportRecordId, e.VulnId }).HasDatabaseName("IX_ScanImportFinding_Import_VulnId");
+        });
+
+        // ─── SecurityAssessmentPlan (Feature 018) ────────────────────────────────
+        modelBuilder.Entity<SecurityAssessmentPlan>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
+            entity.Property(e => e.RegisteredSystemId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.AssessmentId).HasMaxLength(36);
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.Title).HasMaxLength(500).IsRequired();
+            entity.Property(e => e.BaselineLevel).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.ScopeNotes).HasMaxLength(4000);
+            entity.Property(e => e.RulesOfEngagement).HasMaxLength(4000);
+            entity.Property(e => e.ContentHash).HasMaxLength(64);
+            entity.Property(e => e.GeneratedBy).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.FinalizedBy).HasMaxLength(200);
+            entity.Property(e => e.Format).HasMaxLength(20).HasDefaultValue("markdown");
+
+            // Relationships
+            entity.HasOne(e => e.RegisteredSystem)
+                .WithMany()
+                .HasForeignKey(e => e.RegisteredSystemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.ComplianceAssessment)
+                .WithMany()
+                .HasForeignKey(e => e.AssessmentId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Indexes
+            entity.HasIndex(e => new { e.RegisteredSystemId, e.Status })
+                .HasDatabaseName("IX_SecurityAssessmentPlan_System_Status");
+        });
+
+        // ─── SapControlEntry (Feature 018) ───────────────────────────────────────
+        modelBuilder.Entity<SapControlEntry>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
+            entity.Property(e => e.SecurityAssessmentPlanId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.ControlId).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.ControlTitle).HasMaxLength(500).IsRequired();
+            entity.Property(e => e.ControlFamily).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.InheritanceType).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.Provider).HasMaxLength(200);
+            entity.Property(e => e.OverrideRationale).HasMaxLength(2000);
+
+            // JSON column conversions for list properties
+            entity.Property(e => e.AssessmentMethods).HasConversion(stringListConverter);
+            entity.Property(e => e.AssessmentObjectives).HasConversion(stringListConverter);
+            entity.Property(e => e.EvidenceRequirements).HasConversion(stringListConverter);
+            entity.Property(e => e.StigBenchmarks).HasConversion(stringListConverter);
+
+            // Relationships
+            entity.HasOne(e => e.SecurityAssessmentPlan)
+                .WithMany(s => s.ControlEntries)
+                .HasForeignKey(e => e.SecurityAssessmentPlanId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Indexes
+            entity.HasIndex(e => new { e.SecurityAssessmentPlanId, e.ControlId })
+                .IsUnique()
+                .HasDatabaseName("IX_SapControlEntry_Plan_Control");
+        });
+
+        // ─── SapTeamMember (Feature 018) ─────────────────────────────────────────
+        modelBuilder.Entity<SapTeamMember>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
+            entity.Property(e => e.SecurityAssessmentPlanId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Organization).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Role).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.ContactInfo).HasMaxLength(500);
+
+            // Relationships
+            entity.HasOne(e => e.SecurityAssessmentPlan)
+                .WithMany(s => s.TeamMembers)
+                .HasForeignKey(e => e.SecurityAssessmentPlanId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 

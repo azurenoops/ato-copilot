@@ -314,6 +314,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ListImportsTool>();
         services.AddSingleton<GetImportSummaryTool>();
 
+        // ─── Feature 018: SAP Generation service and tools ───────────────────
+        services.AddSingleton<ISapService, SapService>();
+        services.AddSingleton<GenerateSapTool>();
+        services.AddSingleton<UpdateSapTool>();
+        services.AddSingleton<FinalizeSapTool>();
+        services.AddSingleton<GetSapTool>();
+        services.AddSingleton<ListSapsTool>();
+
         // Compliance Watch notification & escalation services (US4)
         services.AddSingleton<AlertNotificationService>();
         services.AddSingleton<IAlertNotificationService>(sp => sp.GetRequiredService<AlertNotificationService>());
@@ -440,6 +448,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ExportCklTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ListImportsTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<GetImportSummaryTool>());
+
+        // Feature 018: SAP Generation BaseTool wrappers
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<GenerateSapTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<UpdateSapTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<FinalizeSapTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<GetSapTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ListSapsTool>());
 
         // Register the agent
         services.AddSingleton<ComplianceAgent>();
