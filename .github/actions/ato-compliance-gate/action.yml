@@ -49,30 +49,28 @@ runs:
       id: discover
       shell: bash
       run: |
+        shopt -s globstar nullglob
         echo "Scanning for IaC files..."
         IFS=',' read -ra SCAN_DIRS <<< "${{ inputs.scan-paths }}"
-        IAC_FILES=""
+        FILE_LIST="${{ runner.temp }}/iac-file-list.txt"
+        : > "${FILE_LIST}"
+
         for dir in "${SCAN_DIRS[@]}"; do
+          dir="${dir%/}"
           # Terraform
-          if compgen -G "${dir}/**/*.tf" > /dev/null 2>&1; then
-            IAC_FILES="${IAC_FILES} $(find "${dir}" -name '*.tf' -type f)"
-          fi
+          find "${dir}" -name '*.tf' -type f >> "${FILE_LIST}" 2>/dev/null || true
           # Bicep
-          if compgen -G "${dir}/**/*.bicep" > /dev/null 2>&1; then
-            IAC_FILES="${IAC_FILES} $(find "${dir}" -name '*.bicep' -type f)"
-          fi
+          find "${dir}" -name '*.bicep' -type f >> "${FILE_LIST}" 2>/dev/null || true
           # ARM Templates
-          if compgen -G "${dir}/**/*.json" > /dev/null 2>&1; then
-            IAC_FILES="${IAC_FILES} $(find "${dir}" -name '*.json' -type f -exec grep -l '"\\$schema.*deploymentTemplate' {} \; 2>/dev/null)"
-          fi
+          find "${dir}" -name '*.json' -type f -exec grep -l '"\$schema.*deploymentTemplate' {} \; >> "${FILE_LIST}" 2>/dev/null || true
           # Kubernetes manifests
-          if compgen -G "${dir}/**/*.yaml" > /dev/null 2>&1; then
-            IAC_FILES="${IAC_FILES} $(find "${dir}" -name '*.yaml' -type f -exec grep -l 'apiVersion:' {} \; 2>/dev/null)"
-          fi
+          find "${dir}" -name '*.yaml' -type f -exec grep -l 'apiVersion:' {} \; >> "${FILE_LIST}" 2>/dev/null || true
         done
-        
-        FILE_COUNT=$(echo "${IAC_FILES}" | tr -s ' ' '\n' | grep -c '[^[:space:]]' || echo "0")
-        echo "files=${IAC_FILES}" >> $GITHUB_OUTPUT
+
+        # Deduplicate
+        sort -u -o "${FILE_LIST}" "${FILE_LIST}"
+        FILE_COUNT=$(wc -l < "${FILE_LIST}" | tr -d ' ')
+        echo "file-list=${FILE_LIST}" >> $GITHUB_OUTPUT
         echo "file-count=${FILE_COUNT}" >> $GITHUB_OUTPUT
         echo "Found ${FILE_COUNT} IaC files to scan"
 
@@ -84,6 +82,7 @@ runs:
         BLOCKING=0
         ACCEPTED=0
         THRESHOLD=${{ inputs.severity-threshold }}
+        FILE_LIST="${{ steps.discover.outputs.file-list }}"
         FINDINGS_FILE="${{ runner.temp }}/compliance-findings.json"
         echo "[]" > "${FINDINGS_FILE}"
 
@@ -99,30 +98,30 @@ runs:
         echo "Severity threshold: CAT ${THRESHOLD} and above will block"
 
         # Scan each file using the MCP server's IaC scanning capability
-        for file in ${{ steps.discover.outputs.files }}; do
+        while IFS= read -r file; do
           if [ -z "${file}" ]; then continue; fi
           echo "Scanning: ${file}"
-          
+
           # Call MCP server for IaC compliance check
           RESPONSE=$(curl -s -X POST "${{ inputs.mcp-server-url }}/api/tools/compliance_scan_iac" \
             -H "Content-Type: application/json" \
             -d "{\"file_path\": \"${file}\"}" \
             --connect-timeout 5 \
             --max-time 30 2>/dev/null || echo '{"findings": []}')
-          
+
           # Parse findings from response
           FILE_FINDINGS=$(echo "${RESPONSE}" | jq -r '.findings // [] | length' 2>/dev/null || echo "0")
           TOTAL=$((TOTAL + FILE_FINDINGS))
-          
+
           # Check each finding against severity threshold
           if [ "${FILE_FINDINGS}" -gt "0" ]; then
-            echo "${RESPONSE}" | jq -c '.findings[]' 2>/dev/null | while read -r finding; do
+            while IFS= read -r finding; do
               CAT=$(echo "${finding}" | jq -r '.cat_severity // 3')
               CONTROL=$(echo "${finding}" | jq -r '.control_id // "unknown"')
               RULE=$(echo "${finding}" | jq -r '.stig_id // "N/A"')
               MSG=$(echo "${finding}" | jq -r '.message // "Compliance finding"')
               LINE=$(echo "${finding}" | jq -r '.line // 1')
-              
+
               # Check risk acceptance
               IS_ACCEPTED="false"
               if [ "${{ inputs.respect-risk-acceptances }}" = "true" ]; then
@@ -132,18 +131,20 @@ runs:
                   --connect-timeout 5 --max-time 10 2>/dev/null || echo '{"accepted": false}')
                 IS_ACCEPTED=$(echo "${ACCEPT_CHECK}" | jq -r '.accepted // false')
               fi
-              
+
               if [ "${IS_ACCEPTED}" = "true" ]; then
+                ACCEPTED=$((ACCEPTED + 1))
                 echo "::notice file=${file},line=${LINE}::${CONTROL} (${RULE}) CAT ${CAT} — Risk accepted: ${MSG}"
               elif [ "${CAT}" -le "${THRESHOLD}" ]; then
+                BLOCKING=$((BLOCKING + 1))
                 echo "::error file=${file},line=${LINE}::${CONTROL} (${RULE}) CAT ${CAT}: ${MSG}"
               else
                 echo "::warning file=${file},line=${LINE}::${CONTROL} (${RULE}) CAT ${CAT}: ${MSG}"
               fi
-            done
+            done < <(echo "${RESPONSE}" | jq -c '.findings[]' 2>/dev/null)
           fi
-        done
-        
+        done < "${FILE_LIST}"
+
         echo "total-findings=${TOTAL}" >> $GITHUB_OUTPUT
         echo "blocking-findings=${BLOCKING}" >> $GITHUB_OUTPUT
         echo "accepted-findings=${ACCEPTED}" >> $GITHUB_OUTPUT
@@ -155,7 +156,7 @@ runs:
         BLOCKING=${{ steps.scan.outputs.blocking-findings }}
         TOTAL=${{ steps.scan.outputs.total-findings }}
         ACCEPTED=${{ steps.scan.outputs.accepted-findings }}
-        
+
         echo "## ATO Compliance Gate Results" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
@@ -164,12 +165,14 @@ runs:
         echo "| Blocking (CAT I/II) | ${BLOCKING} |" >> $GITHUB_STEP_SUMMARY
         echo "| Risk Accepted | ${ACCEPTED} |" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        
+
         if [ "${BLOCKING}" -gt "0" ]; then
           echo "status=fail" >> $GITHUB_OUTPUT
           echo "::error::Compliance gate FAILED: ${BLOCKING} blocking finding(s) detected"
           echo "**Status: FAILED** — ${BLOCKING} blocking finding(s) must be resolved or risk-accepted before merge." >> $GITHUB_STEP_SUMMARY
-          exit 1
+          if [ "${{ inputs.fail-on-error }}" = "true" ]; then
+            exit 1
+          fi
         else
           echo "status=pass" >> $GITHUB_OUTPUT
           echo "**Status: PASSED** — No blocking compliance findings." >> $GITHUB_STEP_SUMMARY
