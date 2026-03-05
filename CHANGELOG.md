@@ -4,6 +4,37 @@ All notable changes to ATO Copilot are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.0] - 2026-03-05
+
+### Added
+
+#### Feature 019: Prisma Cloud Scan Import
+
+- **Prisma CSV Import** (`compliance_import_prisma_csv`) — Import Prisma Cloud console CSV exports with automatic severity mapping, NIST 800-53 control resolution via policy-to-CCI crosswalk, finding creation, and control effectiveness determination. Supports dry-run preview mode and multi-subscription resolution.
+- **Prisma API JSON Import** (`compliance_import_prisma_api`) — Import Prisma Cloud API v2 alert JSON responses with full alert detail preservation (resource metadata, remediation CLI commands, compliance standards). Supports auto-resolve subscription mode to match Prisma subscriptions to registered systems.
+- **Prisma Policy Catalog** (`compliance_list_prisma_policies`) — List Prisma Cloud policies from imported scan data with filtering by severity, cloud type, compliance standard, and enabled status. Returns policy-to-NIST control mappings and alert counts.
+- **Prisma Trend Analysis** (`compliance_prisma_trend`) — Analyze Prisma Cloud posture trends across imports with configurable time windows and grouping (by severity, policy, resource type, region, compliance standard). Returns per-period open/resolved/new alert counts for ConMon drift detection.
+- **PrismaCsvParser** — Parses Prisma Cloud console CSV exports with column-header detection, severity normalization, and policy ID extraction.
+- **PrismaApiJsonParser** — Parses Prisma Cloud API v2 alert JSON with nested resource metadata, remediation steps, compliance standard extraction, and alert status mapping.
+- **PrismaSeverityMapper** — Maps Prisma Cloud severity levels (Critical/High/Medium/Low/Informational) to RMF-aligned finding severity categories with configurable threshold overrides.
+- **Shared Downstream Pipeline** — Prisma imports reuse the scan import pipeline from Feature 017: ComplianceFinding creation, ControlEffectiveness aggregation, SHA-256 evidence capture, and ScanImportRecord/ScanImportFinding tracking.
+- **Multi-Subscription Resolution** — Auto-resolves Prisma Cloud subscription/account IDs to registered systems via `ISubscriptionResolverService`, with structured logging for unresolved subscriptions.
+- **ScanImportType Expansion** — Added `PrismaCsv` and `PrismaApi` to `ScanImportType` enum; added `Cloud` to `ScanSourceType` enum.
+- **Prisma-Specific Finding Fields** — Extended `ScanImportFinding` with `PrismaAlertId`, `CloudResourceType`, `CloudResourceName`, `CloudRegion`, `PrismaPolicyId`, `RemediationCli`, and `ComplianceStandards` for full Prisma alert fidelity.
+- **164 Unit Tests** — 21 CSV parser tests, 13 API JSON parser tests, 10 severity mapper tests, 66 service tests (import, policies, trend, integration, downstream artifacts), 42 tool tests, 2 performance benchmarks (500-alert CSV < 15s, 500-alert JSON < 10s), plus model and enum tests.
+
+### Documentation
+
+- **Agent Tool Catalog** — 4 new tool entries with parameter tables, JSON response examples, RBAC roles, and RMF step mapping.
+- **ISSM Guide** — "Import Prisma Cloud Scan Results" workflow section (CSV export, multi-subscription resolution, re-import after remediation) and "Cloud Posture Oversight" section (trend review, ConMon integration, import cadence guidance).
+- **SCA Guide** — "Assess Controls Using Prisma Cloud Data" section (ControlEffectiveness auto-population, trend validation, combined STIG+Prisma evidence review).
+- **Engineer Guide** — "Prisma Remediation Workflow" section (remediation guidance, CLI scripts, resource-centric filtering, policy catalog) and updated Available Import Tools table.
+- **Tool Inventory** — Category 9 "Prisma Cloud Import Tools" (tools #115-118), total tool count updated from 114 to 118.
+- **RMF Assess Phase** — Prisma import steps added to assessment cycle and new "Prisma Cloud Scan Import as Assessment Input" subsection.
+- **RMF Monitor Phase** — "Prisma Cloud Periodic Re-Import" section with recommended cadence table, trend analysis guidance, and ConMon integration notes.
+
+---
+
 ## [1.19.0] - 2026-03-05
 
 ### Added
