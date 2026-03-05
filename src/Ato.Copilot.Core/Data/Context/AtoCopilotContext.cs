@@ -150,6 +150,13 @@ public class AtoCopilotContext : DbContext
     /// <summary>Significant system changes that may trigger reauthorization.</summary>
     public DbSet<SignificantChange> SignificantChanges => Set<SignificantChange>();
 
+    // ─── SCAP/STIG Import DbSets (Feature 017) ──────────────────────────────
+    /// <summary>Tracks each file import operation (one per CKL/XCCDF file).</summary>
+    public DbSet<ScanImportRecord> ScanImportRecords => Set<ScanImportRecord>();
+
+    /// <summary>Per-finding audit trail linking raw parsed data to ComplianceFindings.</summary>
+    public DbSet<ScanImportFinding> ScanImportFindings => Set<ScanImportFinding>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -253,11 +260,21 @@ public class AtoCopilotContext : DbContext
             // New properties (Feature 015 — US7)
             entity.Property(e => e.CatSeverity).HasConversion<string>().HasMaxLength(10);
 
+            // New properties (Feature 017 — SCAP/STIG Import)
+            entity.Property(e => e.ImportRecordId).HasMaxLength(100);
+
+            // Relationship: ComplianceFinding → ScanImportRecord (optional)
+            entity.HasOne<ScanImportRecord>()
+                .WithMany()
+                .HasForeignKey(e => e.ImportRecordId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             // Indexes
             entity.HasIndex(e => e.ControlId);
             entity.HasIndex(e => e.AssessmentId);
             entity.HasIndex(e => e.ControlFamily);
             entity.HasIndex(e => new { e.AssessmentId, e.Severity });
+            entity.HasIndex(e => e.ImportRecordId).HasDatabaseName("IX_ComplianceFinding_ImportRecordId");
         });
 
         // ─── NistControl ────────────────────────────────────────────────────────
@@ -1196,6 +1213,98 @@ public class AtoCopilotContext : DbContext
         modelBuilder.Entity<RemediationTask>(entity =>
         {
             entity.HasIndex(e => e.PoamItemId).HasDatabaseName("IX_RemediationTask_PoamItemId");
+        });
+
+        // ─── ScanImportRecord (Feature 017 — SCAP/STIG Import) ──────────────
+        modelBuilder.Entity<ScanImportRecord>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(100);
+
+            // Required strings
+            entity.Property(e => e.RegisteredSystemId).HasMaxLength(100);
+            entity.Property(e => e.AssessmentId).HasMaxLength(100);
+            entity.Property(e => e.FileName).HasMaxLength(500);
+            entity.Property(e => e.FileHash).HasMaxLength(128);
+            entity.Property(e => e.ImportedBy).HasMaxLength(200);
+
+            // Optional strings
+            entity.Property(e => e.BenchmarkId).HasMaxLength(200);
+            entity.Property(e => e.BenchmarkVersion).HasMaxLength(50);
+            entity.Property(e => e.BenchmarkTitle).HasMaxLength(500);
+            entity.Property(e => e.TargetHostName).HasMaxLength(200);
+            entity.Property(e => e.TargetIpAddress).HasMaxLength(50);
+            entity.Property(e => e.ErrorMessage).HasMaxLength(4000);
+
+            // Enum → string conversion
+            entity.Property(e => e.ImportType).HasConversion<string>().HasMaxLength(10);
+            entity.Property(e => e.ImportStatus).HasConversion<string>().HasMaxLength(30);
+            entity.Property(e => e.ConflictResolution).HasConversion<string>().HasMaxLength(20);
+
+            // JSON column — Warnings
+            entity.Property(e => e.Warnings).HasConversion(stringListConverter);
+
+            // Relationships
+            entity.HasOne<RegisteredSystem>()
+                .WithMany()
+                .HasForeignKey(e => e.RegisteredSystemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne<ComplianceAssessment>()
+                .WithMany()
+                .HasForeignKey(e => e.AssessmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Indexes
+            entity.HasIndex(e => e.RegisteredSystemId).HasDatabaseName("IX_ScanImportRecord_RegisteredSystemId");
+            entity.HasIndex(e => new { e.RegisteredSystemId, e.BenchmarkId }).HasDatabaseName("IX_ScanImportRecord_System_Benchmark");
+            entity.HasIndex(e => new { e.RegisteredSystemId, e.FileHash }).HasDatabaseName("IX_ScanImportRecord_System_FileHash");
+        });
+
+        // ─── ScanImportFinding (Feature 017 — SCAP/STIG Import) ─────────────
+        modelBuilder.Entity<ScanImportFinding>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(100);
+
+            // Required strings
+            entity.Property(e => e.ScanImportRecordId).HasMaxLength(100);
+            entity.Property(e => e.VulnId).HasMaxLength(20);
+            entity.Property(e => e.RawStatus).HasMaxLength(50);
+            entity.Property(e => e.RawSeverity).HasMaxLength(20);
+
+            // Optional strings
+            entity.Property(e => e.RuleId).HasMaxLength(100);
+            entity.Property(e => e.StigVersion).HasMaxLength(50);
+            entity.Property(e => e.FindingDetails).HasMaxLength(8000);
+            entity.Property(e => e.Comments).HasMaxLength(8000);
+            entity.Property(e => e.SeverityOverride).HasMaxLength(20);
+            entity.Property(e => e.SeverityJustification).HasMaxLength(4000);
+            entity.Property(e => e.ResolvedStigControlId).HasMaxLength(20);
+            entity.Property(e => e.ComplianceFindingId).HasMaxLength(100);
+
+            // Enum → string conversion
+            entity.Property(e => e.MappedSeverity).HasConversion<string>().HasMaxLength(10);
+            entity.Property(e => e.ImportAction).HasConversion<string>().HasMaxLength(20);
+
+            // JSON columns
+            entity.Property(e => e.ResolvedNistControlIds).HasConversion(stringListConverter);
+            entity.Property(e => e.ResolvedCciRefs).HasConversion(stringListConverter);
+
+            // Relationships
+            entity.HasOne<ScanImportRecord>()
+                .WithMany()
+                .HasForeignKey(e => e.ScanImportRecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne<ComplianceFinding>()
+                .WithMany()
+                .HasForeignKey(e => e.ComplianceFindingId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Indexes
+            entity.HasIndex(e => e.ScanImportRecordId).HasDatabaseName("IX_ScanImportFinding_ImportRecordId");
+            entity.HasIndex(e => new { e.ScanImportRecordId, e.VulnId }).HasDatabaseName("IX_ScanImportFinding_Import_VulnId");
         });
     }
 

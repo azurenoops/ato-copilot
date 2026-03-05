@@ -20,6 +20,7 @@ public class StigKnowledgeService : IStigKnowledgeService
 
     private const string CacheKey = "kb:stig:all_controls";
     private const string CciCacheKey = "kb:cci:all_mappings";
+    private const string RuleIdIndexCacheKey = "kb:stig:rule_id_index";
     private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -59,6 +60,44 @@ public class StigKnowledgeService : IStigKnowledgeService
         var controls = await LoadControlsAsync();
         return controls.FirstOrDefault(c =>
             string.Equals(c.StigId, stigId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <inheritdoc />
+    public async Task<StigControl?> GetStigControlByRuleIdAsync(string ruleId, CancellationToken cancellationToken = default)
+    {
+        var index = await LoadRuleIdIndexAsync();
+        index.TryGetValue(ruleId, out var control);
+        return control;
+    }
+
+    /// <inheritdoc />
+    public async Task<List<StigControl>> GetStigControlsByBenchmarkAsync(string benchmarkId, CancellationToken cancellationToken = default)
+    {
+        var controls = await LoadControlsAsync();
+        return controls
+            .Where(c => string.Equals(c.BenchmarkId, benchmarkId, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Builds and caches a dictionary keyed by RuleId (case-insensitive) for fast lookups.
+    /// </summary>
+    private async Task<Dictionary<string, StigControl>> LoadRuleIdIndexAsync()
+    {
+        if (_cache.TryGetValue(RuleIdIndexCacheKey, out Dictionary<string, StigControl>? cached) && cached != null)
+            return cached;
+
+        var controls = await LoadControlsAsync();
+        var index = new Dictionary<string, StigControl>(StringComparer.OrdinalIgnoreCase);
+        foreach (var control in controls)
+        {
+            if (!string.IsNullOrEmpty(control.RuleId) && !index.ContainsKey(control.RuleId))
+                index[control.RuleId] = control;
+        }
+
+        _cache.Set(RuleIdIndexCacheKey, index, CacheTtl);
+        _logger.LogDebug("Built RuleId index with {Count} entries", index.Count);
+        return index;
     }
 
     /// <inheritdoc />

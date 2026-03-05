@@ -143,3 +143,79 @@ The GitHub Actions compliance gate (`ato-compliance-gate`) uses CAT severity to 
 | CAT III | Warning annotation only |
 
 Risk acceptances for specific findings bypass the gate block for accepted controls.
+
+---
+
+## STIG Import & Export
+
+> Feature 017: SCAP/STIG Viewer Import
+
+ATO Copilot can import and export STIG assessment data in industry-standard formats:
+
+### Supported Import Formats
+
+| Format | Source | Tool | Collection Method |
+|--------|--------|------|-------------------|
+| **CKL** | DISA STIG Viewer | `compliance_import_ckl` | Manual |
+| **XCCDF** | SCAP Compliance Checker | `compliance_import_xccdf` | Automated |
+
+### Import Processing Pipeline
+
+```
+CKL/XCCDF File
+  ↓ Parse & validate
+STIG Rule Resolution
+  ↓ Match VulnId/RuleId → StigControl
+CCI/NIST Mapping
+  ↓ Cross-reference StigControl → CCI → NIST 800-53
+Finding Creation
+  ↓ ComplianceFinding with CAT severity
+Effectiveness Update
+  ↓ Aggregate per-control effectiveness
+Evidence Capture
+  ↓ SHA-256 hashed import evidence
+```
+
+### Status Mapping
+
+#### CKL Status → Finding Status
+
+| CKL Status | Finding Status |
+|------------|----------------|
+| Open | Open |
+| NotAFinding | Remediated |
+| Not_Applicable | Accepted |
+| Not_Reviewed | Open |
+
+#### XCCDF Result → Finding Status
+
+| XCCDF Result | Finding Status |
+|--------------|----------------|
+| fail | Open |
+| pass | Remediated |
+| notapplicable | Accepted |
+| error | Open |
+| unknown | Open |
+| notchecked | Open |
+
+### Export Format
+
+| Format | Target | Tool |
+|--------|--------|------|
+| **CKL** | DISA STIG Viewer / eMASS | `compliance_export_ckl` |
+
+Exported CKL files follow the DISA STIG Viewer CHECKLIST XML schema with ASSET, STIG_INFO, and VULN elements.
+
+### Conflict Resolution
+
+When re-importing files that contain findings already present in the database:
+
+| Strategy | Behavior |
+|----------|----------|
+| **Skip** | Keep existing finding unchanged (default) |
+| **Overwrite** | Replace existing finding with imported data |
+| **Merge** | Keep whichever finding has the higher severity |
+
+### Duplicate Detection
+
+Imports use SHA-256 file hashing to detect and warn about duplicate file imports.

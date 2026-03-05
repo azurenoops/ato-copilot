@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--DISA STIG Viewer :: 2.17-->
+<CHECKLIST>
+  <ASSET>
+    <ROLE>None</ROLE>
+    <ASSET_TYPE>Computing</ASSET_TYPE>
+    <HOST_NAME>secure-server-01</HOST_NAME>
+    <HOST_IP>10.0.2.50</HOST_IP>
+    <HOST_MAC>AA:BB:CC:DD:EE:FF</HOST_MAC>
+    <HOST_FQDN>secure-server-01.example.mil</HOST_FQDN>
+    <TARGET_COMMENT></TARGET_COMMENT>
+    <TECH_AREA></TECH_AREA>
+    <TARGET_KEY>5001</TARGET_KEY>
+    <WEB_OR_DATABASE>false</WEB_OR_DATABASE>
+  </ASSET>
+  <STIGS>
+    <iSTIG>
+      <STIG_INFO>
+        <SI_DATA>
+          <SID_NAME>version</SID_NAME>
+          <SID_DATA>2</SID_DATA>
+        </SI_DATA>
+        <SI_DATA>
+          <SID_NAME>stigid</SID_NAME>
+          <SID_DATA>Windows_Server_2022_STIG</SID_DATA>
+        </SI_DATA>
+        <SI_DATA>
+          <SID_NAME>releaseinfo</SID_NAME>
+          <SID_DATA>Release: 2 Benchmark Date: 15 Jun 2025</SID_DATA>
+        </SI_DATA>
+        <SI_DATA>
+          <SID_NAME>title</SID_NAME>
+          <SID_DATA>Microsoft Windows Server 2022 STIG</SID_DATA>
+        </SI_DATA>
+      </STIG_INFO>
+      <!-- VULN with severity override from medium to high -->
+      <VULN>
+        <STIG_DATA>
+          <VULN_ATTRIBUTE>Vuln_Num</VULN_ATTRIBUTE>
+          <ATTRIBUTE_DATA>V-254250</ATTRIBUTE_DATA>
+        </STIG_DATA>
+        <STIG_DATA>
+          <VULN_ATTRIBUTE>Severity</VULN_ATTRIBUTE>
+          <ATTRIBUTE_DATA>medium</ATTRIBUTE_DATA>
+        </STIG_DATA>
+        <STIG_DATA>
+          <VULN_ATTRIBUTE>Group_Title</VULN_ATTRIBUTE>
+          <ATTRIBUTE_DATA>SRG-OS-000080-GPOS-00048</ATTRIBUTE_DATA>
+        </STIG_DATA>
+        <STIG_DATA>
+          <VULN_ATTRIBUTE>Rule_ID</VULN_ATTRIBUTE>
+          <ATTRIBUTE_DATA>SV-254250r849120_rule</ATTRIBUTE_DATA>
+        </STIG_DATA>
+        <STIG_DATA>
+          <VULN_ATTRIBUTE>Rule_Ver</VULN_ATTRIBUTE>
+          <ATTRIBUTE_DATA>WN22-SO-000010</ATTRIBUTE_DATA>
+        </STIG_DATA>
+        <STIG_DATA>
+          <VULN_ATTRIBUTE>Rule_Title</VULN_ATTRIBUTE>
+          <ATTRIBUTE_DATA>Windows Server 2022 must restrict unauthenticated RPC clients.</ATTRIBUTE_DATA>
+        </STIG_DATA>
+        <STIG_DATA>
+          <VULN_ATTRIBUTE>CCI_REF</VULN_ATTRIBUTE>
+          <ATTRIBUTE_DATA>CCI-000213</ATTRIBUTE_DATA>
+        </STIG_DATA>
+        <STATUS>Open</STATUS>
+        <FINDING_DETAILS>RPC restrictions not applied per STIG guidance.</FINDING_DETAILS>
+        <COMMENTS>Override justified due to exposure on public-facing network segment.</COMMENTS>
+        <SEVERITY_OVERRIDE>high</SEVERITY_OVERRIDE>
+        <SEVERITY_JUSTIFICATION>This system is on a public-facing network segment. The risk of unauthenticated RPC access is elevated to CAT I per the site ISSM determination on 2026-01-15.</SEVERITY_JUSTIFICATION>
+      </VULN>
+    </iSTIG>
+  </STIGS>
+</CHECKLIST>

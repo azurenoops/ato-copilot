@@ -4,6 +4,37 @@ All notable changes to ATO Copilot are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.18.0] - 2026-03-15
+
+### Added
+
+#### Feature 017: SCAP/STIG Viewer Import & Export
+
+- **CKL Checklist Import** (`compliance_import_ckl`) — Import DISA STIG Viewer `.ckl` checklist files with automatic STIG rule resolution, CCI-to-NIST mapping, finding creation, and control effectiveness determination. Supports `Skip`/`Overwrite`/`Merge` conflict resolution strategies and dry-run preview mode.
+- **XCCDF Results Import** (`compliance_import_xccdf`) — Import SCAP Compliance Checker XCCDF result files (1.1 and 1.2 namespaces) with automated rule ID resolution, benchmark score capture, and error/unknown/notchecked result handling.
+- **CKL Checklist Export** (`compliance_export_ckl`) — Export assessment data as DISA STIG Viewer-compatible CHECKLIST XML for eMASS upload or offline review. Generates ASSET, STIG_INFO, and VULN elements with finding status mapping.
+- **Import History** (`compliance_list_imports`) — Paginated import history with filtering by benchmark, import type, date range, and dry-run inclusion.
+- **Import Summary** (`compliance_get_import_summary`) — Detailed per-finding breakdown of any import operation including unmatched rules, conflict resolution actions, and NIST control mappings.
+- **CKL Parser** — Parses DISA STIG Viewer CHECKLIST XML with SI_DATA/VULN_DATA extraction, host metadata, and STIG info parsing. Includes `CklParseException` for structured error reporting.
+- **XCCDF Parser** — Parses SCAP Compliance Checker XCCDF results with XCCDF 1.1/1.2 namespace detection, Benchmark-wrapped TestResult handling, score extraction, and rule ID prefix stripping.
+- **CKL Generator** — Generates DISA STIG Viewer-compatible CHECKLIST XML from assessment data with proper STATUS, FINDING_DETAILS, COMMENTS, and SEVERITY_OVERRIDE elements.
+- **Import Data Model** — `ScanImportRecord` and `ScanImportFinding` entities with SHA-256 duplicate detection, `ImportFindingAction` enum (Created/Updated/Skipped/Unmatched/NotApplicable/NotReviewed/Error), and `ScanImportStatus` lifecycle tracking.
+- **STIG Resolution** — Control lookup by VulnId and RuleId with CCI cross-reference to NIST 800-53 controls. Benchmark-based bulk control retrieval for export.
+- **Effectiveness Aggregation** — Auto-determines per-control effectiveness (Satisfied/OtherThanSatisfied) based on aggregate STIG finding status across all imports.
+- **Evidence Capture** — SHA-256 hashed import evidence with benchmark metadata, finding counts, and XCCDF score data.
+- **Performance** — CKL import with 500 VULNs completes in < 10 seconds; XCCDF import with 500 rule-results in < 5 seconds.
+- **170+ Unit Tests** — Comprehensive test coverage for parsers, service logic, MCP tools, models, CKL generation, and integration scenarios.
+
+### Documentation
+
+- **Agent Tool Catalog** — 5 new tool entries with parameter tables, response schemas, RBAC roles, and RMF step mapping.
+- **ISSM Guide** — STIG import workflow section with dry-run, conflict resolution, and eMASS export workflow.
+- **SCA Guide** — SCAP import for assessment section with imported data usage and SAR integration.
+- **Engineer Guide** — CKL import/export from VS Code via `@ato` chat participant.
+- **STIG Coverage Reference** — Import processing pipeline, status mapping tables, conflict resolution, and duplicate detection.
+
+---
+
 ## [1.17.0] - 2026-03-01
 
 ### Added

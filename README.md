@@ -4,6 +4,15 @@ AI-powered compliance copilot that guides DoD teams through every step of the NI
 
 Built on the Model Context Protocol (MCP) with Azure OpenAI function calling, 130 compliance tools, and multi-channel delivery (VS Code, web chat, stdio).
 
+ATO Copilot is the first tool that:
+
+- Covers all 7 steps in a single conversational interface
+- Uses AI to automate the hardest part (control narrative writing)
+- Integrates with Azure for automated compliance evidence
+- Exports to eMASS so it fits into the existing DoD workflow instead of replacing it
+
+ATO Copilot is where you DO the work, eMASS is where you SUBMIT the work. 
+
 ## Features
 
 ### RMF Lifecycle Automation

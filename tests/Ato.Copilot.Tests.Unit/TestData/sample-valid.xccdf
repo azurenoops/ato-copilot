@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TestResult xmlns="http://checklists.nist.gov/xccdf/1.2"
+            id="xccdf_mil.disa.stig_testresult_default"
+            start-time="2026-02-15T14:30:00"
+            end-time="2026-02-15T14:45:22">
+  <benchmark href="xccdf_mil.disa.stig_benchmark_Windows_Server_2022_STIG"/>
+  <title>SCAP SCC Scan Results - Windows Server 2022</title>
+  <identity authenticated="true" privileged="true">SYSTEM</identity>
+  <target>web-server-01</target>
+  <target-address>10.0.1.100</target-address>
+  <target-facts>
+    <fact name="urn:scap:fact:asset:identifier:host_name" type="string">web-server-01</fact>
+    <fact name="urn:scap:fact:asset:identifier:os_name" type="string">Microsoft Windows Server 2022</fact>
+    <fact name="urn:scap:fact:asset:identifier:os_version" type="string">10.0.20348</fact>
+  </target-facts>
+
+  <!-- Rule 1: FAIL - high severity -->
+  <rule-result idref="xccdf_mil.disa.stig_rule_SV-254239r849090_rule"
+               time="2026-02-15T14:32:11"
+               severity="high" weight="10.0">
+    <result>fail</result>
+    <check system="http://oval.mitre.org/XMLSchema/oval-definitions-5">
+      <check-content-ref href="scap_mil.disa.stig_comp_U_MS_Windows_Server_2022_STIG_V1R1-oval.xml"
+                         name="oval:mil.disa.stig.windows_server_2022:def:254239"/>
+    </check>
+    <message severity="info">Registry value not configured as expected.</message>
+  </rule-result>
+
+  <!-- Rule 2: FAIL - medium severity -->
+  <rule-result idref="xccdf_mil.disa.stig_rule_SV-254240r849093_rule"
+               time="2026-02-15T14:32:15"
+               severity="medium" weight="10.0">
+    <result>fail</result>
+    <message severity="info">Audit policy not properly configured.</message>
+  </rule-result>
+
+  <!-- Rule 3: PASS - medium severity -->
+  <rule-result idref="xccdf_mil.disa.stig_rule_SV-254241r849096_rule"
+               time="2026-02-15T14:33:01"
+               severity="medium" weight="10.0">
+    <result>pass</result>
+  </rule-result>
+
+  <!-- Rule 4: PASS - low severity -->
+  <rule-result idref="xccdf_mil.disa.stig_rule_SV-254242r849099_rule"
+               time="2026-02-15T14:33:05"
+               severity="low" weight="10.0">
+    <result>pass</result>
+  </rule-result>
+
+  <!-- Rule 5: NOT APPLICABLE -->
+  <rule-result idref="xccdf_mil.disa.stig_rule_SV-254243r849102_rule"
+               time="2026-02-15T14:33:10"
+               severity="medium" weight="10.0">
+    <result>notapplicable</result>
+  </rule-result>
+
+  <score system="urn:xccdf:scoring:default" maximum="100">72.5</score>
+</TestResult>

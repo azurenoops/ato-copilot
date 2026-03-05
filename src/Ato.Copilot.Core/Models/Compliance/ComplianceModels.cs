@@ -961,6 +961,14 @@ public class ComplianceFinding
 
     /// <summary>DoD CAT severity level for this finding (CAT I, CAT II, or CAT III).</summary>
     public CatSeverity? CatSeverity { get; set; }
+
+    // ─── New Properties (Feature 017 — SCAP/STIG Viewer Import) ──────────
+
+    /// <summary>
+    /// FK to <see cref="ScanImportRecord"/> when this finding was created or updated via scan import.
+    /// Null for manually-created findings. See data-model.md §Modified Entities.
+    /// </summary>
+    public string? ImportRecordId { get; set; }
 }
 
 /// <summary>

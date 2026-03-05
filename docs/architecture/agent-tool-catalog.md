@@ -1722,3 +1722,228 @@ The existing document generation tool now supports three output formats:
 - **RMF Step**: Authorize (Step 5), Monitor (Step 6)
 - **PDF Engine**: QuestPDF (Community Edition, MIT license)
 - **Progress**: Reports streaming progress (0.0–1.0) during PDF generation
+
+---
+
+## SCAP/STIG Viewer Import & Export Tools (Feature 017)
+
+### `compliance_import_ckl`
+
+Import a DISA STIG Viewer CKL checklist file for a registered system. Creates
+compliance findings, control effectiveness records, and evidence artifacts.
+Accepts base64-encoded file content (max 5 MB after decoding).
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | Registered system ID |
+| `file_content` | string | Yes | Base64-encoded CKL file content (max 5 MB) |
+| `file_name` | string | Yes | Original file name (e.g., `windows_server_2022.ckl`) |
+| `conflict_resolution` | string | No | How to handle duplicates: `Skip` (default), `Overwrite`, `Merge` |
+| `dry_run` | boolean | No | Preview results without persisting (default: `false`) |
+| `assessment_id` | string | No | Optional assessment ID; auto-resolves or creates one if omitted |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "import_record_id": "...",
+    "import_status": "Completed",
+    "dry_run": false,
+    "benchmark": "Windows_Server_2022_STIG",
+    "benchmark_title": "Windows Server 2022 STIG",
+    "total_entries": 287,
+    "summary": {
+      "open": 12,
+      "pass": 260,
+      "not_applicable": 10,
+      "not_reviewed": 5,
+      "skipped": 0,
+      "unmatched": 3
+    },
+    "changes": {
+      "findings_created": 12,
+      "findings_updated": 0,
+      "effectiveness_created": 8,
+      "effectiveness_updated": 0,
+      "nist_controls_affected": 8
+    },
+    "warnings": ["3 STIG rule(s) not found in curated library: V-99997, V-99998, V-99999"]
+  }
+}
+```
+
+- **RBAC**: ISSM, SCA
+- **RMF Step**: Assess (Step 4)
+- **Duplicate Detection**: SHA-256 file hash prevents re-importing identical files
+- **Conflict Resolution**: `Skip` ignores existing findings, `Overwrite` replaces, `Merge` keeps higher severity
+
+---
+
+### `compliance_import_xccdf`
+
+Import a SCAP Compliance Checker XCCDF results file for a registered system.
+Creates compliance findings and control effectiveness records from automated
+scan results. Supports XCCDF 1.1 and 1.2 namespace formats.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | Registered system ID |
+| `file_content` | string | Yes | Base64-encoded XCCDF file content (max 5 MB) |
+| `file_name` | string | Yes | Original file name (e.g., `scan_results.xccdf`) |
+| `conflict_resolution` | string | No | How to handle duplicates: `Skip` (default), `Overwrite`, `Merge` |
+| `dry_run` | boolean | No | Preview without persisting (default: `false`) |
+| `assessment_id` | string | No | Optional assessment ID |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "import_record_id": "...",
+    "import_status": "CompletedWithWarnings",
+    "dry_run": false,
+    "benchmark": "Windows_Server_2022_STIG",
+    "total_entries": 300,
+    "summary": {
+      "open": 15,
+      "pass": 270,
+      "not_applicable": 8,
+      "error": 2,
+      "skipped": 0,
+      "unmatched": 5
+    },
+    "changes": {
+      "findings_created": 15,
+      "findings_updated": 0,
+      "effectiveness_created": 10,
+      "effectiveness_updated": 0,
+      "nist_controls_affected": 10
+    }
+  }
+}
+```
+
+- **RBAC**: ISSM, SCA
+- **RMF Step**: Assess (Step 4)
+- **Collection Method**: Automated (vs. Manual for CKL)
+- **Score Capture**: XCCDF benchmark score recorded in import record
+
+---
+
+### `compliance_export_ckl`
+
+Export a CKL checklist file for a system and STIG benchmark. Returns
+base64-encoded XML content compatible with DISA STIG Viewer and eMASS upload.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | Registered system ID |
+| `benchmark_id` | string | Yes | STIG benchmark ID (e.g., `Windows_Server_2022_STIG`) |
+| `assessment_id` | string | No | Optional assessment ID (uses latest if omitted) |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "file_content": "<base64-encoded CKL XML>",
+    "file_name": "Windows_Server_2022_STIG_sys-001.ckl",
+    "content_type": "application/xml",
+    "benchmark_id": "Windows_Server_2022_STIG",
+    "system_id": "sys-001"
+  }
+}
+```
+
+- **RBAC**: ISSM, SCA, Engineer
+- **RMF Step**: Assess (Step 4), Monitor (Step 6)
+- **Output Format**: DISA STIG Viewer CHECKLIST XML schema
+- **Finding Status Mapping**: Open → `Open`, Remediated → `NotAFinding`, Accepted → `Not_Applicable`, null → `Not_Reviewed`
+
+---
+
+### `compliance_list_imports`
+
+List import history for a registered system. Shows CKL and XCCDF imports with
+summary statistics. Supports pagination and filtering.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | Registered system ID |
+| `page` | integer | No | Page number, 1-based (default: 1) |
+| `page_size` | integer | No | Items per page (default: 20, max: 100) |
+| `benchmark_id` | string | No | Filter by benchmark ID |
+| `include_dry_runs` | boolean | No | Include dry-run records (default: `false`) |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "total_count": 5,
+    "page": 1,
+    "page_size": 20,
+    "imports": [
+      {
+        "id": "...",
+        "file_name": "windows_2022.ckl",
+        "import_type": "Ckl",
+        "benchmark_id": "Windows_Server_2022_STIG",
+        "status": "Completed",
+        "imported_at": "2026-03-15T10:30:00Z",
+        "total_entries": 287,
+        "open_count": 12,
+        "pass_count": 260,
+        "findings_created": 12
+      }
+    ]
+  }
+}
+```
+
+- **RBAC**: All compliance roles
+- **RMF Step**: Assess (Step 4), Monitor (Step 6)
+
+---
+
+### `compliance_get_import_summary`
+
+Get detailed summary of a specific import operation, including per-finding
+breakdown, unmatched rules, and import configuration.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `import_id` | string | Yes | Import record ID |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "...",
+    "file_name": "windows_2022.ckl",
+    "file_hash": "abc123...",
+    "import_type": "Ckl",
+    "import_status": "CompletedWithWarnings",
+    "benchmark_id": "Windows_Server_2022_STIG",
+    "imported_at": "2026-03-15T10:30:00Z",
+    "conflict_resolution": "Skip",
+    "counts": {
+      "total": 287,
+      "open": 12,
+      "pass": 260,
+      "findings_created": 12,
+      "nist_controls_affected": 8
+    },
+    "findings": [
+      {
+        "vuln_id": "V-12345",
+        "rule_id": "SV-12345r1_rule",
+        "raw_status": "Open",
+        "mapped_severity": "CatII",
+        "action": "Created",
+        "resolved_stig_id": "V-12345"
+      }
+    ]
+  }
+}
+```
+
+- **RBAC**: All compliance roles
+- **RMF Step**: Assess (Step 4), Monitor (Step 6)
