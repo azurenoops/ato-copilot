@@ -1947,3 +1947,140 @@ breakdown, unmatched rules, and import configuration.
 
 - **RBAC**: All compliance roles
 - **RMF Step**: Assess (Step 4), Monitor (Step 6)
+
+---
+
+### `compliance_import_prisma_csv`
+
+Import a Prisma Cloud CSPM compliance CSV export file. Supports multi-subscription auto-resolution, dry-run preview, and conflict handling.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `file_content` | string | Yes | Base64-encoded Prisma Cloud CSV file |
+| `file_name` | string | Yes | Original file name |
+| `system_id` | string | No | Registered system ID (if omitted, auto-resolves from Azure subscription IDs) |
+| `conflict_resolution` | string | No | `"skip"` (default), `"overwrite"` |
+| `dry_run` | boolean | No | Preview import without persisting (default: false) |
+| `assessment_id` | string | No | Existing assessment ID (auto-resolved if omitted) |
+
+```json
+{
+  "status": "success",
+  "imports": [
+    {
+      "import_record_id": "...",
+      "system_id": "...",
+      "system_name": "ACME Portal",
+      "total_alerts": 47,
+      "open_count": 32,
+      "resolved_count": 12,
+      "findings_created": 32,
+      "nist_controls_affected": 22,
+      "is_dry_run": false
+    }
+  ],
+  "unresolved_subscriptions": [],
+  "total_processed": 47,
+  "duration_ms": 2340
+}
+```
+
+- **RBAC**: `SecurityLead`, `Analyst`, `Administrator`
+- **RMF Step**: Assess (Step 4), Monitor (Step 6)
+
+---
+
+### `compliance_import_prisma_api`
+
+Import Prisma Cloud API JSON (RQL alert response) with enhanced remediation context, CLI scripts, alert history, and policy metadata.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `file_content` | string | Yes | Base64-encoded JSON file |
+| `file_name` | string | Yes | Original file name |
+| `system_id` | string | No | Registered system ID |
+| `conflict_resolution` | string | No | `"skip"` (default), `"overwrite"` |
+| `dry_run` | boolean | No | Preview without persisting (default: false) |
+| `assessment_id` | string | No | Existing assessment ID |
+
+Returns the same format as CSV import, plus enhanced fields:
+
+```json
+{
+  "imports": [
+    {
+      "remediable_count": 28,
+      "cli_scripts_extracted": 22,
+      "policy_labels_found": ["CSPM", "Azure", "Storage"],
+      "alerts_with_history": 47
+    }
+  ]
+}
+```
+
+- **RBAC**: `SecurityLead`, `Analyst`, `Administrator`
+- **RMF Step**: Assess (Step 4), Monitor (Step 6)
+
+---
+
+### `compliance_list_prisma_policies`
+
+List unique Prisma Cloud policies observed across imports for a system, with NIST control mappings, finding status counts, and affected resource types.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | Registered system ID |
+
+```json
+{
+  "system_id": "...",
+  "total_policies": 35,
+  "policies": [
+    {
+      "policy_name": "Azure Storage account should use CMK encryption",
+      "policy_type": "config",
+      "severity": "high",
+      "nist_control_ids": ["SC-28", "SC-12"],
+      "open_count": 3,
+      "resolved_count": 7,
+      "dismissed_count": 1,
+      "affected_resource_types": ["Microsoft.Storage/storageAccounts"],
+      "last_seen_at": "2026-03-05T10:30:00Z"
+    }
+  ]
+}
+```
+
+- **RBAC**: `SecurityLead`, `Analyst`, `Assessor`, `Administrator`
+- **RMF Step**: Assess (Step 4), Monitor (Step 6)
+
+---
+
+### `compliance_prisma_trend`
+
+Compare Prisma Cloud findings across scan imports to show remediation progress, new findings, and compliance drift. Supports optional breakdowns by resource type or NIST control.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | Registered system ID |
+| `import_ids` | string | No | JSON array of specific import IDs to compare |
+| `group_by` | string | No | `"resource_type"` or `"nist_control"` |
+
+```json
+{
+  "system_id": "...",
+  "imports": [
+    { "import_id": "...", "imported_at": "2026-02-15T10:00:00Z", "total_alerts": 55 },
+    { "import_id": "...", "imported_at": "2026-03-05T10:00:00Z", "total_alerts": 47 }
+  ],
+  "new_findings": 8,
+  "resolved_findings": 16,
+  "persistent_findings": 31,
+  "remediation_rate": 34.04,
+  "resource_type_breakdown": { "Microsoft.Storage/storageAccounts": 12 },
+  "nist_control_breakdown": { "SC-28": 5, "AC-2": 3 }
+}
+```
+
+- **RBAC**: `SecurityLead`, `Analyst`, `Assessor`, `Administrator`
+- **RMF Step**: Assess (Step 4), Monitor (Step 6)

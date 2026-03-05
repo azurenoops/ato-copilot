@@ -314,6 +314,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ListImportsTool>();
         services.AddSingleton<GetImportSummaryTool>();
 
+        // ─── Feature 019: Prisma Cloud Scan Import ───────────────────────────
+        services.AddSingleton<PrismaCsvParser>();
+        services.AddSingleton<PrismaApiJsonParser>();
+        services.AddSingleton<ImportPrismaCsvTool>();
+        services.AddSingleton<ImportPrismaApiTool>();
+        services.AddSingleton<ListPrismaPoliciesTool>();
+        services.AddSingleton<PrismaTrendTool>();
+
         // ─── Feature 018: SAP Generation service and tools ───────────────────
         services.AddSingleton<ISapService, SapService>();
         services.AddSingleton<GenerateSapTool>();
@@ -455,6 +463,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<FinalizeSapTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<GetSapTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ListSapsTool>());
+
+        // Feature 019: Prisma Cloud Import BaseTool wrappers
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ImportPrismaCsvTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ImportPrismaApiTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ListPrismaPoliciesTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<PrismaTrendTool>());
 
         // Register the agent
         services.AddSingleton<ComplianceAgent>();

@@ -96,4 +96,79 @@ public interface IScanImportService
     Task<(ScanImportRecord Record, List<ScanImportFinding> Findings)?> GetImportSummaryAsync(
         string importId,
         CancellationToken ct = default);
+
+    // ─── Feature 019: Prisma Cloud Import ─────────────────────────────────
+
+    /// <summary>
+    /// Import a Prisma Cloud CSPM compliance CSV export file.
+    /// Parses the CSV, auto-resolves Azure subscriptions to registered systems,
+    /// creates ComplianceFinding + ControlEffectiveness + ComplianceEvidence records.
+    /// </summary>
+    /// <param name="systemId">Optional system ID. If null, auto-resolves from subscription IDs.</param>
+    /// <param name="assessmentId">Assessment context (optional — auto-resolved if null).</param>
+    /// <param name="fileContent">Raw CSV file bytes (UTF-8).</param>
+    /// <param name="fileName">Original file name.</param>
+    /// <param name="resolution">Conflict resolution strategy.</param>
+    /// <param name="dryRun">If true, preview without persisting.</param>
+    /// <param name="importedBy">Identity of the importing user.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Import result with per-system breakdown.</returns>
+    Task<PrismaImportResult> ImportPrismaCsvAsync(
+        string? systemId,
+        string? assessmentId,
+        byte[] fileContent,
+        string fileName,
+        ImportConflictResolution resolution,
+        bool dryRun,
+        string importedBy,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Import a Prisma Cloud API JSON response (RQL alert data) with enhanced
+    /// remediation guidance, CLI scripts, alert history, and policy metadata.
+    /// </summary>
+    /// <param name="systemId">Optional system ID. If null, auto-resolves from subscription IDs.</param>
+    /// <param name="assessmentId">Assessment context (optional).</param>
+    /// <param name="fileContent">Raw JSON file bytes (UTF-8).</param>
+    /// <param name="fileName">Original file name.</param>
+    /// <param name="resolution">Conflict resolution strategy.</param>
+    /// <param name="dryRun">If true, preview without persisting.</param>
+    /// <param name="importedBy">Identity of the importing user.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Import result with per-system breakdown and enhanced metadata.</returns>
+    Task<PrismaImportResult> ImportPrismaApiAsync(
+        string? systemId,
+        string? assessmentId,
+        byte[] fileContent,
+        string fileName,
+        ImportConflictResolution resolution,
+        bool dryRun,
+        string importedBy,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// List unique Prisma policies observed across imports for a system,
+    /// with NIST control mappings, open/resolved/dismissed counts, and affected resource types.
+    /// </summary>
+    /// <param name="systemId">Registered system ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Policy catalog for the system.</returns>
+    Task<PrismaPolicyListResult> ListPrismaPoliciesAsync(
+        string systemId,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Compare Prisma findings across scan imports to track remediation progress.
+    /// Shows new, resolved, and persistent findings with optional group-by breakdowns.
+    /// </summary>
+    /// <param name="systemId">Registered system ID.</param>
+    /// <param name="importIds">Specific import IDs to compare (null = last 2).</param>
+    /// <param name="groupBy">Optional grouping: <c>resource_type</c> or <c>nist_control</c>.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Trend analysis result.</returns>
+    Task<PrismaTrendResult> GetPrismaTrendAsync(
+        string systemId,
+        List<string>? importIds,
+        string? groupBy,
+        CancellationToken ct = default);
 }

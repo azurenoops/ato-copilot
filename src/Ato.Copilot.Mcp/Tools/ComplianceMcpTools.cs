@@ -201,6 +201,12 @@ public class ComplianceMcpTools
     private readonly GetSapTool _getSapTool;
     private readonly ListSapsTool _listSapsTool;
 
+    // ─── Feature 019: Prisma Cloud Import tools ────────────────────────────
+    private readonly ImportPrismaCsvTool _importPrismaCsvTool;
+    private readonly ImportPrismaApiTool _importPrismaApiTool;
+    private readonly ListPrismaPoliciesTool _listPrismaPoliciesTool;
+    private readonly PrismaTrendTool _prismaTrendTool;
+
     public ComplianceMcpTools(
         ComplianceAssessmentTool assessmentTool,
         ControlFamilyTool controlFamilyTool,
@@ -337,7 +343,12 @@ public class ComplianceMcpTools
         UpdateSapTool updateSapTool,
         FinalizeSapTool finalizeSapTool,
         GetSapTool getSapTool,
-        ListSapsTool listSapsTool)
+        ListSapsTool listSapsTool,
+        // Feature 019: Prisma Cloud Import tools
+        ImportPrismaCsvTool importPrismaCsvTool,
+        ImportPrismaApiTool importPrismaApiTool,
+        ListPrismaPoliciesTool listPrismaPoliciesTool,
+        PrismaTrendTool prismaTrendTool)
     {
         _assessmentTool = assessmentTool;
         _controlFamilyTool = controlFamilyTool;
@@ -480,6 +491,12 @@ public class ComplianceMcpTools
         _finalizeSapTool = finalizeSapTool;
         _getSapTool = getSapTool;
         _listSapsTool = listSapsTool;
+
+        // Feature 019: Prisma Cloud Import
+        _importPrismaCsvTool = importPrismaCsvTool;
+        _importPrismaApiTool = importPrismaApiTool;
+        _listPrismaPoliciesTool = listPrismaPoliciesTool;
+        _prismaTrendTool = prismaTrendTool;
     }
 
     [Description("Run a NIST 800-53 compliance assessment. Scan types: quick, policy, full.")]
@@ -2488,5 +2505,86 @@ public class ComplianceMcpTools
             ["system_id"] = system_id
         };
         return await _listSapsTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Feature 019: Prisma Cloud Import Tools
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    [Description("Import Prisma Cloud CSPM compliance CSV export. Parses alerts, maps NIST 800-53 controls, " +
+        "creates findings and effectiveness records. Supports auto-resolution of Azure subscriptions " +
+        "to registered systems. Returns per-system import results with finding counts and warnings.")]
+    public async Task<string> ImportPrismaCsvAsync(
+        string file_content,
+        string file_name,
+        string? system_id = null,
+        string? conflict_resolution = null,
+        bool dry_run = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["file_content"] = file_content,
+            ["file_name"] = file_name,
+            ["system_id"] = system_id,
+            ["conflict_resolution"] = conflict_resolution,
+            ["dry_run"] = dry_run
+        };
+        return await _importPrismaCsvTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Import Prisma Cloud API JSON (RQL alert) export. Extracts NIST 800-53 controls, " +
+        "remediation scripts, alert history, and policy labels. Creates findings and effectiveness " +
+        "records. Supports auto-resolution of Azure subscriptions. Returns enhanced import results " +
+        "with remediable counts, CLI scripts, and alert state changes.")]
+    public async Task<string> ImportPrismaApiAsync(
+        string file_content,
+        string file_name,
+        string? system_id = null,
+        string? conflict_resolution = null,
+        bool dry_run = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["file_content"] = file_content,
+            ["file_name"] = file_name,
+            ["system_id"] = system_id,
+            ["conflict_resolution"] = conflict_resolution,
+            ["dry_run"] = dry_run
+        };
+        return await _importPrismaApiTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("List unique Prisma Cloud policies observed across scan imports for a system. " +
+        "Returns NIST 800-53 control mappings, open/resolved/dismissed counts, " +
+        "affected resource types, and last-seen import details.")]
+    public async Task<string> ListPrismaPoliciesAsync(
+        string system_id,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = system_id
+        };
+        return await _listPrismaPoliciesTool.ExecuteAsync(args, cancellationToken);
+    }
+
+    [Description("Compare Prisma Cloud findings across scan imports to track remediation progress. " +
+        "Shows new, resolved, and persistent findings with remediation rate. " +
+        "Supports optional group_by for resource_type or nist_control breakdowns.")]
+    public async Task<string> PrismaTrendAsync(
+        string system_id,
+        string? import_ids = null,
+        string? group_by = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["system_id"] = system_id,
+            ["import_ids"] = import_ids,
+            ["group_by"] = group_by
+        };
+        return await _prismaTrendTool.ExecuteAsync(args, cancellationToken);
     }
 }

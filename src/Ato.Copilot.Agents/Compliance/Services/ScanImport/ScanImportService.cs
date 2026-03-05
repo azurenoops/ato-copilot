@@ -30,6 +30,9 @@ public class ScanImportService : IScanImportService
     private readonly ICklParser _cklParser;
     private readonly IXccdfParser _xccdfParser;
     private readonly ICklGenerator _cklGenerator;
+    private readonly ISystemSubscriptionResolver _subscriptionResolver;
+    private readonly PrismaCsvParser _prismaCsvParser;
+    private readonly PrismaApiJsonParser _prismaApiJsonParser;
     private readonly ILogger<ScanImportService> _logger;
 
     public ScanImportService(
@@ -41,6 +44,9 @@ public class ScanImportService : IScanImportService
         ICklParser cklParser,
         IXccdfParser xccdfParser,
         ICklGenerator cklGenerator,
+        ISystemSubscriptionResolver subscriptionResolver,
+        PrismaCsvParser prismaCsvParser,
+        PrismaApiJsonParser prismaApiJsonParser,
         ILogger<ScanImportService> logger)
     {
         _scopeFactory = scopeFactory;
@@ -51,6 +57,9 @@ public class ScanImportService : IScanImportService
         _cklParser = cklParser;
         _xccdfParser = xccdfParser;
         _cklGenerator = cklGenerator;
+        _subscriptionResolver = subscriptionResolver;
+        _prismaCsvParser = prismaCsvParser;
+        _prismaApiJsonParser = prismaApiJsonParser;
         _logger = logger;
     }
 
@@ -1451,5 +1460,1002 @@ public class ScanImportService : IScanImportService
             Warnings: new List<string>(),
             UnmatchedRules: new List<UnmatchedRuleInfo>(),
             ErrorMessage: error);
+    }
+
+    // ─── Feature 019: Prisma Cloud Import ───────────────────────────────
+
+    /// <inheritdoc />
+    public async Task<PrismaImportResult> ImportPrismaCsvAsync(
+        string? systemId,
+        string? assessmentId,
+        byte[] fileContent,
+        string fileName,
+        ImportConflictResolution resolution,
+        bool dryRun,
+        string importedBy,
+        CancellationToken ct = default)
+    {
+        var sw = Stopwatch.StartNew();
+
+        // ── Step 1: File size check (25 MB) ──────────────────────────────
+        if (fileContent.Length > 25 * 1024 * 1024)
+        {
+            sw.Stop();
+            return new PrismaImportResult(
+                new List<PrismaSystemImportResult>(),
+                new List<UnresolvedSubscriptionInfo>(),
+                null, 0, 0, sw.ElapsedMilliseconds,
+                ErrorMessage: "File exceeds maximum size of 25 MB.");
+        }
+
+        // ── Step 2: Parse CSV ────────────────────────────────────────────
+        ParsedPrismaFile parsed;
+        try
+        {
+            parsed = _prismaCsvParser.Parse(fileContent, fileName);
+        }
+        catch (PrismaParseException ex)
+        {
+            sw.Stop();
+            _logger.LogWarning(ex, "Prisma CSV parse failed for file {FileName}", fileName);
+            return new PrismaImportResult(
+                new List<PrismaSystemImportResult>(),
+                new List<UnresolvedSubscriptionInfo>(),
+                null, 0, 0, sw.ElapsedMilliseconds,
+                ErrorMessage: $"CSV parse error: {ex.Message}");
+        }
+
+        var fileHash = $"sha256:{ComputeSha256(fileContent)}";
+        var imports = new List<PrismaSystemImportResult>();
+        var unresolvedSubscriptions = new List<UnresolvedSubscriptionInfo>();
+        SkippedNonAzureInfo? skippedNonAzure = null;
+        int totalProcessed = 0;
+        int totalSkipped = 0;
+
+        _logger.LogInformation(
+            "Prisma CSV import started: file={FileName}, hash={FileHash}, system={SystemId}, " +
+            "alerts={AlertCount}, resolution={Resolution}, dryRun={DryRun}",
+            fileName, fileHash, systemId ?? "(auto)", parsed.TotalAlerts, resolution, dryRun);
+
+        if (systemId is not null)
+        {
+            // ── Explicit system — validate and import all alerts ─────────
+            var system = await _rmfService.GetSystemAsync(systemId, ct);
+            if (system is null)
+            {
+                sw.Stop();
+                return new PrismaImportResult(
+                    new List<PrismaSystemImportResult>(),
+                    new List<UnresolvedSubscriptionInfo>(),
+                    null, 0, 0, sw.ElapsedMilliseconds,
+                    ErrorMessage: $"System '{systemId}' not found.");
+            }
+
+            var result = await ImportPrismaAlertsForSystemAsync(
+                systemId, system.Name, assessmentId, parsed.Alerts,
+                fileContent, fileName, fileHash, resolution, dryRun, importedBy,
+                ScanImportType.PrismaCsv, ct);
+            imports.Add(result);
+            totalProcessed = result.TotalAlerts;
+        }
+        else
+        {
+            // ── Auto-resolve mode — split by cloud type, then by account ─
+            var azureAlerts = parsed.Alerts
+                .Where(a => string.Equals(a.CloudType, "azure", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var nonAzureAlerts = parsed.Alerts
+                .Where(a => !string.Equals(a.CloudType, "azure", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (nonAzureAlerts.Count > 0)
+            {
+                var cloudTypes = nonAzureAlerts
+                    .Select(a => a.CloudType)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                skippedNonAzure = new SkippedNonAzureInfo(
+                    nonAzureAlerts.Count,
+                    cloudTypes,
+                    $"Skipped {nonAzureAlerts.Count} non-Azure alert(s) from cloud type(s): " +
+                    $"{string.Join(", ", cloudTypes)}. Provide an explicit system_id to import these.");
+                totalSkipped = nonAzureAlerts.Count;
+            }
+
+            // Group Azure alerts by AccountId and resolve each
+            var groupedByAccount = azureAlerts
+                .GroupBy(a => a.AccountId, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var group in groupedByAccount)
+            {
+                var accountId = group.Key;
+                var accountAlerts = group.ToList();
+
+                var resolvedSystemId = await _subscriptionResolver.ResolveAsync(accountId, ct);
+                if (resolvedSystemId is null)
+                {
+                    _logger.LogWarning(
+                        "Prisma CSV subscription unresolved: subscriptionId={SubscriptionId}, accountName={AccountName}, alertCount={AlertCount}",
+                        accountId, accountAlerts[0].AccountName, accountAlerts.Count);
+                    unresolvedSubscriptions.Add(new UnresolvedSubscriptionInfo(
+                        accountId,
+                        accountAlerts[0].AccountName,
+                        accountAlerts.Count,
+                        $"Azure subscription '{accountId}' is not registered. " +
+                        $"Register it with a system to import these {accountAlerts.Count} alert(s)."));
+                    totalSkipped += accountAlerts.Count;
+                    continue;
+                }
+
+                _logger.LogInformation(
+                    "Prisma CSV subscription resolved: subscriptionId={SubscriptionId}, resolvedSystemId={ResolvedSystemId}",
+                    accountId, resolvedSystemId);
+
+                var system = await _rmfService.GetSystemAsync(resolvedSystemId, ct);
+                if (system is null)
+                {
+                    unresolvedSubscriptions.Add(new UnresolvedSubscriptionInfo(
+                        accountId,
+                        accountAlerts[0].AccountName,
+                        accountAlerts.Count,
+                        $"Resolved system '{resolvedSystemId}' for subscription '{accountId}' not found."));
+                    totalSkipped += accountAlerts.Count;
+                    continue;
+                }
+
+                var result = await ImportPrismaAlertsForSystemAsync(
+                    resolvedSystemId, system.Name, assessmentId, accountAlerts,
+                    fileContent, fileName, fileHash, resolution, dryRun, importedBy,
+                    ScanImportType.PrismaCsv, ct);
+                imports.Add(result);
+                totalProcessed += result.TotalAlerts;
+            }
+        }
+
+        sw.Stop();
+        _logger.LogInformation(
+            "Prisma CSV import completed: file={FileName}, duration={DurationMs}ms, " +
+            "systems={SystemCount}, totalProcessed={TotalProcessed}, skipped={TotalSkipped}, " +
+            "findingsCreated={FindingsCreated}, nistControlsAffected={NistControlsAffected}, " +
+            "effectivenessUpserted={EffectivenessUpserted}",
+            fileName, sw.ElapsedMilliseconds, imports.Count, totalProcessed, totalSkipped,
+            imports.Sum(i => i.FindingsCreated), imports.Sum(i => i.NistControlsAffected),
+            imports.Sum(i => i.EffectivenessRecordsCreated + i.EffectivenessRecordsUpdated));
+
+        return new PrismaImportResult(
+            imports,
+            unresolvedSubscriptions,
+            skippedNonAzure,
+            totalProcessed,
+            totalSkipped,
+            sw.ElapsedMilliseconds);
+    }
+
+    /// <summary>
+    /// Import a batch of Prisma alerts for a single resolved system.
+    /// Creates findings, evidence, effectiveness records, and handles conflict resolution.
+    /// </summary>
+    private async Task<PrismaSystemImportResult> ImportPrismaAlertsForSystemAsync(
+        string systemId,
+        string systemName,
+        string? assessmentId,
+        List<ParsedPrismaAlert> alerts,
+        byte[] fileContent,
+        string fileName,
+        string fileHash,
+        ImportConflictResolution resolution,
+        bool dryRun,
+        string importedBy,
+        ScanImportType importType,
+        CancellationToken ct)
+    {
+        var warnings = new List<string>();
+
+        using var scope = _scopeFactory.CreateScope();
+        var ctx = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+
+        // ── Resolve assessment ───────────────────────────────────────────
+        string resolvedAssessmentId;
+        if (!string.IsNullOrEmpty(assessmentId))
+        {
+            var existing = await ctx.Assessments.FindAsync(new object[] { assessmentId }, ct);
+            if (existing is null)
+            {
+                return new PrismaSystemImportResult(
+                    string.Empty, systemId, systemName, ScanImportStatus.Failed,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    false, fileHash, dryRun,
+                    new List<string> { $"Assessment '{assessmentId}' not found." });
+            }
+            resolvedAssessmentId = assessmentId;
+        }
+        else
+        {
+            resolvedAssessmentId = await GetOrCreateAssessmentAsync(ctx, systemId, importedBy, ct);
+        }
+
+        // ── Load baseline ────────────────────────────────────────────────
+        var baseline = await _baselineService.GetBaselineAsync(systemId, cancellationToken: ct);
+        var baselineSet = new HashSet<string>(
+            baseline?.ControlIds ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+
+        // ── Create import record ─────────────────────────────────────────
+        var importRecord = new ScanImportRecord
+        {
+            RegisteredSystemId = systemId,
+            AssessmentId = resolvedAssessmentId,
+            ImportType = importType,
+            FileName = fileName,
+            FileHash = fileHash,
+            FileSizeBytes = fileContent.Length,
+            ConflictResolution = resolution,
+            IsDryRun = dryRun,
+            ImportedBy = importedBy
+        };
+
+        // ── Counters ─────────────────────────────────────────────────────
+        int openCount = 0, resolvedCount = 0, dismissedCount = 0, snoozedCount = 0;
+        int findingsCreated = 0, findingsUpdated = 0, skippedCount = 0;
+        int remediableCount = 0, cliScriptsExtracted = 0, alertsWithHistory = 0;
+        var allPolicyLabels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var affectedNistControls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var importFindings = new List<ScanImportFinding>();
+        var newFindings = new List<ComplianceFinding>();
+        var unmappedPolicyNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // ── Preload existing import findings for conflict detection ──────
+        var existingPrismaFindings = await ctx.ScanImportFindings
+            .Where(f => f.PrismaAlertId != null)
+            .ToListAsync(ct);
+
+        var existingByAlertId = existingPrismaFindings
+            .Where(f => f.PrismaAlertId is not null)
+            .GroupBy(f => f.PrismaAlertId!)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(f => f.Id).First(),
+                StringComparer.OrdinalIgnoreCase);
+
+        // ── Process each alert ───────────────────────────────────────────
+        foreach (var alert in alerts)
+        {
+            // Count by status
+            switch (alert.Status.ToLowerInvariant())
+            {
+                case "open": openCount++; break;
+                case "resolved": resolvedCount++; break;
+                case "dismissed": dismissedCount++; break;
+                case "snoozed": snoozedCount++; break;
+            }
+
+            // Check for unmapped policies (no NIST controls)
+            if (alert.NistControlIds.Count == 0)
+            {
+                unmappedPolicyNames.Add(alert.PolicyName);
+            }
+
+            // Track API JSON enhanced metrics
+            if (alert.Remediable) remediableCount++;
+            if (!string.IsNullOrWhiteSpace(alert.RemediationScript)) cliScriptsExtracted++;
+            if (alert.AlertHistory is { Count: > 0 }) alertsWithHistory++;
+            if (alert.PolicyLabels is not null)
+            {
+                foreach (var label in alert.PolicyLabels)
+                    allPolicyLabels.Add(label);
+            }
+
+            // Map status and severity
+            var findingStatus = MapPrismaStatus(alert.Status);
+            var findingSeverity = PrismaSeverityMapper.MapToFindingSeverity(alert.Severity);
+            var catSeverity = PrismaSeverityMapper.MapToCatSeverity(alert.Severity);
+            var description = BuildPrismaDescription(alert);
+
+            // Primary NIST control
+            var primaryControl = alert.NistControlIds.FirstOrDefault() ?? string.Empty;
+            var controlFamily = ExtractControlFamily(primaryControl);
+
+            // Create ScanImportFinding
+            var importFinding = new ScanImportFinding
+            {
+                ScanImportRecordId = importRecord.Id,
+                VulnId = alert.AlertId,
+                RawStatus = alert.Status,
+                RawSeverity = alert.Severity,
+                MappedSeverity = catSeverity,
+                ResolvedNistControlIds = alert.NistControlIds,
+                PrismaAlertId = alert.AlertId,
+                PrismaPolicyName = alert.PolicyName,
+                CloudResourceId = alert.ResourceId,
+                CloudResourceType = alert.ResourceType,
+                CloudRegion = alert.Region,
+                CloudAccountId = alert.AccountId
+            };
+
+            // ── Conflict detection ───────────────────────────────────────
+            if (existingByAlertId.TryGetValue(alert.AlertId, out var existingImport))
+            {
+                if (resolution == ImportConflictResolution.Skip)
+                {
+                    importFinding.ImportAction = ImportFindingAction.Skipped;
+                    importFinding.ComplianceFindingId = existingImport.ComplianceFindingId;
+                    skippedCount++;
+                    importFindings.Add(importFinding);
+                    continue;
+                }
+
+                if (resolution == ImportConflictResolution.Overwrite
+                    && existingImport.ComplianceFindingId is not null)
+                {
+                    var existingFinding = await ctx.Findings
+                        .FindAsync(new object[] { existingImport.ComplianceFindingId }, ct);
+
+                    if (existingFinding is not null)
+                    {
+                        existingFinding.Status = findingStatus;
+                        existingFinding.Severity = findingSeverity;
+                        existingFinding.CatSeverity = catSeverity;
+                        existingFinding.Title = alert.PolicyName;
+                        existingFinding.Description = description;
+                        existingFinding.ImportRecordId = importRecord.Id;
+
+                        importFinding.ImportAction = ImportFindingAction.Updated;
+                        importFinding.ComplianceFindingId = existingFinding.Id;
+                        findingsUpdated++;
+                        importFindings.Add(importFinding);
+
+                        foreach (var nist in alert.NistControlIds.Where(c => baselineSet.Contains(c)))
+                            affectedNistControls.Add(nist);
+                        continue;
+                    }
+                }
+            }
+
+            // ── Create new ComplianceFinding ─────────────────────────────
+            var newFinding = new ComplianceFinding
+            {
+                ControlId = primaryControl,
+                ControlFamily = controlFamily,
+                Title = alert.PolicyName,
+                Description = description,
+                Severity = findingSeverity,
+                Status = findingStatus,
+                ResourceId = alert.ResourceId,
+                ResourceType = alert.ResourceType,
+                Source = "Prisma Cloud",
+                ScanSource = ScanSourceType.Cloud,
+                StigFinding = false,
+                CatSeverity = catSeverity,
+                AssessmentId = resolvedAssessmentId,
+                ImportRecordId = importRecord.Id,
+                // API JSON enhanced fields (populated when available)
+                RemediationGuidance = alert.Recommendation ?? string.Empty,
+                RemediationScript = alert.RemediationScript,
+                AutoRemediable = alert.Remediable
+            };
+
+            importFinding.ImportAction = ImportFindingAction.Created;
+            importFinding.ComplianceFindingId = newFinding.Id;
+            newFindings.Add(newFinding);
+            findingsCreated++;
+
+            // Track affected NIST controls (in-baseline only) for effectiveness
+            foreach (var nist in alert.NistControlIds.Where(c => baselineSet.Contains(c)))
+                affectedNistControls.Add(nist);
+
+            importFindings.Add(importFinding);
+        }
+
+        // ── Unmapped policy warnings ─────────────────────────────────────
+        if (unmappedPolicyNames.Count > 0)
+        {
+            foreach (var policyName in unmappedPolicyNames)
+            {
+                warnings.Add($"Policy '{policyName}' has no NIST 800-53 mapping.");
+            }
+        }
+
+        // ── Create evidence ──────────────────────────────────────────────
+        var evidenceContent = JsonSerializer.Serialize(new
+        {
+            ImportType = importType.ToString(),
+            FileName = fileName,
+            TotalAlerts = alerts.Count,
+            OpenCount = openCount,
+            ResolvedCount = resolvedCount,
+            DismissedCount = dismissedCount,
+            SnoozedCount = snoozedCount
+        });
+
+        var evidence = new ComplianceEvidence
+        {
+            ControlId = affectedNistControls.FirstOrDefault() ?? string.Empty,
+            SubscriptionId = string.Empty,
+            EvidenceType = "CloudScanResult",
+            Description = $"Prisma Cloud {importType} Import: {fileName}",
+            Content = evidenceContent,
+            CollectedAt = DateTime.UtcNow,
+            CollectedBy = importedBy,
+            AssessmentId = resolvedAssessmentId,
+            EvidenceCategory = EvidenceCategory.Configuration,
+            ContentHash = fileHash,
+            CollectionMethod = "Automated"
+        };
+
+        // ── Upsert effectiveness (non-dry-run only) ─────────────────────
+        int effectivenessCreated = 0, effectivenessUpdated = 0;
+        if (!dryRun && affectedNistControls.Count > 0)
+        {
+            var allExistingFindings = await ctx.Findings
+                .Where(f => f.AssessmentId == resolvedAssessmentId)
+                .ToListAsync(ct);
+
+            var allFindings = allExistingFindings.Concat(newFindings).ToList();
+            var controlFindingMap = allFindings
+                .Where(f => !string.IsNullOrEmpty(f.ControlId))
+                .GroupBy(f => f.ControlId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var controlId in affectedNistControls)
+            {
+                controlFindingMap.TryGetValue(controlId, out var controlFindings);
+                var findingsForControl = controlFindings ?? new List<ComplianceFinding>();
+
+                var anyOpen = findingsForControl.Any(f =>
+                    f.Status == FindingStatus.Open || f.Status == FindingStatus.InProgress);
+                var determination = anyOpen
+                    ? EffectivenessDetermination.OtherThanSatisfied
+                    : EffectivenessDetermination.Satisfied;
+
+                CatSeverity? controlCatSeverity = null;
+                if (anyOpen)
+                {
+                    var openSeverities = findingsForControl
+                        .Where(f => f.Status == FindingStatus.Open || f.Status == FindingStatus.InProgress)
+                        .Where(f => f.CatSeverity.HasValue)
+                        .Select(f => f.CatSeverity!.Value)
+                        .ToList();
+                    if (openSeverities.Count > 0)
+                        controlCatSeverity = openSeverities.Min();
+                }
+
+                var existingEffectiveness = await ctx.ControlEffectivenessRecords
+                    .Where(e => e.AssessmentId == resolvedAssessmentId &&
+                                e.RegisteredSystemId == systemId &&
+                                e.ControlId == controlId)
+                    .FirstOrDefaultAsync(ct);
+
+                if (existingEffectiveness is not null)
+                {
+                    existingEffectiveness.Determination = determination;
+                    existingEffectiveness.AssessmentMethod = "Test";
+                    existingEffectiveness.AssessorId = importedBy;
+                    existingEffectiveness.AssessedAt = DateTime.UtcNow;
+                    existingEffectiveness.CatSeverity = controlCatSeverity;
+                    if (!existingEffectiveness.EvidenceIds.Contains(evidence.Id))
+                        existingEffectiveness.EvidenceIds.Add(evidence.Id);
+                    existingEffectiveness.Notes = $"Re-evaluated via Prisma Cloud import '{fileName}'";
+                    effectivenessUpdated++;
+                }
+                else
+                {
+                    var effectiveness = new ControlEffectiveness
+                    {
+                        AssessmentId = resolvedAssessmentId,
+                        RegisteredSystemId = systemId,
+                        ControlId = controlId,
+                        Determination = determination,
+                        AssessmentMethod = "Test",
+                        EvidenceIds = new List<string> { evidence.Id },
+                        AssessorId = importedBy,
+                        CatSeverity = controlCatSeverity,
+                        Notes = $"Auto-determined via Prisma Cloud import '{fileName}'"
+                    };
+                    ctx.ControlEffectivenessRecords.Add(effectiveness);
+                    effectivenessCreated++;
+                }
+            }
+        }
+
+        // ── Update import record counts ──────────────────────────────────
+        importRecord.TotalEntries = alerts.Count;
+        importRecord.OpenCount = openCount;
+        importRecord.FindingsCreated = findingsCreated;
+        importRecord.FindingsUpdated = findingsUpdated;
+        importRecord.SkippedCount = skippedCount;
+        importRecord.EffectivenessRecordsCreated = effectivenessCreated;
+        importRecord.EffectivenessRecordsUpdated = effectivenessUpdated;
+        importRecord.NistControlsAffected = affectedNistControls.Count;
+        importRecord.Warnings = warnings;
+        importRecord.ImportStatus = warnings.Count > 0
+            ? ScanImportStatus.CompletedWithWarnings
+            : ScanImportStatus.Completed;
+
+        // ── Persist (unless dry-run) ─────────────────────────────────────
+        if (!dryRun)
+        {
+            ctx.ScanImportRecords.Add(importRecord);
+            ctx.ScanImportFindings.AddRange(importFindings);
+            ctx.Findings.AddRange(newFindings);
+            ctx.Evidence.Add(evidence);
+            await ctx.SaveChangesAsync(ct);
+        }
+
+        _logger.LogInformation(
+            "Prisma import for system {SystemId}: findings={Created}/{Updated}, " +
+            "effectiveness={EffCreated}/{EffUpdated}, skipped={Skipped}, unmapped={Unmapped}",
+            systemId, findingsCreated, findingsUpdated,
+            effectivenessCreated, effectivenessUpdated, skippedCount, unmappedPolicyNames.Count);
+
+        return new PrismaSystemImportResult(
+            importRecord.Id,
+            systemId,
+            systemName,
+            importRecord.ImportStatus,
+            alerts.Count,
+            openCount,
+            resolvedCount,
+            dismissedCount,
+            snoozedCount,
+            findingsCreated,
+            findingsUpdated,
+            skippedCount,
+            unmappedPolicyNames.Count,
+            effectivenessCreated,
+            effectivenessUpdated,
+            affectedNistControls.Count,
+            !dryRun,    // evidence persisted only when not dry-run
+            fileHash,
+            dryRun,
+            warnings,
+            RemediableCount: remediableCount,
+            CliScriptsExtracted: cliScriptsExtracted,
+            PolicyLabelsFound: allPolicyLabels.Count > 0 ? allPolicyLabels.ToList() : null,
+            AlertsWithHistory: alertsWithHistory);
+    }
+
+    /// <summary>Map Prisma alert status to <see cref="FindingStatus"/>.</summary>
+    private static FindingStatus MapPrismaStatus(string status) =>
+        status.ToLowerInvariant() switch
+        {
+            "open"      => FindingStatus.Open,
+            "resolved"  => FindingStatus.Remediated,
+            "dismissed" => FindingStatus.Accepted,
+            "snoozed"   => FindingStatus.Open,
+            _           => FindingStatus.Open
+        };
+
+    /// <summary>Build description string for a Prisma Cloud finding.</summary>
+    private static string BuildPrismaDescription(ParsedPrismaAlert alert)
+    {
+        var parts = new List<string>
+        {
+            $"Prisma Cloud Alert: {alert.PolicyName}",
+            $"Cloud: {alert.CloudType} | Region: {alert.Region} | Resource: {alert.ResourceName}"
+        };
+
+        if (alert.Status.Equals("snoozed", StringComparison.OrdinalIgnoreCase))
+            parts.Add("Note: Alert is currently snoozed in Prisma Cloud.");
+
+        if (!string.IsNullOrEmpty(alert.Description))
+            parts.Add(alert.Description);
+
+        return string.Join("\n", parts);
+    }
+
+    /// <inheritdoc />
+    public async Task<PrismaImportResult> ImportPrismaApiAsync(
+        string? systemId,
+        string? assessmentId,
+        byte[] fileContent,
+        string fileName,
+        ImportConflictResolution resolution,
+        bool dryRun,
+        string importedBy,
+        CancellationToken ct = default)
+    {
+        var sw = Stopwatch.StartNew();
+
+        // ── Step 1: File size check (25 MB) ──────────────────────────────
+        if (fileContent.Length > 25 * 1024 * 1024)
+        {
+            sw.Stop();
+            return new PrismaImportResult(
+                new List<PrismaSystemImportResult>(),
+                new List<UnresolvedSubscriptionInfo>(),
+                null, 0, 0, sw.ElapsedMilliseconds,
+                ErrorMessage: "File exceeds maximum size of 25 MB.");
+        }
+
+        // ── Step 2: Parse API JSON ───────────────────────────────────────
+        ParsedPrismaFile parsed;
+        try
+        {
+            parsed = _prismaApiJsonParser.Parse(fileContent, fileName);
+        }
+        catch (PrismaParseException ex)
+        {
+            sw.Stop();
+            _logger.LogWarning(ex, "Prisma API JSON parse failed for file {FileName}", fileName);
+            return new PrismaImportResult(
+                new List<PrismaSystemImportResult>(),
+                new List<UnresolvedSubscriptionInfo>(),
+                null, 0, 0, sw.ElapsedMilliseconds,
+                ErrorMessage: $"JSON parse error: {ex.Message}");
+        }
+
+        var fileHash = $"sha256:{ComputeSha256(fileContent)}";
+        var imports = new List<PrismaSystemImportResult>();
+        var unresolvedSubscriptions = new List<UnresolvedSubscriptionInfo>();
+        SkippedNonAzureInfo? skippedNonAzure = null;
+        int totalProcessed = 0;
+        int totalSkipped = 0;
+
+        _logger.LogInformation(
+            "Prisma API JSON import started: file={FileName}, hash={FileHash}, system={SystemId}, " +
+            "alerts={AlertCount}, resolution={Resolution}, dryRun={DryRun}",
+            fileName, fileHash, systemId ?? "(auto)", parsed.TotalAlerts, resolution, dryRun);
+
+        if (systemId is not null)
+        {
+            // ── Explicit system — validate and import all alerts ─────────
+            var system = await _rmfService.GetSystemAsync(systemId, ct);
+            if (system is null)
+            {
+                sw.Stop();
+                return new PrismaImportResult(
+                    new List<PrismaSystemImportResult>(),
+                    new List<UnresolvedSubscriptionInfo>(),
+                    null, 0, 0, sw.ElapsedMilliseconds,
+                    ErrorMessage: $"System '{systemId}' not found.");
+            }
+
+            var result = await ImportPrismaAlertsForSystemAsync(
+                systemId, system.Name, assessmentId, parsed.Alerts,
+                fileContent, fileName, fileHash, resolution, dryRun, importedBy,
+                ScanImportType.PrismaApi, ct);
+            imports.Add(result);
+            totalProcessed = result.TotalAlerts;
+        }
+        else
+        {
+            // ── Auto-resolve mode — split by cloud type, then by account ─
+            var azureAlerts = parsed.Alerts
+                .Where(a => string.Equals(a.CloudType, "azure", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var nonAzureAlerts = parsed.Alerts
+                .Where(a => !string.Equals(a.CloudType, "azure", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (nonAzureAlerts.Count > 0)
+            {
+                var cloudTypes = nonAzureAlerts
+                    .Select(a => a.CloudType)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                skippedNonAzure = new SkippedNonAzureInfo(
+                    nonAzureAlerts.Count,
+                    cloudTypes,
+                    $"Skipped {nonAzureAlerts.Count} non-Azure alert(s) from cloud type(s): " +
+                    $"{string.Join(", ", cloudTypes)}. Provide an explicit system_id to import these.");
+                totalSkipped = nonAzureAlerts.Count;
+            }
+
+            // Group Azure alerts by AccountId and resolve each
+            var groupedByAccount = azureAlerts
+                .GroupBy(a => a.AccountId, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var group in groupedByAccount)
+            {
+                var accountId = group.Key;
+                var accountAlerts = group.ToList();
+
+                var resolvedSystemId = await _subscriptionResolver.ResolveAsync(accountId, ct);
+                if (resolvedSystemId is null)
+                {
+                    _logger.LogWarning(
+                        "Prisma API JSON subscription unresolved: subscriptionId={SubscriptionId}, accountName={AccountName}, alertCount={AlertCount}",
+                        accountId, accountAlerts[0].AccountName, accountAlerts.Count);
+                    unresolvedSubscriptions.Add(new UnresolvedSubscriptionInfo(
+                        accountId,
+                        accountAlerts[0].AccountName,
+                        accountAlerts.Count,
+                        $"Azure subscription '{accountId}' is not registered. " +
+                        $"Register it with a system to import these {accountAlerts.Count} alert(s)."));
+                    totalSkipped += accountAlerts.Count;
+                    continue;
+                }
+
+                _logger.LogInformation(
+                    "Prisma API JSON subscription resolved: subscriptionId={SubscriptionId}, resolvedSystemId={ResolvedSystemId}",
+                    accountId, resolvedSystemId);
+
+                var system = await _rmfService.GetSystemAsync(resolvedSystemId, ct);
+                if (system is null)
+                {
+                    unresolvedSubscriptions.Add(new UnresolvedSubscriptionInfo(
+                        accountId,
+                        accountAlerts[0].AccountName,
+                        accountAlerts.Count,
+                        $"Resolved system '{resolvedSystemId}' for subscription '{accountId}' not found."));
+                    totalSkipped += accountAlerts.Count;
+                    continue;
+                }
+
+                var result = await ImportPrismaAlertsForSystemAsync(
+                    resolvedSystemId, system.Name, assessmentId, accountAlerts,
+                    fileContent, fileName, fileHash, resolution, dryRun, importedBy,
+                    ScanImportType.PrismaApi, ct);
+                imports.Add(result);
+                totalProcessed += result.TotalAlerts;
+            }
+        }
+
+        sw.Stop();
+        _logger.LogInformation(
+            "Prisma API JSON import completed: file={FileName}, duration={DurationMs}ms, " +
+            "systems={SystemCount}, totalProcessed={TotalProcessed}, skipped={TotalSkipped}, " +
+            "findingsCreated={FindingsCreated}, nistControlsAffected={NistControlsAffected}, " +
+            "effectivenessUpserted={EffectivenessUpserted}",
+            fileName, sw.ElapsedMilliseconds, imports.Count, totalProcessed, totalSkipped,
+            imports.Sum(i => i.FindingsCreated), imports.Sum(i => i.NistControlsAffected),
+            imports.Sum(i => i.EffectivenessRecordsCreated + i.EffectivenessRecordsUpdated));
+
+        return new PrismaImportResult(
+            imports,
+            unresolvedSubscriptions,
+            skippedNonAzure,
+            totalProcessed,
+            totalSkipped,
+            sw.ElapsedMilliseconds);
+    }
+
+    /// <inheritdoc />
+    public async Task<PrismaPolicyListResult> ListPrismaPoliciesAsync(
+        string systemId,
+        CancellationToken ct = default)
+    {
+        var system = await _rmfService.GetSystemAsync(systemId, ct)
+            ?? throw new InvalidOperationException($"System '{systemId}' not found.");
+
+        using var scope = _scopeFactory.CreateScope();
+        var ctx = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+
+        // Get all Prisma import records for this system
+        var prismaImportIds = await ctx.ScanImportRecords
+            .Where(r => r.RegisteredSystemId == systemId &&
+                        (r.ImportType == ScanImportType.PrismaCsv || r.ImportType == ScanImportType.PrismaApi))
+            .Select(r => r.Id)
+            .ToListAsync(ct);
+
+        if (prismaImportIds.Count == 0)
+        {
+            return new PrismaPolicyListResult(systemId, 0, new List<PrismaPolicyEntry>());
+        }
+
+        // Get all ScanImportFindings with Prisma policy data
+        var findings = await ctx.ScanImportFindings
+            .Where(f => prismaImportIds.Contains(f.ScanImportRecordId) &&
+                        f.PrismaPolicyName != null)
+            .ToListAsync(ct);
+
+        // Also get related ComplianceFindings for status info
+        var findingIds = findings
+            .Where(f => f.ComplianceFindingId != null)
+            .Select(f => f.ComplianceFindingId!)
+            .Distinct()
+            .ToList();
+
+        var complianceFindings = await ctx.Findings
+            .Where(f => findingIds.Contains(f.Id))
+            .ToListAsync(ct);
+
+        var cfLookup = complianceFindings.ToDictionary(f => f.Id);
+
+        // Get import records for lastSeen info
+        var importRecords = await ctx.ScanImportRecords
+            .Where(r => prismaImportIds.Contains(r.Id))
+            .ToDictionaryAsync(r => r.Id, ct);
+
+        // Group by policy name
+        var policyGroups = findings.GroupBy(f => f.PrismaPolicyName!);
+
+        var policies = new List<PrismaPolicyEntry>();
+        foreach (var group in policyGroups)
+        {
+            var policyFindings = group.ToList();
+
+            // Collect NIST controls from associated ComplianceFindings
+            var nistControls = new HashSet<string>();
+            int openCount = 0, resolvedCount = 0, dismissedCount = 0;
+            var resourceTypes = new HashSet<string>();
+            string lastImportId = string.Empty;
+            DateTime lastSeenAt = DateTime.MinValue;
+
+            foreach (var sif in policyFindings)
+            {
+                // NIST controls from the ScanImportFinding
+                foreach (var nist in sif.ResolvedNistControlIds)
+                    nistControls.Add(nist);
+
+                // Status counts from associated ComplianceFinding
+                if (sif.ComplianceFindingId != null && cfLookup.TryGetValue(sif.ComplianceFindingId, out var cf))
+                {
+                    switch (cf.Status)
+                    {
+                        case FindingStatus.Open: openCount++; break;
+                        case FindingStatus.Remediated: resolvedCount++; break;
+                        case FindingStatus.Accepted: dismissedCount++; break;
+                    }
+                }
+
+                // Resource types
+                if (!string.IsNullOrEmpty(sif.CloudResourceType))
+                    resourceTypes.Add(sif.CloudResourceType);
+
+                // Last seen tracking
+                if (importRecords.TryGetValue(sif.ScanImportRecordId, out var imp) && imp.ImportedAt > lastSeenAt)
+                {
+                    lastSeenAt = imp.ImportedAt;
+                    lastImportId = imp.Id;
+                }
+            }
+
+            // Get severity and type from the first finding's raw data
+            var firstFinding = policyFindings.First();
+            policies.Add(new PrismaPolicyEntry(
+                PolicyName: group.Key,
+                PolicyType: "config",
+                Severity: firstFinding.RawSeverity,
+                NistControlIds: nistControls.OrderBy(c => c).ToList(),
+                OpenCount: openCount,
+                ResolvedCount: resolvedCount,
+                DismissedCount: dismissedCount,
+                AffectedResourceTypes: resourceTypes.OrderBy(r => r).ToList(),
+                LastSeenImportId: lastImportId,
+                LastSeenAt: lastSeenAt));
+        }
+
+        return new PrismaPolicyListResult(
+            SystemId: systemId,
+            TotalPolicies: policies.Count,
+            Policies: policies.OrderBy(p => p.PolicyName).ToList());
+    }
+
+    /// <inheritdoc />
+    public async Task<PrismaTrendResult> GetPrismaTrendAsync(
+        string systemId,
+        List<string>? importIds,
+        string? groupBy,
+        CancellationToken ct = default)
+    {
+        var system = await _rmfService.GetSystemAsync(systemId, ct)
+            ?? throw new InvalidOperationException($"System '{systemId}' not found.");
+
+        using var scope = _scopeFactory.CreateScope();
+        var ctx = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+
+        // Get Prisma import records for this system
+        IQueryable<ScanImportRecord> importQuery = ctx.ScanImportRecords
+            .Where(r => r.RegisteredSystemId == systemId &&
+                        (r.ImportType == ScanImportType.PrismaCsv || r.ImportType == ScanImportType.PrismaApi));
+
+        List<ScanImportRecord> selectedImports;
+
+        if (importIds != null && importIds.Count > 0)
+        {
+            selectedImports = await importQuery
+                .Where(r => importIds.Contains(r.Id))
+                .OrderBy(r => r.ImportedAt)
+                .ToListAsync(ct);
+        }
+        else
+        {
+            selectedImports = await importQuery
+                .OrderByDescending(r => r.ImportedAt)
+                .Take(2)
+                .OrderBy(r => r.ImportedAt) // re-order oldest first
+                .ToListAsync(ct);
+        }
+
+        if (selectedImports.Count == 0)
+        {
+            throw new InvalidOperationException($"No Prisma imports found for system '{systemId}'.");
+        }
+
+        // Build import snapshots
+        var trendImports = selectedImports.Select(imp => new PrismaTrendImport(
+            ImportId: imp.Id,
+            ImportedAt: imp.ImportedAt,
+            FileName: imp.FileName,
+            TotalAlerts: imp.TotalEntries,
+            OpenCount: imp.OpenCount,
+            ResolvedCount: imp.PassCount, // PassCount reused for resolved in Prisma context
+            DismissedCount: imp.NotApplicableCount // NotApplicableCount reused for dismissed
+        )).ToList();
+
+        int newFindings, resolvedFindings, persistentFindings;
+        decimal remediationRate;
+
+        if (selectedImports.Count == 1)
+        {
+            // Snapshot mode — all findings are "new"
+            var importFindings = await ctx.ScanImportFindings
+                .Where(f => f.ScanImportRecordId == selectedImports[0].Id && f.PrismaAlertId != null)
+                .ToListAsync(ct);
+
+            newFindings = importFindings.Count;
+            resolvedFindings = 0;
+            persistentFindings = 0;
+            remediationRate = 0m;
+        }
+        else
+        {
+            var olderImport = selectedImports[0];
+            var newerImport = selectedImports[^1];
+
+            var olderAlertIds = (await ctx.ScanImportFindings
+                .Where(f => f.ScanImportRecordId == olderImport.Id && f.PrismaAlertId != null)
+                .Select(f => f.PrismaAlertId!)
+                .ToListAsync(ct))
+                .ToHashSet();
+
+            var newerAlertIds = (await ctx.ScanImportFindings
+                .Where(f => f.ScanImportRecordId == newerImport.Id && f.PrismaAlertId != null)
+                .Select(f => f.PrismaAlertId!)
+                .ToListAsync(ct))
+                .ToHashSet();
+
+            newFindings = newerAlertIds.Count(id => !olderAlertIds.Contains(id));
+            resolvedFindings = olderAlertIds.Count(id => !newerAlertIds.Contains(id));
+            persistentFindings = newerAlertIds.Count(id => olderAlertIds.Contains(id));
+
+            var denominator = resolvedFindings + persistentFindings;
+            remediationRate = denominator > 0
+                ? Math.Round((decimal)resolvedFindings / denominator * 100, 2)
+                : 0m;
+        }
+
+        // Build optional breakdowns
+        Dictionary<string, int>? resourceTypeBreakdown = null;
+        Dictionary<string, int>? nistControlBreakdown = null;
+
+        if (groupBy != null)
+        {
+            var latestImport = selectedImports[^1];
+            var latestFindings = await ctx.ScanImportFindings
+                .Where(f => f.ScanImportRecordId == latestImport.Id && f.PrismaAlertId != null)
+                .ToListAsync(ct);
+
+            if (groupBy.Equals("resource_type", StringComparison.OrdinalIgnoreCase))
+            {
+                resourceTypeBreakdown = latestFindings
+                    .Where(f => !string.IsNullOrEmpty(f.CloudResourceType))
+                    .GroupBy(f => f.CloudResourceType!)
+                    .ToDictionary(g => g.Key, g => g.Count());
+            }
+            else if (groupBy.Equals("nist_control", StringComparison.OrdinalIgnoreCase))
+            {
+                nistControlBreakdown = new Dictionary<string, int>();
+                foreach (var f in latestFindings)
+                {
+                    foreach (var ctrl in f.ResolvedNistControlIds)
+                    {
+                        if (!nistControlBreakdown.ContainsKey(ctrl))
+                            nistControlBreakdown[ctrl] = 0;
+                        nistControlBreakdown[ctrl]++;
+                    }
+                }
+            }
+        }
+
+        return new PrismaTrendResult(
+            SystemId: systemId,
+            Imports: trendImports,
+            NewFindings: newFindings,
+            ResolvedFindings: resolvedFindings,
+            PersistentFindings: persistentFindings,
+            RemediationRate: remediationRate,
+            ResourceTypeBreakdown: resourceTypeBreakdown,
+            NistControlBreakdown: nistControlBreakdown);
     }
 }

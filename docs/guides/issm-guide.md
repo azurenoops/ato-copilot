@@ -827,6 +827,98 @@ Parameters:
 
 ---
 
+## Import Prisma Cloud Scan Results
+
+Cloud systems using Prisma Cloud for CSPM can import scan results directly into ATO Copilot for compliance tracking.
+
+### CSV Import from Prisma Console
+
+1. Export the compliance CSV from Prisma Cloud Console → Alerts → Compliance
+2. Import the CSV file:
+
+```
+Tool: compliance_import_prisma_csv
+Parameters:
+  file_content: "<base64-encoded CSV>"
+  file_name: "prisma-alerts-2026-03-05.csv"
+  system_id: "<system-guid>"     (optional — omit ONLY for auto-resolve based on Azure subscription IDs)
+  conflict_resolution: "skip"    (default; "overwrite" to update existing)
+  dry_run: true                  (preview first, then set to false)
+```
+
+3. Review the import summary — note `unmappedPolicies` count and `unresolvedSubscriptions`
+4. For unmapped policies, consider adding NIST control mappings via your Prisma Cloud policy configuration
+
+### API JSON Import (Enhanced)
+
+For richer data including remediation scripts and alert history, export from the Prisma Cloud API:
+
+```
+Tool: compliance_import_prisma_api
+Parameters:
+  file_content: "<base64-encoded JSON>"
+  file_name: "prisma-api-alerts.json"
+  system_id: "<system-guid>"
+```
+
+API JSON imports include `remediable_count`, `cli_scripts_extracted`, and `alerts_with_history` metrics.
+
+### Multi-Subscription Resolution
+
+When `system_id` is omitted, ATO Copilot auto-resolves Azure subscription IDs to registered systems. If a subscription is unregistered, the import reports it in `unresolvedSubscriptions`. Register the subscription's system first, then re-import.
+
+### Re-Import After Remediation
+
+After remediation work is completed:
+
+```
+1. Export fresh Prisma Cloud scan results
+2. compliance_import_prisma_csv (conflict_resolution: "overwrite")
+3. compliance_prisma_trend (system_id)  ← View remediation progress
+4. compliance_generate_conmon_report    ← Updated ConMon reflects new scan data
+```
+
+---
+
+## Cloud Posture Oversight
+
+As an ISSM, you oversee cloud security posture across multiple systems.
+
+### Directing ISSOs to Import Prisma Scans
+
+Instruct ISSOs to regularly import Prisma scan results at these cadence points:
+
+- **Pre-assessment**: Import latest scans before initiating the Assess phase
+- **Post-remediation**: Re-import after engineers address Prisma findings
+- **Periodic ConMon**: Monthly or quarterly per your ConMon plan schedule
+
+### Reviewing Trend Data Across Systems
+
+```
+Tool: compliance_prisma_trend
+Parameters:
+  system_id: "<system-guid>"
+  group_by: "nist_control"   (optional — or "resource_type")
+```
+
+Review `remediationRate`, `newFindings`, and `resolvedFindings` to track compliance drift.
+
+### Prisma Findings in ConMon Reports
+
+Prisma-sourced findings automatically appear in ConMon reports (`compliance_generate_conmon_report`) as open/resolved finding counts. Effectiveness records created by Prisma imports feed into SAR generation.
+
+### Policy Catalog Review
+
+```
+Tool: compliance_list_prisma_policies
+Parameters:
+  system_id: "<system-guid>"
+```
+
+Lists all unique Prisma policies observed, with NIST control mappings, open/resolved counts, and affected resource types. Use this to identify which policies lack NIST mappings and coordinate with your cloud team.
+
+---
+
 ## See Also
 
 - [ISSM Getting Started](../getting-started/issm.md) — First-time setup and first 3 commands

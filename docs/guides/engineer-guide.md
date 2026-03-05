@@ -343,9 +343,65 @@ The exported CKL file can be opened in DISA STIG Viewer or uploaded to eMASS.
 |------|-------------|
 | `compliance_import_ckl` | Import DISA STIG Viewer CKL checklist |
 | `compliance_import_xccdf` | Import SCAP Compliance Checker XCCDF results |
+| `compliance_import_prisma_csv` | Import Prisma Cloud compliance CSV export |
+| `compliance_import_prisma_api` | Import Prisma Cloud API JSON (enhanced) |
 | `compliance_export_ckl` | Export CKL for STIG Viewer / eMASS upload |
 | `compliance_list_imports` | List import history for a system |
 | `compliance_get_import_summary` | Detailed per-finding import breakdown |
+| `compliance_list_prisma_policies` | List Prisma policies with NIST mappings |
+| `compliance_prisma_trend` | Compare scan imports for remediation progress |
+
+---
+
+## Prisma Remediation Workflow
+
+Cloud engineers can view Prisma-sourced findings with remediation guidance and execute CLI scripts to fix issues.
+
+### Viewing Prisma Findings with Remediation Guidance
+
+After an ISSO or ISSM imports Prisma Cloud scan results, findings are available as `ComplianceFinding` records with:
+
+- **RemediationGuidance** — Human-readable fix instructions from the Prisma policy
+- **RemediationScript** — CLI script (e.g., `az storage account update ...`) extracted from API JSON imports
+- **AutoRemediable** — Whether the finding can be auto-remediated via CLI
+
+```
+@ato Show open Prisma Cloud findings for Eagle Eye with remediation steps
+@ato What CLI scripts are available for Eagle Eye Prisma findings?
+```
+
+### CLI Remediation Scripts from API JSON Imports
+
+When Prisma API JSON is imported (vs. CSV), CLI remediation scripts are extracted and stored on each finding:
+
+```
+@ato Import Prisma API scan results for Eagle Eye
+```
+
+After import, the summary shows `cli_scripts_extracted` count — the number of findings with actionable CLI commands.
+
+### Resource-Centric Filtering
+
+Use the `group_by` parameter on trend analysis to focus on specific resource types:
+
+```
+Tool: compliance_prisma_trend
+Parameters:
+  system_id: "<system-guid>"
+  group_by: "resource_type"
+```
+
+This groups findings by Azure resource type (e.g., `Microsoft.Storage/storageAccounts`, `Microsoft.Sql/servers`), helping engineers prioritize remediation by resource category.
+
+### Prisma Policy Catalog
+
+```
+Tool: compliance_list_prisma_policies
+Parameters:
+  system_id: "<system-guid>"
+```
+
+View all Prisma policies affecting the system, their NIST control mappings, and open/resolved counts to identify which policies need immediate attention.
 
 ---
 

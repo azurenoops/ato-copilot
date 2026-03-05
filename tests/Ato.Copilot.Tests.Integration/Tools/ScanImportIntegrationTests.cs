@@ -120,6 +120,9 @@ public class ScanImportIntegrationTests : IDisposable
         var importSvc = new ScanImportService(
             scopeFactory, _stigServiceMock.Object, baselineSvc, lifecycleSvc,
             artifactSvc, cklParser, xccdfParser, cklGenerator,
+            Mock.Of<ISystemSubscriptionResolver>(),
+            new PrismaCsvParser(Mock.Of<ILogger<PrismaCsvParser>>()),
+            new PrismaApiJsonParser(Mock.Of<ILogger<PrismaApiJsonParser>>()),
             Mock.Of<ILogger<ScanImportService>>());
 
         // Tools
