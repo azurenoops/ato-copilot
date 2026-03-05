@@ -270,6 +270,46 @@ Parameters:
 4. compliance_generate_sar    ← SAR includes STIG-based severity data
 ```
 
+---
+
+## Assess Controls Using Prisma Cloud Data
+
+Prisma Cloud scan imports automatically create `ControlEffectiveness` records for in-baseline NIST controls, providing automated assessment evidence alongside traditional STIG data.
+
+### How Prisma Findings Auto-Populate ControlEffectiveness
+
+When a Prisma import is processed, each import creates or updates effectiveness records for affected NIST 800-53 controls:
+
+- **Open Prisma alerts** → `OtherThanSatisfied` determination with CAT severity
+- **All Prisma alerts resolved** for a control → `Satisfied` determination
+- Evidence is automatically linked from the import's `CloudScanResult` evidence record
+
+### Using Trend Data for Remediation Validation
+
+After remediation work, use `compliance_prisma_trend` to validate improvements:
+
+```
+Tool: compliance_prisma_trend
+Parameters:
+  system_id: "<system-guid>"
+  group_by: "nist_control"
+```
+
+The `remediationRate` shows the percentage of previously-open findings now resolved. Use `resolvedFindings` vs `newFindings` to track net compliance improvement.
+
+### Combined STIG + Prisma Evidence Review
+
+For each control, review both STIG and Prisma evidence together:
+
+```
+1. compliance_get_baseline (system_id) ← List all in-scope controls
+2. compliance_list_imports (system_id) ← Review both CKL/XCCDF and Prisma imports
+3. compliance_assess_control           ← Evaluate control using combined evidence
+4. compliance_generate_sar             ← SAR aggregates STIG + Prisma effectiveness
+```
+
+Controls assessed by both STIG and Prisma sources provide stronger evidence for AO review.
+
 ### Exporting Assessment State
 
 Export the current assessment state as a CKL checklist for external review:

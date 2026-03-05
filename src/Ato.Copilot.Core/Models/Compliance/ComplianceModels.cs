@@ -68,7 +68,9 @@ public enum ScanSourceType
     /// <summary>Microsoft Defender for Cloud recommendation.</summary>
     Defender,
     /// <summary>Correlated from multiple scan sources.</summary>
-    Combined
+    Combined,
+    /// <summary>Cloud security posture management scan (e.g., Prisma Cloud CSPM).</summary>
+    Cloud
 }
 
 /// <summary>

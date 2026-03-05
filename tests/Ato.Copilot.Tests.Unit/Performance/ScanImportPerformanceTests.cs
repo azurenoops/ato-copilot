@@ -5,6 +5,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 using System.Diagnostics;
+using Ato.Copilot.Agents.Compliance.Services;
 using Ato.Copilot.Agents.Compliance.Services.ScanImport;
 using Ato.Copilot.Core.Data.Context;
 using Ato.Copilot.Core.Interfaces.Compliance;
@@ -144,6 +145,9 @@ public class ScanImportPerformanceTests : IDisposable
             _cklParserMock.Object,
             _xccdfParserMock.Object,
             cklGeneratorMock.Object,
+            Mock.Of<ISystemSubscriptionResolver>(),
+            new PrismaCsvParser(NullLogger<PrismaCsvParser>.Instance),
+            new PrismaApiJsonParser(NullLogger<PrismaApiJsonParser>.Instance),
             NullLogger<ScanImportService>.Instance);
     }
 

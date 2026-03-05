@@ -1,0 +1,275 @@
+[
+  {
+    "id": "P-20001",
+    "status": "open",
+    "reason": "NEW_ALERT",
+    "firstSeen": 1740652800000,
+    "lastSeen": 1740912000000,
+    "alertTime": 1740652800000,
+    "policy": {
+      "policyId": "policy-uuid-001",
+      "name": "Azure Storage account should use customer-managed key for encryption",
+      "policyType": "config",
+      "severity": "high",
+      "description": "This policy identifies Azure Storage accounts that are not configured with customer-managed keys (CMK) for encryption. Using CMK provides additional control and flexibility over the data encryption key, meeting organizational compliance requirements.",
+      "recommendation": "1. Navigate to the Azure Portal.\n2. Go to Storage Accounts.\n3. Select the storage account.\n4. Under Security + networking, select Encryption.\n5. Select Customer-managed keys.\n6. Choose a key vault and key.\n7. Save the configuration.",
+      "remediation": {
+        "cliScriptTemplate": "az storage account update --name ${resourceName} --resource-group ${resourceGroup} --encryption-key-source Microsoft.Keyvault --encryption-key-vault ${keyVaultUri} --encryption-key-name ${keyName}",
+        "description": "Enable customer-managed key encryption on the storage account",
+        "impact": "medium"
+      },
+      "labels": ["CSPM", "Azure", "Storage", "Encryption"],
+      "remediable": true,
+      "complianceMetadata": [
+        {
+          "standardName": "NIST 800-53 Rev 5",
+          "standardDescription": "National Institute of Standards and Technology Special Publication 800-53 Revision 5",
+          "requirementId": "SC-28",
+          "requirementName": "Protection of Information at Rest",
+          "sectionId": "SC-28",
+          "sectionDescription": "Protection of Information at Rest"
+        },
+        {
+          "standardName": "NIST 800-53 Rev 5",
+          "standardDescription": "National Institute of Standards and Technology Special Publication 800-53 Revision 5",
+          "requirementId": "SC-12",
+          "requirementName": "Cryptographic Key Establishment and Management",
+          "sectionId": "SC-12",
+          "sectionDescription": "Cryptographic Key Establishment and Management"
+        },
+        {
+          "standardName": "CIS v2.0.0 (Azure)",
+          "standardDescription": "Center for Internet Security Azure Benchmark v2.0.0",
+          "requirementId": "3.2",
+          "requirementName": "Ensure that Storage Account Access Keys are Periodically Regenerated",
+          "sectionId": "3.2",
+          "sectionDescription": "Storage Account Access Keys"
+        }
+      ]
+    },
+    "resource": {
+      "id": "/subscriptions/a1b2c3d4-5678-90ab-cdef-1234567890ab/resourceGroups/rg-prod/providers/Microsoft.Storage/storageAccounts/storagesecure01",
+      "name": "storagesecure01",
+      "resourceType": "Microsoft.Storage/storageAccounts",
+      "region": "eastus",
+      "cloudType": "azure",
+      "accountId": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
+      "accountName": "FS-Azure-Prod",
+      "resourceGroupName": "rg-prod",
+      "rrn": "rrn:prisma:cloud:111111111:azure:us-east-1:storage:storagesecure01"
+    },
+    "history": [
+      {
+        "modifiedBy": "System",
+        "modifiedOn": 1740652800000,
+        "reason": "NEW_ALERT",
+        "status": "open"
+      },
+      {
+        "modifiedBy": "System",
+        "modifiedOn": 1740825600000,
+        "reason": "RESOURCE_UPDATED",
+        "status": "open"
+      }
+    ]
+  },
+  {
+    "id": "P-20002",
+    "status": "resolved",
+    "reason": "RESOURCE_UPDATED",
+    "firstSeen": 1739443200000,
+    "lastSeen": 1740912000000,
+    "alertTime": 1739443200000,
+    "policy": {
+      "policyId": "policy-uuid-002",
+      "name": "Azure SQL server should have auditing enabled",
+      "policyType": "config",
+      "severity": "medium",
+      "description": "This policy identifies Azure SQL servers that do not have auditing enabled. Auditing tracks database events and writes them to an audit log in your Azure storage account.",
+      "recommendation": "1. Navigate to the Azure Portal.\n2. Go to SQL servers.\n3. Select the server.\n4. Under Security, select Auditing.\n5. Set Auditing to On.\n6. Configure audit log destination.\n7. Save.",
+      "remediation": null,
+      "labels": ["CSPM", "Azure", "SQL", "Auditing"],
+      "remediable": false,
+      "complianceMetadata": [
+        {
+          "standardName": "NIST 800-53 Rev 5",
+          "standardDescription": "National Institute of Standards and Technology Special Publication 800-53 Revision 5",
+          "requirementId": "AU-2",
+          "requirementName": "Event Logging",
+          "sectionId": "AU-2",
+          "sectionDescription": "Event Logging"
+        }
+      ]
+    },
+    "resource": {
+      "id": "/subscriptions/a1b2c3d4-5678-90ab-cdef-1234567890ab/resourceGroups/rg-prod/providers/Microsoft.Sql/servers/sqlserver-prod01",
+      "name": "sqlserver-prod01",
+      "resourceType": "Microsoft.Sql/servers",
+      "region": "usgovvirginia",
+      "cloudType": "azure",
+      "accountId": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
+      "accountName": "FS-Azure-Prod",
+      "resourceGroupName": "rg-prod",
+      "rrn": "rrn:prisma:cloud:111111111:azure:usgovvirginia:sql:sqlserver-prod01"
+    },
+    "history": [
+      {
+        "modifiedBy": "System",
+        "modifiedOn": 1739443200000,
+        "reason": "NEW_ALERT",
+        "status": "open"
+      },
+      {
+        "modifiedBy": "admin@contoso.com",
+        "modifiedOn": 1740048000000,
+        "reason": "RESOURCE_UPDATED",
+        "status": "resolved"
+      }
+    ]
+  },
+  {
+    "id": "P-20003",
+    "status": "dismissed",
+    "reason": "DISMISSED",
+    "firstSeen": 1738838400000,
+    "lastSeen": 1740912000000,
+    "alertTime": 1738838400000,
+    "policy": {
+      "policyId": "policy-uuid-003",
+      "name": "Azure Key Vault should use RBAC permission model",
+      "policyType": "config",
+      "severity": "low",
+      "description": "This policy identifies Azure Key Vaults that do not use the RBAC permission model.",
+      "recommendation": "1. Navigate to the Azure Portal.\n2. Go to Key Vaults.\n3. Select the vault.\n4. Under Settings, select Access configuration.\n5. Select Azure role-based access control.\n6. Save.",
+      "remediation": {
+        "cliScriptTemplate": "az keyvault update --name ${resourceName} --resource-group ${resourceGroup} --enable-rbac-authorization true",
+        "description": "Enable RBAC authorization on the Key Vault",
+        "impact": "low"
+      },
+      "labels": ["CSPM", "Azure", "IAM"],
+      "remediable": true,
+      "complianceMetadata": [
+        {
+          "standardName": "NIST 800-53 Rev 5",
+          "standardDescription": "National Institute of Standards and Technology Special Publication 800-53 Revision 5",
+          "requirementId": "AC-2",
+          "requirementName": "Account Management",
+          "sectionId": "AC-2",
+          "sectionDescription": "Account Management"
+        }
+      ]
+    },
+    "resource": {
+      "id": "/subscriptions/a1b2c3d4-5678-90ab-cdef-1234567890ab/resourceGroups/rg-prod/providers/Microsoft.KeyVault/vaults/keyvault-prod01",
+      "name": "keyvault-prod01",
+      "resourceType": "Microsoft.KeyVault/vaults",
+      "region": "eastus",
+      "cloudType": "azure",
+      "accountId": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
+      "accountName": "FS-Azure-Prod",
+      "resourceGroupName": "rg-prod",
+      "rrn": "rrn:prisma:cloud:111111111:azure:eastus:keyvault:keyvault-prod01"
+    },
+    "history": [
+      {
+        "modifiedBy": "System",
+        "modifiedOn": 1738838400000,
+        "reason": "NEW_ALERT",
+        "status": "open"
+      },
+      {
+        "modifiedBy": "isso@contoso.com",
+        "modifiedOn": 1739270400000,
+        "reason": "DISMISSED",
+        "status": "dismissed"
+      }
+    ]
+  },
+  {
+    "id": "P-20004",
+    "status": "open",
+    "reason": "NEW_ALERT",
+    "firstSeen": 1740912000000,
+    "lastSeen": 1740912000000,
+    "alertTime": 1740912000000,
+    "policy": {
+      "policyId": "policy-uuid-004",
+      "name": "Azure custom policy: check naming convention",
+      "policyType": "anomaly",
+      "severity": "informational",
+      "description": "Custom policy that checks resource naming conventions.",
+      "recommendation": "Review and update resource names to follow the organization naming convention.",
+      "remediation": null,
+      "labels": [],
+      "remediable": false,
+      "complianceMetadata": []
+    },
+    "resource": {
+      "id": "/subscriptions/a1b2c3d4-5678-90ab-cdef-1234567890ab/resourceGroups/rg-prod",
+      "name": "rg-prod",
+      "resourceType": "Microsoft.Resources/resourceGroups",
+      "region": "eastus",
+      "cloudType": "azure",
+      "accountId": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
+      "accountName": "FS-Azure-Prod",
+      "resourceGroupName": "rg-prod",
+      "rrn": "rrn:prisma:cloud:111111111:azure:eastus:rg:rg-prod"
+    },
+    "history": [
+      {
+        "modifiedBy": "System",
+        "modifiedOn": 1740912000000,
+        "reason": "NEW_ALERT",
+        "status": "open"
+      }
+    ]
+  },
+  {
+    "id": "P-20005",
+    "status": "open",
+    "reason": "NEW_ALERT",
+    "firstSeen": 1740912000000,
+    "lastSeen": 1740912000000,
+    "alertTime": 1740912000000,
+    "policy": {
+      "policyId": "policy-uuid-005",
+      "name": "Azure IAM password policy is not strict enough",
+      "policyType": "config",
+      "severity": "high",
+      "description": "This policy identifies Azure AD tenants where the password policy does not meet minimum security requirements.",
+      "recommendation": "Configure Azure AD password policy to require minimum 14 characters, complexity, and expiration.",
+      "remediation": null,
+      "labels": ["CSPM", "Azure", "IAM", "Identity"],
+      "remediable": false,
+      "complianceMetadata": [
+        {
+          "standardName": "NIST 800-53 Rev 5",
+          "standardDescription": "National Institute of Standards and Technology Special Publication 800-53 Revision 5",
+          "requirementId": "IA-5(1)",
+          "requirementName": "Authenticator Management | Password-Based Authentication",
+          "sectionId": "IA-5(1)",
+          "sectionDescription": "Password-Based Authentication"
+        }
+      ]
+    },
+    "resource": {
+      "id": "",
+      "name": "",
+      "resourceType": "",
+      "region": "eastus",
+      "cloudType": "azure",
+      "accountId": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
+      "accountName": "FS-Azure-Prod",
+      "resourceGroupName": "",
+      "rrn": ""
+    },
+    "history": [
+      {
+        "modifiedBy": "System",
+        "modifiedOn": 1740912000000,
+        "reason": "NEW_ALERT",
+        "status": "open"
+      }
+    ]
+  }
+]

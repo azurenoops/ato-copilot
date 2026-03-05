@@ -102,6 +102,46 @@
 
 ---
 
+## Prisma Cloud Periodic Re-Import
+
+Prisma Cloud scan data should be re-imported periodically as a ConMon data source to track cloud posture drift.
+
+### Recommended Cadence
+
+| ConMon Plan Interval | Prisma Import Cadence | Purpose |
+|----------------------|----------------------|---------|
+| Monthly | Monthly | Track incremental drift and new policy violations |
+| Quarterly | Quarterly | Comprehensive cloud posture reassessment |
+| Annual | Monthly + annual comprehensive | Continuous monitoring with annual deep review |
+
+### Trend Analysis for Drift Detection
+
+After each re-import, use `compliance_prisma_trend` to compare against previous scans:
+
+```
+Tool: compliance_prisma_trend
+Parameters:
+  system_id: "<system-guid>"
+  group_by: "nist_control"
+```
+
+Key metrics to monitor:
+
+- **`newFindings`**: Cloud policy violations discovered since last scan — investigate promptly
+- **`resolvedFindings`**: Successfully remediated issues — validate they stay resolved
+- **`remediationRate`**: Percentage trend — should improve or stay stable over time
+- **`nist_control_breakdown`**: Identifies which control families have growing exposure
+
+### Integration with ConMon Reports
+
+Prisma-sourced findings automatically appear in `compliance_generate_conmon_report` output:
+
+- Open Prisma findings contribute to the open findings count
+- Resolved Prisma findings contribute to the resolved findings count
+- Effectiveness records from Prisma imports update control assessment status
+
+---
+
 ## Expiration Alert Levels
 
 | Days Remaining | Alert Level | Severity | Action Required |

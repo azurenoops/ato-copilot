@@ -157,19 +157,33 @@ Engineers can remediate findings using **standalone tools** (direct finding reme
 ```
  1. compliance_assess              ← ISSO runs automated scan (quick/policy/full)
  2. compliance_collect_evidence    ← ISSO collects evidence from Azure
- 3. compliance_assess_control      ← SCA formally assesses each control (batch)
- 4. compliance_take_snapshot       ← SCA snapshots current state
- 5. compliance_verify_evidence     ← SCA spot-checks evidence integrity
- 6. compliance_check_evidence_completeness ← SCA verifies coverage
- 7. compliance_generate_sar        ← SCA generates SAR
+ 3. compliance_import_prisma_csv   ← ISSO imports Prisma Cloud scan results
+ 4. compliance_assess_control      ← SCA formally assesses each control (batch)
+ 5. compliance_take_snapshot       ← SCA snapshots current state
+ 6. compliance_verify_evidence     ← SCA spot-checks evidence integrity
+ 7. compliance_check_evidence_completeness ← SCA verifies coverage
+ 8. compliance_generate_sar        ← SCA generates SAR
     ── (Remediation occurs) ──
- 8. compliance_assess              ← ISSO re-runs automated scan
- 9. compliance_assess_control      ← SCA re-assesses remediated controls
-10. compliance_take_snapshot       ← SCA snapshots after remediation
-11. compliance_compare_snapshots   ← SCA shows improvement
-12. compliance_generate_sar        ← SCA produces updated SAR for AO
-13. compliance_generate_rar        ← SCA/ISSM produces final RAR
+ 9. compliance_assess              ← ISSO re-runs automated scan
+10. compliance_import_prisma_csv   ← ISSO re-imports post-remediation Prisma scan
+11. compliance_prisma_trend        ← SCA validates remediation progress
+12. compliance_assess_control      ← SCA re-assesses remediated controls
+13. compliance_take_snapshot       ← SCA snapshots after remediation
+14. compliance_compare_snapshots   ← SCA shows improvement
+15. compliance_generate_sar        ← SCA produces updated SAR for AO
+16. compliance_generate_rar        ← SCA/ISSM produces final RAR
 ```
+
+### Prisma Cloud Scan Import as Assessment Input
+
+Step 3 above introduces Prisma Cloud as an assessment data source alongside STIG/SCAP imports. Prisma imports:
+
+- Create `ComplianceFinding` records with `Source="Prisma Cloud"` and `ScanSource=Cloud`
+- Auto-generate `ControlEffectiveness` records for in-baseline NIST controls
+- Create `ComplianceEvidence` (type `CloudScanResult`) linked to the assessment
+- Support both CSV (console export) and API JSON (programmatic) formats
+
+This is the primary stage for initial Prisma import. For ongoing monitoring, see the [Monitor Phase](monitor.md).
 
 ---
 

@@ -464,7 +464,12 @@ public class McpServerAiIntegrationTests
             new UpdateSapTool(Mock.Of<ISapService>(), Mock.Of<ILogger<UpdateSapTool>>()),
             new FinalizeSapTool(Mock.Of<ISapService>(), Mock.Of<ILogger<FinalizeSapTool>>()),
             new GetSapTool(Mock.Of<ISapService>(), Mock.Of<ILogger<GetSapTool>>()),
-            new ListSapsTool(Mock.Of<ISapService>(), Mock.Of<ILogger<ListSapsTool>>()));
+            new ListSapsTool(Mock.Of<ISapService>(), Mock.Of<ILogger<ListSapsTool>>()),
+            // Feature 019: Prisma Cloud Import tools
+            new ImportPrismaCsvTool(Mock.Of<IScanImportService>(), sf, Mock.Of<ILogger<ImportPrismaCsvTool>>()),
+            new ImportPrismaApiTool(Mock.Of<IScanImportService>(), sf, Mock.Of<ILogger<ImportPrismaApiTool>>()),
+            new ListPrismaPoliciesTool(Mock.Of<IScanImportService>(), Mock.Of<ILogger<ListPrismaPoliciesTool>>()),
+            new PrismaTrendTool(Mock.Of<IScanImportService>(), Mock.Of<ILogger<PrismaTrendTool>>()));
     }
 
     private KnowledgeBaseMcpTools CreateKnowledgeBaseMcpTools()

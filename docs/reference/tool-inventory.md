@@ -207,6 +207,19 @@ Privileged Identity Management, just-in-time access, and CAC session management.
 
 ---
 
+## Category 9: Prisma Cloud Import Tools (4 tools)
+
+Cloud security posture management scan import, policy catalog, and trend analysis.
+
+| # | Tool | Description | Phase(s) | Roles |
+|---|------|-------------|----------|-------|
+| 115 | `compliance_import_prisma_csv` | Import Prisma Cloud CSV export | Assess, Monitor | ISSM, SCA, Admin |
+| 116 | `compliance_import_prisma_api` | Import Prisma Cloud API JSON | Assess, Monitor | ISSM, SCA, Admin |
+| 117 | `compliance_list_prisma_policies` | List Prisma policies with NIST mappings | Assess, Monitor | ISSM, SCA, Assessor, Admin |
+| 118 | `compliance_prisma_trend` | Compare imports for trend analysis | Assess, Monitor | ISSM, SCA, Assessor, Admin |
+
+---
+
 ## Tool Count Summary
 
 | Category | Tools | Description |
@@ -219,7 +232,8 @@ Privileged Identity Management, just-in-time access, and CAC session management.
 | Compliance Watch | 23 | Real-time alerts and monitoring |
 | Kanban Remediation | 18 | Task lifecycle management |
 | PIM & Authentication | 13 | JIT access and CAC sessions |
-| **Total** | **114** | |
+| Prisma Cloud Import | 4 | CSPM scan import and analysis |
+| **Total** | **118** | |
 
 ---
 

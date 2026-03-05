@@ -4,6 +4,7 @@
 // T028-T029 (conflict resolution, dry-run).
 // ═══════════════════════════════════════════════════════════════════════════
 
+using Ato.Copilot.Agents.Compliance.Services;
 using Ato.Copilot.Agents.Compliance.Services.ScanImport;
 using Ato.Copilot.Core.Data.Context;
 using Ato.Copilot.Core.Interfaces.Compliance;
@@ -175,6 +176,9 @@ public class ScanImportServiceTests : IDisposable
             _cklParserMock.Object,
             _xccdfParserMock.Object,
             _cklGeneratorMock.Object,
+            Mock.Of<ISystemSubscriptionResolver>(),
+            new PrismaCsvParser(NullLogger<PrismaCsvParser>.Instance),
+            new PrismaApiJsonParser(NullLogger<PrismaApiJsonParser>.Instance),
             logger);
     }
 
