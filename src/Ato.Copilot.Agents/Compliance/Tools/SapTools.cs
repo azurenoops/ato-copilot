@@ -242,7 +242,8 @@ public class UpdateSapTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["sap_id"] = new() { Name = "sap_id", Description = "SAP ID to update", Type = "string", Required = true },
+        ["sap_id"] = new() { Name = "sap_id", Description = "SAP ID to update (optional if system_id is provided)", Type = "string", Required = false },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym — looks up the latest Draft SAP for this system", Type = "string", Required = false },
         ["schedule_start"] = new() { Name = "schedule_start", Description = "Updated assessment start date (ISO 8601)", Type = "string", Required = false },
         ["schedule_end"] = new() { Name = "schedule_end", Description = "Updated assessment end date (ISO 8601)", Type = "string", Required = false },
         ["scope_notes"] = new() { Name = "scope_notes", Description = "Updated scope notes", Type = "string", Required = false },
@@ -257,6 +258,7 @@ public class UpdateSapTool : BaseTool
     {
         var sw = Stopwatch.StartNew();
         var sapId = GetArg<string>(arguments, "sap_id");
+        var systemId = GetArg<string>(arguments, "system_id");
         var scheduleStartStr = GetArg<string>(arguments, "schedule_start");
         var scheduleEndStr = GetArg<string>(arguments, "schedule_end");
         var scopeNotes = GetArg<string>(arguments, "scope_notes");
@@ -264,8 +266,22 @@ public class UpdateSapTool : BaseTool
         var teamMembersJson = GetArg<string>(arguments, "team_members");
         var methodOverridesJson = GetArg<string>(arguments, "method_overrides");
 
+        // Resolve sap_id from system_id if not provided
         if (string.IsNullOrWhiteSpace(sapId))
-            return Error("INVALID_INPUT", "The 'sap_id' parameter is required.");
+        {
+            if (string.IsNullOrWhiteSpace(systemId))
+                return Error("INVALID_INPUT", "Either 'sap_id' or 'system_id' parameter is required.");
+
+            try
+            {
+                var existing = await _sapService.GetSapAsync(systemId: systemId, cancellationToken: cancellationToken);
+                sapId = existing.SapId;
+            }
+            catch (InvalidOperationException)
+            {
+                return Error("SAP_NOT_FOUND", $"No SAP found for system '{systemId}'. Generate a SAP first using compliance_generate_sap.");
+            }
+        }
 
         // Parse optional dates
         DateTime? scheduleStart = null;
@@ -392,7 +408,8 @@ public class FinalizeSapTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["sap_id"] = new() { Name = "sap_id", Description = "SAP ID to finalize", Type = "string", Required = true }
+        ["sap_id"] = new() { Name = "sap_id", Description = "SAP ID to finalize (optional if system_id is provided)", Type = "string", Required = false },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym — looks up the latest SAP for this system", Type = "string", Required = false }
     };
 
     public override async Task<string> ExecuteCoreAsync(
@@ -401,9 +418,24 @@ public class FinalizeSapTool : BaseTool
     {
         var sw = Stopwatch.StartNew();
         var sapId = GetArg<string>(arguments, "sap_id");
+        var systemId = GetArg<string>(arguments, "system_id");
 
+        // Resolve sap_id from system_id if not provided
         if (string.IsNullOrWhiteSpace(sapId))
-            return Error("INVALID_INPUT", "The 'sap_id' parameter is required.");
+        {
+            if (string.IsNullOrWhiteSpace(systemId))
+                return Error("INVALID_INPUT", "Either 'sap_id' or 'system_id' parameter is required.");
+
+            try
+            {
+                var existing = await _sapService.GetSapAsync(systemId: systemId, cancellationToken: cancellationToken);
+                sapId = existing.SapId;
+            }
+            catch (InvalidOperationException)
+            {
+                return Error("SAP_NOT_FOUND", $"No SAP found for system '{systemId}'. Generate a SAP first using compliance_generate_sap.");
+            }
+        }
 
         try
         {
