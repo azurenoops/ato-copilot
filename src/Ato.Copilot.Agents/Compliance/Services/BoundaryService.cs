@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Ato.Copilot.Agents.Compliance.Configuration;
 using Ato.Copilot.Core.Data.Context;
 using Ato.Copilot.Core.Interfaces.Compliance;
 using Ato.Copilot.Core.Models.Compliance;
@@ -14,14 +16,20 @@ namespace Ato.Copilot.Agents.Compliance.Services;
 public class BoundaryService : IBoundaryService
 {
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IAzureResourceValidator? _resourceValidator;
+    private readonly BoundaryOptions _boundaryOptions;
     private readonly ILogger<BoundaryService> _logger;
 
     public BoundaryService(
         IServiceScopeFactory scopeFactory,
-        ILogger<BoundaryService> logger)
+        ILogger<BoundaryService> logger,
+        IOptions<BoundaryOptions>? boundaryOptions = null,
+        IAzureResourceValidator? resourceValidator = null)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _boundaryOptions = boundaryOptions?.Value ?? new BoundaryOptions();
+        _resourceValidator = resourceValidator;
     }
 
     /// <inheritdoc />
@@ -48,6 +56,54 @@ public class BoundaryService : IBoundaryService
         var resourceList = resources.ToList();
         if (resourceList.Count == 0)
             throw new ArgumentException("At least one resource is required.", nameof(resources));
+
+        // ─── Azure resource validation (feature flag) ────────────────────────
+        if (_boundaryOptions.ValidateAzureResources && _resourceValidator != null)
+        {
+            var resourceIds = resourceList
+                .Select(r => r.ResourceId)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .ToList();
+
+            var validationResults = await _resourceValidator
+                .ValidateResourcesAsync(resourceIds, cancellationToken);
+
+            var invalidResources = validationResults
+                .Where(kvp => !kvp.Value.IsValid)
+                .ToList();
+
+            if (invalidResources.Count > 0)
+            {
+                var errors = invalidResources
+                    .Select(kvp => $"{kvp.Key}: {kvp.Value.ErrorMessage}")
+                    .ToList();
+
+                _logger.LogWarning(
+                    "Azure resource validation rejected {Count} resource(s) for system {SystemId}: {Errors}",
+                    invalidResources.Count, systemId, string.Join("; ", errors));
+
+                throw new InvalidOperationException(
+                    $"Azure resource validation failed for {invalidResources.Count} resource(s): " +
+                    string.Join("; ", errors));
+            }
+
+            // Enrich resources with validated info (type + name from ARM)
+            foreach (var r in resourceList)
+            {
+                if (validationResults.TryGetValue(r.ResourceId.Trim(), out var result) && result.IsValid)
+                {
+                    if (!string.IsNullOrWhiteSpace(result.ResourceType))
+                        r.ResourceType = result.ResourceType;
+                    if (!string.IsNullOrWhiteSpace(result.ResourceName) && string.IsNullOrWhiteSpace(r.ResourceName))
+                        r.ResourceName = result.ResourceName;
+                }
+            }
+
+            _logger.LogInformation(
+                "Azure resource validation passed for all {Count} resource(s) in system {SystemId}",
+                resourceIds.Count, systemId);
+        }
+        // ─────────────────────────────────────────────────────────────────────
 
         var entries = new List<AuthorizationBoundary>();
 

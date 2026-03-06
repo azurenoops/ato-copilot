@@ -41,6 +41,9 @@ public static class ServiceCollectionExtensions
         // Bind compliance agent options
         services.Configure<ComplianceAgentOptions>(configuration.GetSection("Agents:Compliance"));
 
+        // Bind boundary options (feature flag for Azure resource validation)
+        services.Configure<BoundaryOptions>(configuration.GetSection("Agents:Compliance:Boundary"));
+
         // Bind NIST Controls options with validation
         services.AddOptions<NistControlsOptions>()
             .Bind(configuration.GetSection("Agents:Compliance:NistControls"))
@@ -170,6 +173,7 @@ public static class ServiceCollectionExtensions
 
         // ─── RMF Lifecycle & Boundary Services (Feature 015) ────────────────
         services.AddSingleton<IRmfLifecycleService, RmfLifecycleService>();
+        services.AddSingleton<IAzureResourceValidator, AzureResourceValidator>();
         services.AddSingleton<IBoundaryService, BoundaryService>();
         services.AddSingleton<ICategorizationService, CategorizationService>();
         services.AddSingleton<IReferenceDataService, ReferenceDataService>();
