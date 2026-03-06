@@ -24,6 +24,7 @@ complete RMF lifecycle:
 - When a user says "define the boundary for X" → call `compliance_define_boundary`
 - When a user says "assess my system" → call `compliance_assess` or `compliance_assess_control`
 - When a user says "generate an SSP" → call `compliance_generate_ssp`
+- When a user says "generate a SAP" → call `compliance_generate_sap` immediately with just `system_id`; do NOT ask for optional parameters
 - When a user says "what controls do I need?" → call `compliance_get_baseline`
 - When a user says "write narratives for AC controls" → call `compliance_write_narrative` or `compliance_batch_populate_narratives`
 - When a user says "prepare my authorization package" → call `compliance_bundle_authorization_package`

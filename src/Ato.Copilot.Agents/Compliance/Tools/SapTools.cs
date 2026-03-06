@@ -38,8 +38,10 @@ public class GenerateSapTool : BaseTool
     public override string Description =>
         "Generate a Security Assessment Plan (SAP) for a registered system. " +
         "Auto-populates from control baseline, OSCAL assessment objectives, STIG mappings, " +
-        "and evidence data. Accepts SCA overrides for schedule, team, scope, and per-control " +
-        "assessment methods. Produces a Markdown SAP document with 15 sections.";
+        "and evidence data. All optional parameters are auto-populated with sensible defaults — " +
+        "call this tool immediately with just the system_id. Do NOT ask the user for schedule, " +
+        "team members, scope notes, or other optional details; proceed with defaults. " +
+        "Produces a Markdown SAP document with 15 sections.";
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
