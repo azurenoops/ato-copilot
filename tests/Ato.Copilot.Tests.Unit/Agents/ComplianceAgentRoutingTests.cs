@@ -460,6 +460,7 @@ public class ComplianceAgentRoutingTests
             Enumerable.Empty<BaseTool>(),
             factory,
             scopeFactory,
+            Mock.Of<ISystemIdResolver>(),
             logger);
     }
 

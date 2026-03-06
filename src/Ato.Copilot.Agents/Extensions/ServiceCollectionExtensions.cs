@@ -165,6 +165,9 @@ public static class ServiceCollectionExtensions
         // Compliance validation service (validates 11 system-critical control IDs)
         services.AddSingleton<ComplianceValidationService>();
 
+        // ─── System ID Resolver (auto-resolves system names/acronyms to GUIDs) ──
+        services.AddSingleton<ISystemIdResolver, SystemIdResolver>();
+
         // ─── RMF Lifecycle & Boundary Services (Feature 015) ────────────────
         services.AddSingleton<IRmfLifecycleService, RmfLifecycleService>();
         services.AddSingleton<IBoundaryService, BoundaryService>();
@@ -473,6 +476,11 @@ public static class ServiceCollectionExtensions
         // Register the agent
         services.AddSingleton<ComplianceAgent>();
         services.AddSingleton<BaseAgent>(sp => sp.GetRequiredService<ComplianceAgent>());
+
+        // ─── SystemIdResolver property injection ─────────────────────────────
+        // Injects the ISystemIdResolver into ALL BaseTool singletons at startup
+        // so system_id parameters transparently accept names/acronyms.
+        services.AddHostedService<SystemIdResolverInitializer>();
 
         // ─── Kanban Services ─────────────────────────────────────────────────
         services.AddScoped<IKanbanService, KanbanService>();

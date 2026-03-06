@@ -221,6 +221,7 @@ public class SystemPromptEnhancementTests
             Enumerable.Empty<BaseTool>(),
             new InMemoryDbContextFactory(dbOpts("Main")),
             sf,
+            Mock.Of<ISystemIdResolver>(),
             Mock.Of<ILogger<ComplianceAgent>>());
     }
 

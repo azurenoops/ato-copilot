@@ -43,7 +43,7 @@ public class GenerateSapTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["assessment_id"] = new() { Name = "assessment_id", Description = "Optional assessment cycle ID to link SAP to", Type = "string", Required = false },
         ["schedule_start"] = new() { Name = "schedule_start", Description = "Assessment start date (ISO 8601)", Type = "string", Required = false },
         ["schedule_end"] = new() { Name = "schedule_end", Description = "Assessment end date (ISO 8601)", Type = "string", Required = false },
@@ -493,7 +493,7 @@ public class GetSapTool : BaseTool
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
         ["sap_id"] = new() { Name = "sap_id", Description = "Specific SAP ID to retrieve", Type = "string", Required = false },
-        ["system_id"] = new() { Name = "system_id", Description = "System ID — returns latest SAP (prefers Finalized)", Type = "string", Required = false }
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym — returns latest SAP (prefers Finalized)", Type = "string", Required = false }
     };
 
     public override async Task<string> ExecuteCoreAsync(
@@ -602,7 +602,7 @@ public class ListSapsTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "System ID to list SAPs for", Type = "string", Required = true }
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true }
     };
 
     public override async Task<string> ExecuteCoreAsync(

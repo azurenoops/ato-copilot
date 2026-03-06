@@ -41,7 +41,7 @@ public class CreateConMonPlanTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["assessment_frequency"] = new() { Name = "assessment_frequency", Description = "Monthly | Quarterly | Annually", Type = "string", Required = true },
         ["annual_review_date"] = new() { Name = "annual_review_date", Description = "ISO 8601 date for annual review (e.g., 2026-06-15)", Type = "string", Required = true },
         ["report_distribution"] = new() { Name = "report_distribution", Description = "User IDs or role names for report distribution", Type = "string[]", Required = false },
@@ -161,7 +161,7 @@ public class GenerateConMonReportTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["report_type"] = new() { Name = "report_type", Description = "Monthly | Quarterly | Annual", Type = "string", Required = true },
         ["period"] = new() { Name = "period", Description = "Report period (e.g., 2026-02, 2026-Q1, 2026)", Type = "string", Required = true }
     };
@@ -269,7 +269,7 @@ public class ReportSignificantChangeTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["change_type"] = new() { Name = "change_type", Description = "Change category (e.g., New Interconnection, Major Upgrade, Data Type Change)", Type = "string", Required = true },
         ["description"] = new() { Name = "description", Description = "Detailed description of the change", Type = "string", Required = true }
     };
@@ -369,7 +369,7 @@ public class TrackAtoExpirationTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true }
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true }
     };
 
     public override async Task<string> ExecuteCoreAsync(
@@ -554,7 +554,7 @@ public class ReauthorizationWorkflowTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["initiate"] = new() { Name = "initiate", Description = "If true, initiate reauthorization workflow (default: false — check only)", Type = "string", Required = false }
     };
 
@@ -648,7 +648,7 @@ public class NotificationDeliveryTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["notification_type"] = new() { Name = "notification_type", Description = "expiration | significant_change | conmon_report", Type = "string", Required = true }
     };
 

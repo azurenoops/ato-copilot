@@ -35,7 +35,7 @@ public class CategorizeSystemTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["information_types"] = new() { Name = "information_types", Description = "Array of info types with sp800_60_id, name, confidentiality_impact, integrity_impact, availability_impact (Low|Moderate|High)", Type = "array", Required = true },
         ["is_national_security_system"] = new() { Name = "is_national_security_system", Description = "Whether the system is designated NSS (affects IL derivation)", Type = "boolean", Required = false },
         ["justification"] = new() { Name = "justification", Description = "Overall categorization rationale", Type = "string", Required = false }
@@ -203,7 +203,7 @@ public class GetCategorizationTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true }
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true }
     };
 
     public override async Task<string> ExecuteCoreAsync(
@@ -314,7 +314,7 @@ public class SuggestInfoTypesTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["description"] = new() { Name = "description", Description = "Additional context for better suggestions", Type = "string", Required = false }
     };
 

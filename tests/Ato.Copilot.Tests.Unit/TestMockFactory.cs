@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Ato.Copilot.Agents.Common;
 using Ato.Copilot.Agents.Compliance.Agents;
+using Ato.Copilot.Core.Interfaces.Compliance;
 using Ato.Copilot.Mcp.Server;
 
 namespace Ato.Copilot.Tests.Unit;
@@ -19,7 +20,7 @@ internal static class TestMockFactory
     /// </summary>
     public static Mock<ComplianceAgent> CreateComplianceAgentMock()
     {
-        // ComplianceAgent constructor: 75 required params (72 tools + dbFactory + scopeFactory + logger)
+        // ComplianceAgent constructor: 76 required params (72 tools + dbFactory + scopeFactory + systemIdResolver + logger)
         // plus 2 optional (chatClient, aiOptions). See ComplianceAgent.cs lines 136-216.
         var mock = new Mock<ComplianceAgent>(MockBehavior.Loose,
             /* 01  assessmentTool          */ null!,
@@ -96,9 +97,10 @@ internal static class TestMockFactory
             /* 72  allRegisteredTools      */ Enumerable.Empty<BaseTool>(),
             /* 73  dbFactory               */ null!,
             /* 74  scopeFactory            */ null!,
-            /* 75  logger                  */ Mock.Of<ILogger<ComplianceAgent>>(),
-            /* 76  chatClient (optional)   */ (object?)null,
-            /* 77  aiOptions (optional)    */ (object?)null
+            /* 75  systemIdResolver        */ Mock.Of<ISystemIdResolver>(),
+            /* 76  logger                  */ Mock.Of<ILogger<ComplianceAgent>>(),
+            /* 77  chatClient (optional)   */ (object?)null,
+            /* 78  aiOptions (optional)    */ (object?)null
         );
 
         mock.Setup(a => a.AgentId).Returns("compliance-agent");

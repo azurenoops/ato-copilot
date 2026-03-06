@@ -206,6 +206,7 @@ public class ComplianceAgentTests
                     .UseInMemoryDatabase($"AgentTests_{Guid.NewGuid()}")
                     .Options),
             scopeFactory,
+            Mock.Of<ISystemIdResolver>(),
             logger);
     }
 

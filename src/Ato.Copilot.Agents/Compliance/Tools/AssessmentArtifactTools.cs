@@ -159,7 +159,7 @@ public class TakeSnapshotTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["assessment_id"] = new() { Name = "assessment_id", Description = "ComplianceAssessment ID", Type = "string", Required = true }
     };
 
@@ -412,7 +412,7 @@ public class CheckEvidenceCompletenessTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["assessment_id"] = new() { Name = "assessment_id", Description = "Filter to specific assessment", Type = "string", Required = false },
         ["family_filter"] = new() { Name = "family_filter", Description = "Filter by family prefix (e.g., 'AC')", Type = "string", Required = false }
     };
@@ -498,7 +498,7 @@ public class GenerateSarTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["assessment_id"] = new() { Name = "assessment_id", Description = "ComplianceAssessment ID", Type = "string", Required = true },
         ["format"] = new() { Name = "format", Description = "Output format: markdown (default) or docx", Type = "string", Required = false }
     };

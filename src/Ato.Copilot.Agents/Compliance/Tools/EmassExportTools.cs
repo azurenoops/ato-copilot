@@ -40,7 +40,7 @@ public class ExportEmassTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["export_type"] = new() { Name = "export_type", Description = "Export type: 'controls', 'poam', or 'full'", Type = "string", Required = true }
     };
 
@@ -146,7 +146,7 @@ public class ImportEmassTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["file_base64"] = new() { Name = "file_base64", Description = "Base64-encoded Excel file content", Type = "string", Required = true },
         ["conflict_strategy"] = new() { Name = "conflict_strategy", Description = "Conflict resolution: 'skip' (default), 'overwrite', 'merge'", Type = "string", Required = false },
         ["dry_run"] = new() { Name = "dry_run", Description = "Preview changes without applying: 'true' (default) or 'false'", Type = "string", Required = false }
@@ -244,7 +244,7 @@ public class ExportOscalTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["model"] = new() { Name = "model", Description = "OSCAL model: 'ssp', 'assessment-results', or 'poam'", Type = "string", Required = true }
     };
 

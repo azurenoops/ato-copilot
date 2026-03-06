@@ -11,7 +11,7 @@
 1. **Activate PIM role**: `Activate my Compliance.SecurityLead role for 8 hours — persona test suite execution`
 2. **Verify role**: `Show my active PIM roles` → Confirm `Compliance.SecurityLead` is active
 3. **Open Teams**: Switch to the Microsoft Teams interface with ATO Copilot bot
-4. **Open results template**: `specs/020-persona-test-cases/results-template.md`
+4. **Open results template**: `docs/persona-test-cases/results-template.md`
 5. **Confirm clean slate**: `Show system details for Eagle Eye` → Should return "System not found"
 
 ---
@@ -25,18 +25,28 @@
 
 ```text
 Register a new system called 'Eagle Eye' as a Major Application with
-mission-critical designation in Azure Government
+mission-critical designation in Azure Government. The acronym is 'EE',
+the description is 'Mission planning and operational intelligence
+platform for joint force coordination', the Azure subscription ID is
+12345678-abcd-1234-abcd-123456789012, the compliance framework is
+NIST80053, and the cloud environment is Azure Government.
 ```
 
-**Expected Tool**: `compliance_register_system`
+> **Note**: The system requires **System Acronym**, **System Description**, **Azure Subscription IDs**, **Compliance Framework**, and **Cloud Environment** to complete registration. Including all five in the initial prompt avoids follow-up questions.
+
+**Expected Tool**: `configuration_manage` (may be called multiple times to set each property)
 **Expected Output**:
 - `system_id`: GUID (record this — used in all subsequent tests)
 - `name`: "Eagle Eye"
+- `acronym`: "EE"
+- `description`: Contains mission planning reference
 - `type`: "MajorApplication"
 - `environment`: "AzureGovernment"
+- `subscription_ids`: includes `12345678-abcd-1234-abcd-123456789012`
+- `compliance_framework`: "NIST80053"
 - `rmf_step`: "Prepare"
 
-**Verification**: system_id is a valid GUID, RMF step = Prepare
+**Verification**: system_id is a valid GUID, RMF step = Prepare, acronym = "EE", framework = NIST80053
 **Record**: system_id = _______________
 
 ---
@@ -47,17 +57,23 @@ mission-critical designation in Azure Government
 **Type**: Positive test | **Precondition**: ISSM-01
 
 ```text
-Define the authorization boundary for Eagle Eye — add the production VMs,
-SQL database, and Key Vault in subscription sub-12345-abcde
+Define the authorization boundary for Eagle Eye with these resources:
+- /subscriptions/12345678-abcd-1234-abcd-123456789012/resourceGroups/rg-eagleeye-prod/providers/Microsoft.Compute/virtualMachines/vm-eagleeye-web01
+- /subscriptions/12345678-abcd-1234-abcd-123456789012/resourceGroups/rg-eagleeye-prod/providers/Microsoft.Compute/virtualMachines/vm-eagleeye-app01
+- /subscriptions/12345678-abcd-1234-abcd-123456789012/resourceGroups/rg-eagleeye-prod/providers/Microsoft.Sql/servers/sql-eagleeye-prod/databases/db-eagleeye
+- /subscriptions/12345678-abcd-1234-abcd-123456789012/resourceGroups/rg-eagleeye-prod/providers/Microsoft.KeyVault/vaults/kv-eagleeye-prod
+- /subscriptions/12345678-abcd-1234-abcd-123456789012/resourceGroups/rg-eagleeye-dev/providers/Microsoft.KeyVault/vaults/kv-eagleeye-dev
 ```
+
+> **Note**: The boundary tool requires **full ARM resource IDs** (e.g., `/subscriptions/{id}/resourceGroups/{rg}/providers/{type}/{name}`). Generic names like "production VMs" will be rejected.
 
 **Expected Tool**: `compliance_define_boundary`
 **Expected Output**:
 - Boundary created with resource list
-- Subscription `sub-12345-abcde` linked
-- Resource count ≥ 3
+- Subscription `12345678-abcd-1234-abcd-123456789012` linked
+- Resource count = 5
 
-**Verification**: At least 3 resources in boundary
+**Verification**: All 5 resources listed in boundary
 
 ---
 
@@ -67,16 +83,15 @@ SQL database, and Key Vault in subscription sub-12345-abcde
 **Type**: Positive test | **Precondition**: ISSM-02
 
 ```text
-Exclude the dev Key Vault from Eagle Eye's boundary — it's in a separate
-authorization
+Exclude /subscriptions/12345678-abcd-1234-abcd-123456789012/resourceGroups/rg-eagleeye-dev/providers/Microsoft.KeyVault/vaults/kv-eagleeye-dev from Eagle Eye's boundary — it's in a separate authorization
 ```
 
 **Expected Tool**: `compliance_exclude_from_boundary`
 **Expected Output**:
-- Resource excluded confirmation
-- Boundary resource count decremented by 1
+- Resource `kv-eagleeye-dev` excluded confirmation
+- Boundary resource count decremented to 4
 
-**Verification**: Resource count = (ISSM-02 count) - 1
+**Verification**: Resource count = 4 (was 5 in ISSM-02)
 
 ---
 

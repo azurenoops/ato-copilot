@@ -161,6 +161,7 @@ public class ComplianceAgentAiTests
             nistSearchTool, nistExplainerTool,
             Enumerable.Empty<BaseTool>(),
             dbFactory, _scopeFactory,
+            Mock.Of<ISystemIdResolver>(),
             Mock.Of<ILogger<ComplianceAgent>>(),
             chatClient,
             optionsWrapper);

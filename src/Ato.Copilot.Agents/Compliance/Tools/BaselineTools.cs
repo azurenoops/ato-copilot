@@ -36,7 +36,7 @@ public class SelectBaselineTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["apply_overlay"] = new() { Name = "apply_overlay", Description = "Whether to apply the CNSSI 1253 overlay (default: true)", Type = "boolean", Required = false },
         ["overlay_name"] = new() { Name = "overlay_name", Description = "Override overlay name (e.g., 'CNSSI 1253 IL5')", Type = "string", Required = false }
     };
@@ -133,7 +133,7 @@ public class TailorBaselineTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["tailoring_actions"] = new() { Name = "tailoring_actions", Description = "Array of {control_id, action ('Added'|'Removed'), rationale}", Type = "array", Required = true }
     };
 
@@ -276,7 +276,7 @@ public class SetInheritanceTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["inheritance_mappings"] = new() { Name = "inheritance_mappings", Description = "Array of {control_id, inheritance_type ('Inherited'|'Shared'|'Customer'), provider?, customer_responsibility?}", Type = "array", Required = true }
     };
 
@@ -405,7 +405,7 @@ public class GetBaselineTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["include_details"] = new() { Name = "include_details", Description = "Include tailoring and inheritance records (default: false)", Type = "boolean", Required = false },
         ["family_filter"] = new() { Name = "family_filter", Description = "Filter by control family prefix (e.g., 'AC', 'SI')", Type = "string", Required = false }
     };
@@ -541,7 +541,7 @@ public class GenerateCrmTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true }
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true }
     };
 
     public override async Task<string> ExecuteCoreAsync(

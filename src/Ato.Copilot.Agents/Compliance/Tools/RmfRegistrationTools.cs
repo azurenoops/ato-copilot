@@ -233,7 +233,7 @@ public class GetSystemTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID", Type = "string", Required = true }
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true }
     };
 
     public override async Task<string> ExecuteCoreAsync(
@@ -338,7 +338,7 @@ public class AdvanceRmfStepTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["target_step"] = new() { Name = "target_step", Description = "Target RMF step: Prepare | Categorize | Select | Implement | Assess | Authorize | Monitor", Type = "string", Required = true },
         ["force"] = new() { Name = "force", Description = "Override gate failures (will be audit-logged)", Type = "boolean", Required = false }
     };
@@ -423,7 +423,7 @@ public class DefineBoundaryTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["resources"] = new() { Name = "resources", Description = "Array of resources: [{resourceId, resourceType, resourceName?, inheritanceProvider?}]", Type = "array", Required = true }
     };
 
@@ -505,7 +505,7 @@ public class ExcludeFromBoundaryTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["resource_id"] = new() { Name = "resource_id", Description = "Azure resource ID to exclude", Type = "string", Required = true },
         ["rationale"] = new() { Name = "rationale", Description = "Exclusion justification", Type = "string", Required = true }
     };
@@ -585,7 +585,7 @@ public class AssignRmfRoleTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["role"] = new() { Name = "role", Description = "RMF role: AuthorizingOfficial | Issm | Isso | Sca | SystemOwner", Type = "string", Required = true },
         ["user_id"] = new() { Name = "user_id", Description = "User identity", Type = "string", Required = true },
         ["user_display_name"] = new() { Name = "user_display_name", Description = "Display name of the user", Type = "string", Required = false }
@@ -670,7 +670,7 @@ public class ListRmfRolesTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID", Type = "string", Required = true }
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true }
     };
 
     public override async Task<string> ExecuteCoreAsync(
