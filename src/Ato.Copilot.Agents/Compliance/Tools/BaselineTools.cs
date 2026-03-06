@@ -408,7 +408,9 @@ public class SetInheritanceTool : BaseTool
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
         ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
-        ["inheritance_mappings"] = new() { Name = "inheritance_mappings", Description = "Array of {control_id, inheritance_type ('Inherited'|'Shared'|'Customer'), provider?, customer_responsibility?}", Type = "array", Required = true }
+        ["inheritance_mappings"] = new() { Name = "inheritance_mappings", Description = "Array of {control_id, inheritance_type ('Inherited'|'Shared'|'Customer'), provider?, customer_responsibility?} OR a simple array of control ID strings (e.g. [\"AC-1\",\"AC-2\"])", Type = "array", Required = true },
+        ["inheritance_type"] = new() { Name = "inheritance_type", Description = "Default inheritance type when inheritance_mappings is a simple control ID array: 'Inherited', 'Shared', or 'Customer'. Defaults to 'Inherited'.", Type = "string", Required = false },
+        ["provider"] = new() { Name = "provider", Description = "Default provider name when inheritance_mappings is a simple control ID array (e.g. 'Azure Government FedRAMP High')", Type = "string", Required = false }
     };
 
     public override async Task<string> ExecuteCoreAsync(
@@ -422,16 +424,31 @@ public class SetInheritanceTool : BaseTool
             return Error("INVALID_INPUT", "The 'system_id' parameter is required.");
 
         var mappingsRaw = GetArg<object>(arguments, "inheritance_mappings");
+
+        // DEBUG: capture all arguments
+        try { File.WriteAllText("/tmp/inherit_debug.txt",
+            "--- ALL ARGS ---\n" + string.Join("\n", arguments.Select(kv =>
+                kv.Key + " = " + (kv.Value is JsonElement je ? je.GetRawText() : kv.Value?.ToString() ?? "null")))); } catch { }
+
         if (mappingsRaw == null)
             return Error("INVALID_INPUT", "The 'inheritance_mappings' parameter is required.");
+
+        var defaultType = GetArg<string>(arguments, "inheritance_type") ?? "Inherited";
+        var defaultProvider = GetArg<string>(arguments, "provider");
 
         List<InheritanceInput> mappings;
         try
         {
-            mappings = ParseInheritanceMappings(mappingsRaw);
+            mappings = ParseInheritanceMappings(mappingsRaw, defaultType, defaultProvider);
+            // DEBUG: capture parsed result
+            try { File.AppendAllText("/tmp/inherit_debug.txt",
+                "\n\n--- PARSED ---\ncount=" + mappings.Count +
+                "\nitems=" + string.Join("; ", mappings.Select(m =>
+                    $"[{m.ControlId}|{m.InheritanceType}|{m.Provider}]"))); } catch { }
         }
         catch (Exception ex)
         {
+            try { File.AppendAllText("/tmp/inherit_debug.txt", "\n\n--- EXCEPTION ---\n" + ex); } catch { }
             return Error("INVALID_INPUT", $"Failed to parse inheritance_mappings: {ex.Message}");
         }
 
@@ -474,11 +491,18 @@ public class SetInheritanceTool : BaseTool
     private static readonly HashSet<string> InheritanceKeys = new(StringComparer.OrdinalIgnoreCase)
     { "control_id", "controlid", "inheritance_type", "inheritancetype", "provider", "customer_responsibility", "customerresponsibility" };
 
-    private static List<InheritanceInput> ParseInheritanceMappings(object raw)
+    private static List<InheritanceInput> ParseInheritanceMappings(object raw, string defaultType = "Inherited", string? defaultProvider = null)
     {
         if (raw is JsonElement jsonElement)
         {
             var rawText = jsonElement.GetRawText();
+
+            // DEBUG: capture raw value
+            try { File.AppendAllText("/tmp/inherit_debug.txt",
+                "\n\n--- PARSE ---\ntype=" + raw.GetType().FullName +
+                "\nkind=" + jsonElement.ValueKind +
+                "\nlength=" + rawText.Length +
+                "\nvalue=" + rawText); } catch { }
 
             // Strategy 1: Direct deserialization
             try
@@ -538,6 +562,21 @@ public class SetInheritanceTool : BaseTool
                                 CustomerResponsibility = dict.GetValueOrDefault("customer_responsibility", dict.GetValueOrDefault("customerresponsibility"))
                             }];
                     }
+
+                    // Flat array of control ID strings (e.g. ["AC-1", "AC-2", "AC-3"])
+                    // Convert each to an InheritanceInput using defaults
+                    if (strings.Any(s => System.Text.RegularExpressions.Regex.IsMatch(s, @"^[A-Z]{2}-\d+", System.Text.RegularExpressions.RegexOptions.IgnoreCase)))
+                    {
+                        return strings
+                            .Where(s => !string.IsNullOrWhiteSpace(s))
+                            .Select(s => new InheritanceInput
+                            {
+                                ControlId = s.Trim(),
+                                InheritanceType = defaultType,
+                                Provider = defaultProvider
+                            })
+                            .ToList();
+                    }
                 }
 
                 var result = new List<InheritanceInput>();
@@ -553,7 +592,17 @@ public class SetInheritanceTool : BaseTool
                         var s = item.GetString();
                         if (!string.IsNullOrWhiteSpace(s))
                         {
-                            try { var parsed = JsonSerializer.Deserialize<InheritanceInput>(s, CaseInsensitiveOpts); if (parsed != null && !string.IsNullOrWhiteSpace(parsed.ControlId)) result.Add(parsed); } catch { }
+                            try { var parsed = JsonSerializer.Deserialize<InheritanceInput>(s, CaseInsensitiveOpts); if (parsed != null && !string.IsNullOrWhiteSpace(parsed.ControlId)) { result.Add(parsed); continue; } } catch { }
+                            // Treat as bare control ID string
+                            if (System.Text.RegularExpressions.Regex.IsMatch(s, @"^[A-Z]{2}-\d+", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                            {
+                                result.Add(new InheritanceInput
+                                {
+                                    ControlId = s.Trim(),
+                                    InheritanceType = defaultType,
+                                    Provider = defaultProvider
+                                });
+                            }
                         }
                     }
                 }
