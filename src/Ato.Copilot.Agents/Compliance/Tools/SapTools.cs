@@ -279,7 +279,20 @@ public class UpdateSapTool : BaseTool
             }
             catch (InvalidOperationException)
             {
-                return Error("SAP_NOT_FOUND", $"No SAP found for system '{systemId}'. Generate a SAP first using compliance_generate_sap.");
+                // Auto-generate a draft SAP if none exists
+                try
+                {
+                    var genInput = new SapGenerationInput(
+                        SystemId: systemId,
+                        Format: "markdown");
+                    var generated = await _sapService.GenerateSapAsync(genInput, cancellationToken: cancellationToken);
+                    sapId = generated.SapId;
+                    Logger.LogInformation("Auto-generated draft SAP {SapId} for system '{SystemId}' during update", sapId, systemId);
+                }
+                catch (InvalidOperationException ex2)
+                {
+                    return Error("SAP_GENERATION_FAILED", $"No SAP found and auto-generation failed: {ex2.Message}");
+                }
             }
         }
 
