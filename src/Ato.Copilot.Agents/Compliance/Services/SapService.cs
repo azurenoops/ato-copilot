@@ -220,11 +220,24 @@ public class SapService : ISapService
         }
 
         // ── Create SAP entity ────────────────────────────────────────────
+        // Ensure AssessmentId is null (not empty string) when not provided — FK requires valid reference or NULL
+        var resolvedAssessmentId = string.IsNullOrWhiteSpace(input.AssessmentId) ? null : input.AssessmentId;
+        if (resolvedAssessmentId != null)
+        {
+            var assessmentExists = await context.Assessments
+                .AnyAsync(a => a.Id == resolvedAssessmentId, cancellationToken);
+            if (!assessmentExists)
+            {
+                warnings.Add($"AssessmentId '{resolvedAssessmentId}' not found — ignoring link.");
+                resolvedAssessmentId = null;
+            }
+        }
+
         var sapTitle = $"Security Assessment Plan — {system.Name} — {DateTime.UtcNow:yyyy-MM-dd}";
         var sap = new SecurityAssessmentPlan
         {
             RegisteredSystemId = input.SystemId,
-            AssessmentId = input.AssessmentId,
+            AssessmentId = resolvedAssessmentId,
             Status = SapStatus.Draft,
             Title = sapTitle,
             BaselineLevel = baseline.BaselineLevel,
