@@ -143,7 +143,11 @@ public abstract class BaseTool
 
         if (value is System.Text.Json.JsonElement jsonElement)
         {
-            try { return System.Text.Json.JsonSerializer.Deserialize<T>(jsonElement.GetRawText()); }
+            try
+            {
+                var opts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                return System.Text.Json.JsonSerializer.Deserialize<T>(jsonElement.GetRawText(), opts);
+            }
             catch { return default; }
         }
 
