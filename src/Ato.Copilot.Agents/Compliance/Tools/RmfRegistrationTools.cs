@@ -435,6 +435,45 @@ public class DefineBoundaryTool : BaseTool
         var systemId = GetArg<string>(arguments, "system_id");
         var resources = GetArg<List<BoundaryResourceInput>>(arguments, "resources");
 
+        // The LLM sometimes sends resources as a flat array of resource ID strings
+        // instead of an array of objects. Handle both formats.
+        if ((resources == null || resources.Count == 0 || resources.All(r => string.IsNullOrWhiteSpace(r.ResourceId)))
+            && arguments.TryGetValue("resources", out var rawRes) && rawRes is System.Text.Json.JsonElement je && je.ValueKind == System.Text.Json.JsonValueKind.Array)
+        {
+            var stringIds = GetArg<List<string>>(arguments, "resources");
+            if (stringIds != null && stringIds.Count > 0)
+            {
+                resources = stringIds
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Select(id =>
+                    {
+                        var trimmed = id.Trim();
+                        // Extract resource type from ARM path: .../providers/{provider}/{type}/{name}
+                        var resourceType = "Unknown";
+                        var providerIdx = trimmed.IndexOf("/providers/", StringComparison.OrdinalIgnoreCase);
+                        if (providerIdx >= 0)
+                        {
+                            var afterProvider = trimmed[(providerIdx + "/providers/".Length)..];
+                            var segments = afterProvider.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                            if (segments.Length >= 2)
+                                resourceType = $"{segments[0]}/{segments[1]}";
+                        }
+                        // Extract resource name (last path segment)
+                        var resourceName = trimmed.Split('/').LastOrDefault() ?? trimmed;
+
+                        return new BoundaryResourceInput
+                        {
+                            ResourceId = trimmed,
+                            ResourceType = resourceType,
+                            ResourceName = resourceName
+                        };
+                    })
+                    .ToList();
+
+                Logger.LogInformation("compliance_define_boundary: converted {Count} string IDs to BoundaryResourceInput objects", resources.Count);
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(systemId))
             return JsonSerializer.Serialize(new { status = "error", errorCode = "INVALID_INPUT", message = "The 'system_id' parameter is required." }, JsonOpts);
 
