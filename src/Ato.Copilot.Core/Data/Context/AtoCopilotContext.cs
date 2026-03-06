@@ -1142,7 +1142,7 @@ public class AtoCopilotContext : DbContext
             entity.Property(e => e.Id).HasMaxLength(36);
             entity.Property(e => e.RegisteredSystemId).HasMaxLength(36).IsRequired();
             entity.Property(e => e.FindingId).HasMaxLength(100);
-            entity.Property(e => e.RemediationTaskId).HasMaxLength(100);
+            entity.Property(e => e.RemediationTaskId).HasMaxLength(36);
             entity.Property(e => e.Weakness).HasMaxLength(2000).IsRequired();
             entity.Property(e => e.WeaknessSource).HasMaxLength(100).IsRequired();
             entity.Property(e => e.SecurityControlNumber).HasMaxLength(20).IsRequired();
@@ -1232,7 +1232,7 @@ public class AtoCopilotContext : DbContext
             entity.Property(e => e.Id).HasMaxLength(100);
 
             // Required strings
-            entity.Property(e => e.RegisteredSystemId).HasMaxLength(100);
+            entity.Property(e => e.RegisteredSystemId).HasMaxLength(36);
             entity.Property(e => e.AssessmentId).HasMaxLength(100);
             entity.Property(e => e.FileName).HasMaxLength(500);
             entity.Property(e => e.FileHash).HasMaxLength(128);
@@ -1323,7 +1323,7 @@ public class AtoCopilotContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasMaxLength(36);
             entity.Property(e => e.RegisteredSystemId).HasMaxLength(36).IsRequired();
-            entity.Property(e => e.AssessmentId).HasMaxLength(36);
+            entity.Property(e => e.AssessmentId).HasMaxLength(100);
             entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
             entity.Property(e => e.Title).HasMaxLength(500).IsRequired();
             entity.Property(e => e.BaselineLevel).HasMaxLength(20).IsRequired();
