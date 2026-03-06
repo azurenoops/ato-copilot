@@ -82,7 +82,12 @@ public class KnowledgeBaseAgent : BaseAgent
 
         // Action keywords indicate compliance agent intent — return low
         string[] actionKeywords = ["scan", "assess", "check compliance", "validate", "run ",
-            "execute", "monitor ", "remediate", "fix ", "generate report", "create document"];
+            "execute", "monitor ", "remediate", "fix ", "generate report", "create document",
+            "inherited from", "as inherited", "inherit from", "set inheritance",
+            "remove control", "add control", "tailor baseline", "generate the customer",
+            "register system", "register a new", "define boundary", "categorize system",
+            "select baseline", "set controls", "write narrative", "generate crm",
+            "generate sar", "issue ato", "create poam", "assign rmf"];
         foreach (var keyword in actionKeywords)
         {
             if (lower.Contains(keyword))

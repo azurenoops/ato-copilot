@@ -148,6 +148,12 @@ public class TailorBaselineTool : BaseTool
             return Error("INVALID_INPUT", "The 'system_id' parameter is required.");
 
         var actionsRaw = GetArg<object>(arguments, "tailoring_actions");
+
+        // DEBUG: capture all arguments
+        try { File.AppendAllText("/tmp/tailor_debug.txt",
+            "\n\n--- ALL ARGS ---\n" + string.Join("\n", arguments.Select(kv =>
+                kv.Key + " = " + (kv.Value is JsonElement je ? je.GetRawText() : kv.Value?.ToString() ?? "null")))); } catch { }
+
         if (actionsRaw == null)
             return Error("INVALID_INPUT", "The 'tailoring_actions' parameter is required.");
 
@@ -221,6 +227,13 @@ public class TailorBaselineTool : BaseTool
         if (raw is JsonElement jsonElement)
         {
             var rawText = jsonElement.GetRawText();
+
+            // DEBUG: capture raw value for diagnosis
+            try { File.WriteAllText("/tmp/tailor_debug.txt",
+                "type=" + raw.GetType().FullName +
+                "\nkind=" + jsonElement.ValueKind +
+                "\nlength=" + rawText.Length +
+                "\nvalue=" + rawText); } catch { }
 
             // Strategy 1: Direct deserialization of entire element
             try
