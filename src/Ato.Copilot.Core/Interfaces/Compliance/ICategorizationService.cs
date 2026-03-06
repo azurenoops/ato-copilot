@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Ato.Copilot.Core.Models.Compliance;
 
 namespace Ato.Copilot.Core.Interfaces.Compliance;
@@ -72,27 +73,35 @@ public interface ICategorizationService
 public class InformationTypeInput
 {
     /// <summary>SP 800-60 identifier (e.g., "D.1.1").</summary>
+    [JsonPropertyName("sp800_60_id")]
     public string Sp80060Id { get; set; } = string.Empty;
 
     /// <summary>Information type name.</summary>
+    [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
 
     /// <summary>SP 800-60 category.</summary>
+    [JsonPropertyName("category")]
     public string? Category { get; set; }
 
     /// <summary>Confidentiality impact.</summary>
+    [JsonPropertyName("confidentiality_impact")]
     public string ConfidentialityImpact { get; set; } = "Low";
 
     /// <summary>Integrity impact.</summary>
+    [JsonPropertyName("integrity_impact")]
     public string IntegrityImpact { get; set; } = "Low";
 
     /// <summary>Availability impact.</summary>
+    [JsonPropertyName("availability_impact")]
     public string AvailabilityImpact { get; set; } = "Low";
 
     /// <summary>Whether values match SP 800-60 provisional defaults.</summary>
+    [JsonPropertyName("uses_provisional")]
     public bool UsesProvisional { get; set; } = true;
 
     /// <summary>Required if UsesProvisional is false — justification for adjustment.</summary>
+    [JsonPropertyName("adjustment_justification")]
     public string? AdjustmentJustification { get; set; }
 }
 

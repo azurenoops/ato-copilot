@@ -106,16 +106,27 @@ public class CategorizeSystemTool : BaseTool
             var result = new List<InformationTypeInput>();
             foreach (var item in jsonElement.EnumerateArray())
             {
+                // Try case-insensitive deserialization first (handles camelCase, PascalCase, snake_case)
+                var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var parsed = JsonSerializer.Deserialize<InformationTypeInput>(item.GetRawText(), opts);
+                if (parsed != null && !string.IsNullOrWhiteSpace(parsed.Sp80060Id))
+                {
+                    result.Add(parsed);
+                    continue;
+                }
+
+                // Fallback: try known property name variations manually
                 result.Add(new InformationTypeInput
                 {
-                    Sp80060Id = item.GetProperty("sp800_60_id").GetString() ?? "",
-                    Name = item.GetProperty("name").GetString() ?? "",
-                    Category = item.TryGetProperty("category", out var cat) ? cat.GetString() : null,
-                    ConfidentialityImpact = item.GetProperty("confidentiality_impact").GetString() ?? "Low",
-                    IntegrityImpact = item.GetProperty("integrity_impact").GetString() ?? "Low",
-                    AvailabilityImpact = item.GetProperty("availability_impact").GetString() ?? "Low",
-                    UsesProvisional = item.TryGetProperty("uses_provisional", out var up) ? up.GetBoolean() : true,
-                    AdjustmentJustification = item.TryGetProperty("adjustment_justification", out var aj) ? aj.GetString() : null
+                    Sp80060Id = GetJsonProp(item, "sp800_60_id", "sp80060Id", "sp80060_id", "Sp80060Id", "SP800_60_ID", "id") ?? "",
+                    Name = GetJsonProp(item, "name", "Name", "info_type_name", "infoTypeName") ?? "",
+                    Category = GetJsonProp(item, "category", "Category"),
+                    ConfidentialityImpact = GetJsonProp(item, "confidentiality_impact", "confidentialityImpact", "ConfidentialityImpact", "confidentiality") ?? "Low",
+                    IntegrityImpact = GetJsonProp(item, "integrity_impact", "integrityImpact", "IntegrityImpact", "integrity") ?? "Low",
+                    AvailabilityImpact = GetJsonProp(item, "availability_impact", "availabilityImpact", "AvailabilityImpact", "availability") ?? "Low",
+                    UsesProvisional = item.TryGetProperty("uses_provisional", out var up) ? up.GetBoolean()
+                        : item.TryGetProperty("usesProvisional", out up) ? up.GetBoolean() : true,
+                    AdjustmentJustification = GetJsonProp(item, "adjustment_justification", "adjustmentJustification", "AdjustmentJustification")
                 });
             }
             return result;
@@ -129,10 +140,22 @@ public class CategorizeSystemTool : BaseTool
         if (raw is System.Collections.IEnumerable enumerable)
         {
             var json = JsonSerializer.Serialize(raw);
-            return JsonSerializer.Deserialize<List<InformationTypeInput>>(json) ?? [];
+            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            return JsonSerializer.Deserialize<List<InformationTypeInput>>(json, opts) ?? [];
         }
 
         throw new InvalidOperationException("information_types must be an array of info type objects.");
+    }
+
+    /// <summary>Try multiple property name variations and return the first match.</summary>
+    private static string? GetJsonProp(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (element.TryGetProperty(name, out var prop))
+                return prop.GetString();
+        }
+        return null;
     }
 
     private static object FormatCategorization(SecurityCategorization sc) => new
