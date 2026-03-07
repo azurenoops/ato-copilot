@@ -104,7 +104,7 @@ Later tests depend on artifacts created by earlier tests. Cross-persona handoffs
 | TC-ID | Task / Job | Natural Language Input | Tool(s) Invoked | Expected Output | Preconditions |
 |-------|-----------|----------------------|-----------------|-----------------|---------------|
 | ISSM-17 | Check SSP progress | "What's the SSP completion percentage for Eagle Eye?" | `compliance_narrative_progress` | Returns overall %, per-family breakdown; initially low before ISSO authoring | ISSM-16 |
-| ISSM-18 | Generate SSP | "Generate the SSP for Eagle Eye" | `compliance_generate_ssp` | Markdown SSP with System Information, Categorization, Baseline, Control Implementations; warnings for missing narratives | ISSM-16 + narratives authored |
+| ISSM-18 | Generate SSP | "Generate the SSP for Eagle Eye" | `compliance_generate_ssp` | Markdown SSP with System Information, Categorization, Baseline, Control Implementations; warnings for missing narratives | ISSM-16 + ISSO-04/ENG-05 (cross-persona: ISSO or Engineer authors narratives) |
 | ISSM-19 | Import Prisma CSV scan | "Import this Prisma Cloud CSV scan for Eagle Eye" | `compliance_import_prisma_csv` | Import record created; findings created with Prisma-specific fields; NIST controls mapped; effectiveness records upserted | ISSM-16 |
 | ISSM-20 | Import Prisma API scan | "Import Prisma Cloud API scan results for Eagle Eye with auto-resolve subscriptions" | `compliance_import_prisma_api` | Import record with `auto_resolve_subscription: true`; CLI remediation scripts extracted; compliance standards captured | ISSM-16 |
 | ISSM-21 | List Prisma policies | "Show all Prisma Cloud policies affecting Eagle Eye" | `compliance_list_prisma_policies` | Policy list with severity, cloud type, NIST mappings, open/resolved counts | ISSM-19 or ISSM-20 |
@@ -124,10 +124,12 @@ Later tests depend on artifacts created by earlier tests. Cross-persona handoffs
 
 | TC-ID | Task / Job | Natural Language Input | Tool(s) Invoked | Expected Output | Preconditions |
 |-------|-----------|----------------------|-----------------|-----------------|---------------|
-| ISSM-23 | Create POA&M | "Create a POA&M item for finding {finding_id} — scheduled completion in 90 days" | `compliance_create_poam` | POA&M record with finding linked, scheduled completion date, status = "Ongoing" | Findings exist from assessment |
-| ISSM-24 | List POA&M items | "Show all POA&M items for Eagle Eye" | `compliance_list_poam` | Returns list with status, severity, scheduled dates, finding references | ISSM-23 |
-| ISSM-25 | Generate RAR | "Generate the Risk Assessment Report for Eagle Eye" | `compliance_generate_rar` | RAR document with risk characterization, finding summary, residual risk assessment | Assessment complete |
-| ISSM-26 | Create remediation board | "Create a Kanban remediation board from Eagle Eye's assessment" | `kanban_create_board` | Board created with tasks for each open finding; status counts returned | Assessment complete |
+| ISSM-23a | Create POA&M (from assessment) | "Create a POA&M item for finding {finding_id} — scheduled completion in 90 days" | `compliance_create_poam` | POA&M record with finding linked, scheduled completion date, status = "Ongoing" | SCA-20 (cross-persona: SCA runs `compliance_assess`) |
+| ISSM-23b | Create POA&M (from STIG/scan import) | "Create a POA&M item for finding {finding_id} — scheduled completion in 90 days" | `compliance_create_poam` | POA&M record with finding linked, scheduled completion date, status = "Ongoing" | Findings from CKL/XCCDF import (ISSO-09 or ISSO-10) |
+| ISSM-23c | Create POA&M (from Prisma Cloud) | "Create a POA&M item for finding {finding_id} — scheduled completion in 90 days" | `compliance_create_poam` | POA&M record with finding linked, scheduled completion date, status = "Ongoing" | Findings from Prisma import (ISSM-19 or ISSM-20) |
+| ISSM-24 | List POA&M items | "Show all POA&M items for Eagle Eye" | `compliance_list_poam` | Returns list with status, severity, scheduled dates, finding references | ISSM-23a, 23b, or 23c |
+| ISSM-25 | Generate RAR | "Generate the Risk Assessment Report for Eagle Eye" | `compliance_generate_rar` | RAR document with risk characterization, finding summary, residual risk assessment | SCA-17 (cross-persona: SCA generates SAR after assessments) |
+| ISSM-26 | Create remediation board | "Create a Kanban remediation board from Eagle Eye's assessment" | `kanban_create_board` | Board created with tasks for each open finding; status counts returned | SCA-06 to SCA-09 (cross-persona: SCA records assessments) |
 | ISSM-27 | Bulk assign tasks | "Assign all CAT I tasks on Eagle Eye's board to SSgt Rodriguez" | `kanban_bulk_update` | Multiple tasks assigned; confirmation with count of updated tasks | ISSM-26 |
 | ISSM-28 | Export Kanban to POA&M | "Export Eagle Eye's remediation board as POA&M" | `kanban_export` | POA&M-formatted export with all open tasks, milestones, and responsible parties | ISSM-26 |
 
@@ -135,9 +137,9 @@ Later tests depend on artifacts created by earlier tests. Cross-persona handoffs
 
 | TC-ID | Task / Job | Natural Language Input | Tool(s) Invoked | Expected Output | Preconditions |
 |-------|-----------|----------------------|-----------------|-----------------|---------------|
-| ISSM-29 | Bundle authorization package | "Bundle the authorization package for Eagle Eye" | `compliance_bundle_authorization_package` | Package with SSP + SAR + RAR + POA&M + CRM; completeness check with warnings | SSP, SAR, RAR, POA&M exist |
+| ISSM-29 | Bundle authorization package | "Bundle the authorization package for Eagle Eye" | `compliance_bundle_authorization_package` | Package with SSP + SAR + RAR + POA&M + CRM; completeness check with warnings | ISSM-18 (SSP) + SCA-17 (SAR) + ISSM-25 (RAR) + ISSM-23a/b/c (POA&M) |
 | ISSM-30 | Advance to Authorize | "Move Eagle Eye to the Authorize phase" | `compliance_advance_rmf_step` | RMF step changes to "Authorize" | ISSM-29 |
-| ISSM-31 | View risk register | "Show the risk register for Eagle Eye" | `compliance_show_risk_register` | Risk entries with severity, status, mitigation, residual risk | Assessment complete |
+| ISSM-31 | View risk register | "Show the risk register for Eagle Eye" | `compliance_show_risk_register` | Risk entries with severity, status, mitigation, residual risk | SCA-06 to SCA-09 (cross-persona: SCA records assessments) |
 
 → **Handoff to AO**: Authorization package submitted for AO review and decision
 
@@ -145,15 +147,15 @@ Later tests depend on artifacts created by earlier tests. Cross-persona handoffs
 
 | TC-ID | Task / Job | Natural Language Input | Tool(s) Invoked | Expected Output | Preconditions |
 |-------|-----------|----------------------|-----------------|-----------------|---------------|
-| ISSM-32 | Create ConMon plan | "Create a continuous monitoring plan for Eagle Eye with monthly assessments and quarterly reviews" | `compliance_create_conmon_plan` | ConMon plan created with frequency, review dates, stakeholder list | ATO granted |
+| ISSM-32 | Create ConMon plan | "Create a continuous monitoring plan for Eagle Eye with monthly assessments and quarterly reviews" | `compliance_create_conmon_plan` | ConMon plan created with frequency, review dates, stakeholder list | AO-04 (cross-persona: AO issues ATO) |
 | ISSM-33 | Generate ConMon report | "Generate the monthly ConMon report for Eagle Eye" | `compliance_generate_conmon_report` | Report with compliance score, baseline delta, finding trends, POA&M status | ISSM-32 |
-| ISSM-34 | Track ATO expiration | "When does Eagle Eye's ATO expire?" | `compliance_track_ato_expiration` | Alert level (None/Info/Warning/Urgent/Expired), days remaining, recommended action | ATO granted |
-| ISSM-35 | Report significant change | "Report a significant change for Eagle Eye — new interconnection with DISA SIPR gateway" | `compliance_report_significant_change` | Change recorded; `requires_reauthorization = true` for "New Interconnection" type | ATO granted |
-| ISSM-36 | Check reauthorization triggers | "Check if Eagle Eye needs reauthorization" | `compliance_reauthorization_workflow` | Returns triggers: expiration status, unreviewed significant changes, compliance drift | ATO granted |
+| ISSM-34 | Track ATO expiration | "When does Eagle Eye's ATO expire?" | `compliance_track_ato_expiration` | Alert level (None/Info/Warning/Urgent/Expired), days remaining, recommended action | AO-04 (cross-persona: AO issues ATO) |
+| ISSM-35 | Report significant change | "Report a significant change for Eagle Eye — new interconnection with DISA SIPR gateway" | `compliance_report_significant_change` | Change recorded; `requires_reauthorization = true` for "New Interconnection" type | AO-04 (cross-persona: AO issues ATO) |
+| ISSM-36 | Check reauthorization triggers | "Check if Eagle Eye needs reauthorization" | `compliance_reauthorization_workflow` | Returns triggers: expiration status, unreviewed significant changes, compliance drift | AO-04 (cross-persona: AO issues ATO) + ISSM-35 |
 | ISSM-37 | Multi-system dashboard | "Show the multi-system compliance dashboard" | `compliance_multi_system_dashboard` | Portfolio view with all systems: RMF step, auth status, compliance score, open findings, expiration | ≥ 1 system registered |
-| ISSM-38 | Export to eMASS | "Export Eagle Eye to eMASS format" | `compliance_export_emass` | eMASS-compatible Excel workbook with system, controls, findings, POA&M sheets | System with baseline + assessment |
+| ISSM-38 | Export to eMASS | "Export Eagle Eye to eMASS format" | `compliance_export_emass` | eMASS-compatible Excel workbook with system, controls, findings, POA&M sheets | ISSM-11 (baseline) + SCA-06 to SCA-09 (cross-persona: SCA assessments) |
 | ISSM-39 | View audit log | "Show the audit log for Eagle Eye" | `compliance_audit_log` | Chronological audit trail with user, action, timestamp, entity | Any actions performed |
-| ISSM-40 | Re-import Prisma after remediation | "Import the latest Prisma Cloud scan for Eagle Eye to verify remediation" | `compliance_import_prisma_csv` | New import record; previously open findings now resolved; trend shows improvement | ISSM-19 + remediation completed |
+| ISSM-40 | Re-import Prisma after remediation | "Import the latest Prisma Cloud scan for Eagle Eye to verify remediation" | `compliance_import_prisma_csv` | New import record; previously open findings now resolved; trend shows improvement | ISSM-19 + ENG-08 (cross-persona: Engineer applies remediation) |
 
 ---
 

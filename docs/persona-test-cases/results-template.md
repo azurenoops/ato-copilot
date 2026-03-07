@@ -130,14 +130,16 @@
 
 | TC-ID | Task | Status | Duration | Actual Output | Notes |
 |-------|------|--------|----------|---------------|-------|
-| ISSM-23 | Create POA&M (90-day completion) | ⬜ | | | |
+| ISSM-23a | Create POA&M (from assessment) | ⬜ | | | |
+| ISSM-23b | Create POA&M (from STIG/scan import) | ⬜ | | | |
+| ISSM-23c | Create POA&M (from Prisma Cloud) | ⬜ | | | |
 | ISSM-24 | List POA&M items | ⬜ | | | item count: |
 | ISSM-25 | Generate RAR | ⬜ | | | |
 | ISSM-26 | Create Kanban remediation board | ⬜ | | | task count: |
 | ISSM-27 | Bulk assign CAT I to SSgt Rodriguez | ⬜ | | | updated count: |
 | ISSM-28 | Export Kanban as POA&M | ⬜ | | | |
 
-**Subtotal**: ___/6 passed | Avg duration: ___s
+**Subtotal**: ___/8 passed | Avg duration: ___s
 
 ### Phase 5 — Authorize Submission (ISSM-29 to ISSM-31)
 

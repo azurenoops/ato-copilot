@@ -83,7 +83,7 @@ This document provides the cross-reference validation of all 88 MCP tools refere
 | # | Tool Name | Spec TC-IDs | Present | Notes |
 |---|-----------|-------------|---------|-------|
 | 33 | `compliance_generate_rar` | ISSM-25, SCA-18 | ⬜ | |
-| 34 | `compliance_create_poam` | ISSM-23 | ⬜ | |
+| 34 | `compliance_create_poam` | ISSM-23a,23b,23c | ⬜ | |
 | 35 | `compliance_list_poam` | ISSM-24 | ⬜ | |
 | 36 | `compliance_show_risk_register` | ISSM-31, AO-03 | ⬜ | |
 | 37 | `compliance_bundle_authorization_package` | ISSM-29, AO-02, ERR-05 | ⬜ | |
