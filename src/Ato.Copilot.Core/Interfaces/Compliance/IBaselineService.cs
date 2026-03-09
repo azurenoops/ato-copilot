@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Ato.Copilot.Core.Models.Compliance;
 
 namespace Ato.Copilot.Core.Interfaces.Compliance;
@@ -87,12 +88,15 @@ public interface IBaselineService
 public class TailoringInput
 {
     /// <summary>NIST control ID (e.g., "AC-2(12)").</summary>
+    [JsonPropertyName("control_id")]
     public string ControlId { get; set; } = string.Empty;
 
     /// <summary>Action: "Added" or "Removed".</summary>
+    [JsonPropertyName("action")]
     public string Action { get; set; } = string.Empty;
 
     /// <summary>Documented justification for the tailoring.</summary>
+    [JsonPropertyName("rationale")]
     public string Rationale { get; set; } = string.Empty;
 }
 
@@ -102,15 +106,19 @@ public class TailoringInput
 public class InheritanceInput
 {
     /// <summary>NIST control ID.</summary>
+    [JsonPropertyName("control_id")]
     public string ControlId { get; set; } = string.Empty;
 
     /// <summary>Inheritance type: "Inherited", "Shared", or "Customer".</summary>
+    [JsonPropertyName("inheritance_type")]
     public string InheritanceType { get; set; } = string.Empty;
 
     /// <summary>CSP name if Inherited or Shared (e.g., "Azure Government (FedRAMP High)").</summary>
+    [JsonPropertyName("provider")]
     public string? Provider { get; set; }
 
     /// <summary>Customer responsibility description if Shared.</summary>
+    [JsonPropertyName("customer_responsibility")]
     public string? CustomerResponsibility { get; set; }
 }
 

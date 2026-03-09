@@ -168,6 +168,7 @@ public class ComplianceAgentAuthTests
             new NistControlExplainerTool(Mock.Of<INistControlsService>(), Mock.Of<ILogger<NistControlExplainerTool>>()),
             Enumerable.Empty<BaseTool>(),
             dbFactory, _scopeFactory,
+            Mock.Of<ISystemIdResolver>(),
             Mock.Of<ILogger<ComplianceAgent>>());
     }
 
@@ -441,6 +442,7 @@ public class ComplianceAgentAuthTests
             new NistControlExplainerTool(Mock.Of<INistControlsService>(), Mock.Of<ILogger<NistControlExplainerTool>>()),
             Enumerable.Empty<BaseTool>(),
             dbFactory, scopeFactory,
+            Mock.Of<ISystemIdResolver>(),
             Mock.Of<ILogger<ComplianceAgent>>());
     }
 

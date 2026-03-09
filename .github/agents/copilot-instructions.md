@@ -37,6 +37,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-21
 - EF Core InMemory (dev/test), SQLite/SQL Server (prod); `EnsureCreatedAsync()` — no migrations (018-sap-generation)
 - C# 13 / .NET 9.0 + `System.Text.Json` (JSON parsing), `string.Split` + quote-aware CSV logic (CSV parsing), existing `IScanImportService`, `ISystemSubscriptionResolver`, `IAssessmentArtifactService`, `IBaselineService` (019-prisma-cloud-import)
 - EF Core 9.0 InMemory (dev/test). Extends existing `ScanImportRecords` and `ScanImportFindings` DbSets — NO new DbSets, NO new migrations. `EnsureCreatedAsync()`. (019-prisma-cloud-import)
+- N/A — documentation-only feature (manual test scripts) + Requires all 118 MCP tools from Features 001–019 to be deployed and functional (020-persona-test-cases)
+- N/A — no data model changes (020-persona-test-cases)
 
 - C# 13 / .NET 9.0 + Azure.Identity 1.13, Azure.ResourceManager 1.13, Microsoft.Extensions.AI 9.4-preview, Microsoft.EntityFrameworkCore 9.0, Serilog 4.2, xUnit 2.9, FluentAssertions 7.0, Moq 4.20 (001-core-compliance)
 
@@ -56,9 +58,9 @@ dotnet build Ato.Copilot.sln [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMAN
 C# .NET 9: Follow standard conventions
 
 ## Recent Changes
+- 020-persona-test-cases: Added N/A — documentation-only feature (manual test scripts) + Requires all 118 MCP tools from Features 001–019 to be deployed and functional
 - 019-prisma-cloud-import: Added C# 13 / .NET 9.0 + `System.Text.Json` (JSON parsing), `string.Split` + quote-aware CSV logic (CSV parsing), existing `IScanImportService`, `ISystemSubscriptionResolver`, `IAssessmentArtifactService`, `IBaselineService`
 - 018-sap-generation: Added C# 13 / .NET 9.0 (`net9.0`) + EF Core 9.0, QuestPDF 2024.12.3, System.Text.Json 9.0.5, Serilog 4.2.0, ClosedXML 0.104.2
-- 016-user-documentation: Added Markdown + MkDocs (Python-based static site generator) + MkDocs, mkdocs-material theme, mkdocs-search plugin
 
 
 <!-- MANUAL ADDITIONS START -->

@@ -13,6 +13,7 @@ using Ato.Copilot.Agents.Compliance.Tools;
 using Ato.Copilot.Core.Configuration;
 using Ato.Copilot.Core.Data.Context;
 using Ato.Copilot.Core.Interfaces.Auth;
+using Ato.Copilot.Core.Interfaces.Compliance;
 using Ato.Copilot.Core.Models.Compliance;
 
 namespace Ato.Copilot.Agents.Compliance.Agents;
@@ -42,6 +43,7 @@ public class ComplianceAgent : BaseAgent
     private readonly ComplianceMonitoringTool _monitoringTool;
     private readonly IDbContextFactory<AtoCopilotContext> _dbFactory;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ISystemIdResolver _systemIdResolver;
 
     // Kanban tools (Phase 3–6)
     private readonly KanbanCreateBoardTool _kanbanCreateBoard;
@@ -215,11 +217,13 @@ public class ComplianceAgent : BaseAgent
         IEnumerable<BaseTool> allRegisteredTools,
         IDbContextFactory<AtoCopilotContext> dbFactory,
         IServiceScopeFactory scopeFactory,
+        ISystemIdResolver systemIdResolver,
         ILogger<ComplianceAgent> logger,
         IChatClient? chatClient = null,
         IOptions<AzureOpenAIGatewayOptions>? aiOptions = null)
         : base(logger, chatClient, aiOptions?.Value)
     {
+        _systemIdResolver = systemIdResolver;
         _assessmentTool = assessmentTool;
         _controlFamilyTool = controlFamilyTool;
         _documentGenerationTool = documentGenerationTool;
@@ -404,6 +408,13 @@ public class ComplianceAgent : BaseAgent
                 registeredNames.Add(tool.Name);
             }
         }
+
+        // Inject SystemIdResolver into all tools so system_id parameters
+        // transparently accept names/acronyms in addition to GUIDs.
+        foreach (var tool in Tools)
+        {
+            tool.SystemIdResolver = _systemIdResolver;
+        }
     }
 
     /// <inheritdoc />
@@ -440,6 +451,9 @@ public class ComplianceAgent : BaseAgent
             "suggest info types", "information types",
             "select baseline", "control baseline", "tailor baseline", "customize baseline",
             "control inheritance", "set inheritance", "inherited controls", "common controls",
+            "inherited from", "as inherited", "inherit from", "mark as inherited",
+            "remove control", "add control", "set controls",
+            "generate the customer", "responsibility matrix",
             "get baseline", "show baseline", "view baseline",
             "generate crm", "customer responsibility matrix",
             "stig mapping", "show stig",

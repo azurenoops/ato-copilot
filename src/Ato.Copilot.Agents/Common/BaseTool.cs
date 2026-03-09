@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using Ato.Copilot.Core.Interfaces.Compliance;
 using Ato.Copilot.Core.Models.Auth;
 using Ato.Copilot.Core.Observability;
 
@@ -49,6 +50,15 @@ public abstract class BaseTool
     public virtual string AgentName => "compliance";
 
     /// <summary>
+    /// Optional resolver that auto-converts system names/acronyms to GUIDs.
+    /// Set via property injection during DI registration — no constructor changes needed.
+    /// When set, any tool with a "system_id" parameter will automatically resolve
+    /// non-GUID values (system names, acronyms) to the canonical system GUID
+    /// before <see cref="ExecuteCoreAsync"/> is called.
+    /// </summary>
+    public ISystemIdResolver? SystemIdResolver { get; set; }
+
+    /// <summary>
     /// Implement tool logic in derived classes. Called by <see cref="ExecuteAsync"/>.
     /// </summary>
     public abstract Task<string> ExecuteCoreAsync(
@@ -64,6 +74,9 @@ public abstract class BaseTool
         Dictionary<string, object?> arguments,
         CancellationToken cancellationToken = default)
     {
+        // Auto-resolve system_id from name/acronym to GUID if needed
+        await TryResolveSystemIdAsync(arguments, cancellationToken);
+
         ToolMetrics.RecordStart(Name, AgentName);
         var sw = Stopwatch.StartNew();
 
@@ -84,6 +97,40 @@ public abstract class BaseTool
     }
 
     /// <summary>
+    /// If this tool has a "system_id" parameter and the caller provided a non-GUID value
+    /// (e.g., system name or acronym), resolve it to the canonical GUID transparently.
+    /// This eliminates the need for the LLM to call compliance_list_systems first.
+    /// </summary>
+    private async Task TryResolveSystemIdAsync(
+        Dictionary<string, object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        if (SystemIdResolver == null)
+            return;
+
+        if (!Parameters.ContainsKey("system_id"))
+            return;
+
+        if (!arguments.TryGetValue("system_id", out var rawValue) || rawValue == null)
+            return;
+
+        var systemIdStr = rawValue is System.Text.Json.JsonElement je
+            ? je.GetString()
+            : rawValue as string ?? rawValue.ToString();
+
+        if (string.IsNullOrWhiteSpace(systemIdStr))
+            return;
+
+        // Already a GUID — no resolution needed
+        if (Guid.TryParse(systemIdStr.Trim(), out _))
+            return;
+
+        // Resolve name/acronym → GUID
+        var resolvedId = await SystemIdResolver.ResolveAsync(systemIdStr, cancellationToken);
+        arguments["system_id"] = resolvedId;
+    }
+
+    /// <summary>
     /// Get a typed argument value from the arguments dictionary
     /// </summary>
     protected T? GetArg<T>(Dictionary<string, object?> args, string key)
@@ -96,7 +143,11 @@ public abstract class BaseTool
 
         if (value is System.Text.Json.JsonElement jsonElement)
         {
-            try { return System.Text.Json.JsonSerializer.Deserialize<T>(jsonElement.GetRawText()); }
+            try
+            {
+                var opts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                return System.Text.Json.JsonSerializer.Deserialize<T>(jsonElement.GetRawText(), opts);
+            }
             catch { return default; }
         }
 

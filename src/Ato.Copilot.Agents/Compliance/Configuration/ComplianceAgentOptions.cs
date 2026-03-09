@@ -22,6 +22,7 @@ public class ComplianceAgentOptions
     public NistControlsOptions NistControls { get; set; } = new();
     public AssessmentPurgeOptions AssessmentPurge { get; set; } = new();
     public RemediationOptions Remediation { get; set; } = new();
+    public BoundaryOptions Boundary { get; set; } = new();
 }
 
 public class DefenderForCloudOptions
@@ -122,4 +123,20 @@ public class RemediationOptions
 
     /// <summary>Default AI script generation usage (Tier 1).</summary>
     public bool UseAiScript { get; set; } = true;
+}
+
+/// <summary>
+/// Configuration options for authorization boundary management.
+/// Bound from <c>AgentConfiguration:ComplianceAgent:Boundary</c> config section.
+/// </summary>
+public class BoundaryOptions
+{
+    /// <summary>
+    /// When true, <c>compliance_define_boundary</c> validates each resource ID
+    /// against the Azure Resource Manager API before persisting it.
+    /// Invalid or inaccessible resource IDs are rejected with an error response
+    /// that includes the specific failure reason per resource.
+    /// Default: false (accept any well-formed resource ID without live validation).
+    /// </summary>
+    public bool ValidateAzureResources { get; set; }
 }

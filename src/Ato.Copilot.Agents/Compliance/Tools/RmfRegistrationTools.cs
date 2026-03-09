@@ -233,7 +233,7 @@ public class GetSystemTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID", Type = "string", Required = true }
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true }
     };
 
     public override async Task<string> ExecuteCoreAsync(
@@ -338,7 +338,7 @@ public class AdvanceRmfStepTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["target_step"] = new() { Name = "target_step", Description = "Target RMF step: Prepare | Categorize | Select | Implement | Assess | Authorize | Monitor", Type = "string", Required = true },
         ["force"] = new() { Name = "force", Description = "Override gate failures (will be audit-logged)", Type = "boolean", Required = false }
     };
@@ -423,7 +423,7 @@ public class DefineBoundaryTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["resources"] = new() { Name = "resources", Description = "Array of resources: [{resourceId, resourceType, resourceName?, inheritanceProvider?}]", Type = "array", Required = true }
     };
 
@@ -434,6 +434,45 @@ public class DefineBoundaryTool : BaseTool
         var sw = Stopwatch.StartNew();
         var systemId = GetArg<string>(arguments, "system_id");
         var resources = GetArg<List<BoundaryResourceInput>>(arguments, "resources");
+
+        // The LLM sometimes sends resources as a flat array of resource ID strings
+        // instead of an array of objects. Handle both formats.
+        if ((resources == null || resources.Count == 0 || resources.All(r => string.IsNullOrWhiteSpace(r.ResourceId)))
+            && arguments.TryGetValue("resources", out var rawRes) && rawRes is System.Text.Json.JsonElement je && je.ValueKind == System.Text.Json.JsonValueKind.Array)
+        {
+            var stringIds = GetArg<List<string>>(arguments, "resources");
+            if (stringIds != null && stringIds.Count > 0)
+            {
+                resources = stringIds
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Select(id =>
+                    {
+                        var trimmed = id.Trim();
+                        // Extract resource type from ARM path: .../providers/{provider}/{type}/{name}
+                        var resourceType = "Unknown";
+                        var providerIdx = trimmed.IndexOf("/providers/", StringComparison.OrdinalIgnoreCase);
+                        if (providerIdx >= 0)
+                        {
+                            var afterProvider = trimmed[(providerIdx + "/providers/".Length)..];
+                            var segments = afterProvider.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                            if (segments.Length >= 2)
+                                resourceType = $"{segments[0]}/{segments[1]}";
+                        }
+                        // Extract resource name (last path segment)
+                        var resourceName = trimmed.Split('/').LastOrDefault() ?? trimmed;
+
+                        return new BoundaryResourceInput
+                        {
+                            ResourceId = trimmed,
+                            ResourceType = resourceType,
+                            ResourceName = resourceName
+                        };
+                    })
+                    .ToList();
+
+                Logger.LogInformation("compliance_define_boundary: converted {Count} string IDs to BoundaryResourceInput objects", resources.Count);
+            }
+        }
 
         if (string.IsNullOrWhiteSpace(systemId))
             return JsonSerializer.Serialize(new { status = "error", errorCode = "INVALID_INPUT", message = "The 'system_id' parameter is required." }, JsonOpts);
@@ -505,7 +544,7 @@ public class ExcludeFromBoundaryTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["resource_id"] = new() { Name = "resource_id", Description = "Azure resource ID to exclude", Type = "string", Required = true },
         ["rationale"] = new() { Name = "rationale", Description = "Exclusion justification", Type = "string", Required = true }
     };
@@ -585,7 +624,7 @@ public class AssignRmfRoleTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["role"] = new() { Name = "role", Description = "RMF role: AuthorizingOfficial | Issm | Isso | Sca | SystemOwner", Type = "string", Required = true },
         ["user_id"] = new() { Name = "user_id", Description = "User identity", Type = "string", Required = true },
         ["user_display_name"] = new() { Name = "user_display_name", Description = "Display name of the user", Type = "string", Required = false }
@@ -670,7 +709,7 @@ public class ListRmfRolesTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID", Type = "string", Required = true }
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true }
     };
 
     public override async Task<string> ExecuteCoreAsync(

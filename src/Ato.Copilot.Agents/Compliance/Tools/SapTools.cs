@@ -38,12 +38,14 @@ public class GenerateSapTool : BaseTool
     public override string Description =>
         "Generate a Security Assessment Plan (SAP) for a registered system. " +
         "Auto-populates from control baseline, OSCAL assessment objectives, STIG mappings, " +
-        "and evidence data. Accepts SCA overrides for schedule, team, scope, and per-control " +
-        "assessment methods. Produces a Markdown SAP document with 15 sections.";
+        "and evidence data. All optional parameters are auto-populated with sensible defaults — " +
+        "call this tool immediately with just the system_id. Do NOT ask the user for schedule, " +
+        "team members, scope notes, or other optional details; proceed with defaults. " +
+        "Produces a Markdown SAP document with 15 sections.";
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["assessment_id"] = new() { Name = "assessment_id", Description = "Optional assessment cycle ID to link SAP to", Type = "string", Required = false },
         ["schedule_start"] = new() { Name = "schedule_start", Description = "Assessment start date (ISO 8601)", Type = "string", Required = false },
         ["schedule_end"] = new() { Name = "schedule_end", Description = "Assessment end date (ISO 8601)", Type = "string", Required = false },
@@ -242,7 +244,8 @@ public class UpdateSapTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["sap_id"] = new() { Name = "sap_id", Description = "SAP ID to update", Type = "string", Required = true },
+        ["sap_id"] = new() { Name = "sap_id", Description = "SAP ID to update (optional if system_id is provided)", Type = "string", Required = false },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym — looks up the latest Draft SAP for this system", Type = "string", Required = false },
         ["schedule_start"] = new() { Name = "schedule_start", Description = "Updated assessment start date (ISO 8601)", Type = "string", Required = false },
         ["schedule_end"] = new() { Name = "schedule_end", Description = "Updated assessment end date (ISO 8601)", Type = "string", Required = false },
         ["scope_notes"] = new() { Name = "scope_notes", Description = "Updated scope notes", Type = "string", Required = false },
@@ -257,6 +260,7 @@ public class UpdateSapTool : BaseTool
     {
         var sw = Stopwatch.StartNew();
         var sapId = GetArg<string>(arguments, "sap_id");
+        var systemId = GetArg<string>(arguments, "system_id");
         var scheduleStartStr = GetArg<string>(arguments, "schedule_start");
         var scheduleEndStr = GetArg<string>(arguments, "schedule_end");
         var scopeNotes = GetArg<string>(arguments, "scope_notes");
@@ -264,8 +268,35 @@ public class UpdateSapTool : BaseTool
         var teamMembersJson = GetArg<string>(arguments, "team_members");
         var methodOverridesJson = GetArg<string>(arguments, "method_overrides");
 
+        // Resolve sap_id from system_id if not provided
         if (string.IsNullOrWhiteSpace(sapId))
-            return Error("INVALID_INPUT", "The 'sap_id' parameter is required.");
+        {
+            if (string.IsNullOrWhiteSpace(systemId))
+                return Error("INVALID_INPUT", "Either 'sap_id' or 'system_id' parameter is required.");
+
+            try
+            {
+                var existing = await _sapService.GetSapAsync(systemId: systemId, cancellationToken: cancellationToken);
+                sapId = existing.SapId;
+            }
+            catch (InvalidOperationException)
+            {
+                // Auto-generate a draft SAP if none exists
+                try
+                {
+                    var genInput = new SapGenerationInput(
+                        SystemId: systemId,
+                        Format: "markdown");
+                    var generated = await _sapService.GenerateSapAsync(genInput, cancellationToken: cancellationToken);
+                    sapId = generated.SapId;
+                    Logger.LogInformation("Auto-generated draft SAP {SapId} for system '{SystemId}' during update", sapId, systemId);
+                }
+                catch (InvalidOperationException ex2)
+                {
+                    return Error("SAP_GENERATION_FAILED", $"No SAP found and auto-generation failed: {ex2.Message}");
+                }
+            }
+        }
 
         // Parse optional dates
         DateTime? scheduleStart = null;
@@ -392,7 +423,8 @@ public class FinalizeSapTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["sap_id"] = new() { Name = "sap_id", Description = "SAP ID to finalize", Type = "string", Required = true }
+        ["sap_id"] = new() { Name = "sap_id", Description = "SAP ID to finalize (optional if system_id is provided)", Type = "string", Required = false },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym — looks up the latest SAP for this system", Type = "string", Required = false }
     };
 
     public override async Task<string> ExecuteCoreAsync(
@@ -401,9 +433,24 @@ public class FinalizeSapTool : BaseTool
     {
         var sw = Stopwatch.StartNew();
         var sapId = GetArg<string>(arguments, "sap_id");
+        var systemId = GetArg<string>(arguments, "system_id");
 
+        // Resolve sap_id from system_id if not provided
         if (string.IsNullOrWhiteSpace(sapId))
-            return Error("INVALID_INPUT", "The 'sap_id' parameter is required.");
+        {
+            if (string.IsNullOrWhiteSpace(systemId))
+                return Error("INVALID_INPUT", "Either 'sap_id' or 'system_id' parameter is required.");
+
+            try
+            {
+                var existing = await _sapService.GetSapAsync(systemId: systemId, cancellationToken: cancellationToken);
+                sapId = existing.SapId;
+            }
+            catch (InvalidOperationException)
+            {
+                return Error("SAP_NOT_FOUND", $"No SAP found for system '{systemId}'. Generate a SAP first using compliance_generate_sap.");
+            }
+        }
 
         try
         {
@@ -493,7 +540,7 @@ public class GetSapTool : BaseTool
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
         ["sap_id"] = new() { Name = "sap_id", Description = "Specific SAP ID to retrieve", Type = "string", Required = false },
-        ["system_id"] = new() { Name = "system_id", Description = "System ID — returns latest SAP (prefers Finalized)", Type = "string", Required = false }
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym — returns latest SAP (prefers Finalized)", Type = "string", Required = false }
     };
 
     public override async Task<string> ExecuteCoreAsync(
@@ -602,7 +649,7 @@ public class ListSapsTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "System ID to list SAPs for", Type = "string", Required = true }
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true }
     };
 
     public override async Task<string> ExecuteCoreAsync(

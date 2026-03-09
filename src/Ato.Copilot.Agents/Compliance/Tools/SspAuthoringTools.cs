@@ -36,7 +36,7 @@ public class WriteNarrativeTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["control_id"] = new() { Name = "control_id", Description = "NIST 800-53 control ID (e.g., 'AC-1')", Type = "string", Required = true },
         ["narrative"] = new() { Name = "narrative", Description = "Implementation narrative text", Type = "string", Required = true },
         ["status"] = new() { Name = "status", Description = "Implementation status: Implemented, PartiallyImplemented, Planned, NotApplicable (default: Implemented)", Type = "string", Required = false }
@@ -136,7 +136,7 @@ public class SuggestNarrativeTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["control_id"] = new() { Name = "control_id", Description = "NIST 800-53 control ID (e.g., 'AC-2')", Type = "string", Required = true }
     };
 
@@ -222,7 +222,7 @@ public class BatchPopulateNarrativesTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["inheritance_type"] = new() { Name = "inheritance_type", Description = "Filter: 'Inherited', 'Shared', or omit for both", Type = "string", Required = false }
     };
 
@@ -306,7 +306,7 @@ public class NarrativeProgressTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["family_filter"] = new() { Name = "family_filter", Description = "Filter by control family prefix (e.g., 'AC')", Type = "string", Required = false }
     };
 
@@ -401,7 +401,7 @@ public class GenerateSspTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["format"] = new() { Name = "format", Description = "Output format: 'markdown' (default) or 'docx'", Type = "string", Required = false },
         ["sections"] = new() { Name = "sections", Description = "Specific sections to include (comma-separated): system_information, categorization, baseline, controls. Default: all.", Type = "string", Required = false }
     };

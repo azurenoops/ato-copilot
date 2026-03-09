@@ -277,6 +277,7 @@ public class McpServerAiIntegrationTests
             Enumerable.Empty<BaseTool>(),
             new InMemoryDbContextFactory(dbOptions("Main")),
             sf,
+            Mock.Of<ISystemIdResolver>(),
             Mock.Of<ILogger<ComplianceAgent>>(),
             chatClient,
             aiOptions);

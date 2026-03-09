@@ -52,7 +52,7 @@ public class ImportCklTool : BaseTool
         ["system_id"] = new()
         {
             Name = "system_id",
-            Description = "Registered system ID (required).",
+            Description = "System GUID, name, or acronym (required)",
             Type = "string",
             Required = true
         },
@@ -270,7 +270,7 @@ public class ImportXccdfTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "Registered system ID (required).", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym (required)", Type = "string", Required = true },
         ["file_content"] = new() { Name = "file_content", Description = "Base64-encoded XCCDF file content (required).", Type = "string", Required = true },
         ["file_name"] = new() { Name = "file_name", Description = "Original file name (required).", Type = "string", Required = true },
         ["conflict_resolution"] = new() { Name = "conflict_resolution", Description = "How to handle duplicates: 'Skip' (default), 'Overwrite', or 'Merge'.", Type = "string", Required = false },
@@ -366,7 +366,7 @@ public class ExportCklTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "Registered system ID (required).", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym (required)", Type = "string", Required = true },
         ["benchmark_id"] = new() { Name = "benchmark_id", Description = "STIG benchmark ID (required, e.g., 'Windows_Server_2022_STIG').", Type = "string", Required = true },
         ["assessment_id"] = new() { Name = "assessment_id", Description = "Optional assessment ID (uses latest if omitted).", Type = "string", Required = false }
     };
@@ -437,7 +437,7 @@ public class ListImportsTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "Registered system ID (required).", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym (required)", Type = "string", Required = true },
         ["page"] = new() { Name = "page", Description = "Page number, 1-based (default: 1).", Type = "integer", Required = false },
         ["page_size"] = new() { Name = "page_size", Description = "Items per page (default: 20, max: 100).", Type = "integer", Required = false },
         ["benchmark_id"] = new() { Name = "benchmark_id", Description = "Optional benchmark filter.", Type = "string", Required = false },

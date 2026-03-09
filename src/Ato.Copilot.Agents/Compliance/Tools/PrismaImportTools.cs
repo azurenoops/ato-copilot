@@ -68,7 +68,7 @@ public class ImportPrismaCsvTool : BaseTool
         ["system_id"] = new()
         {
             Name = "system_id",
-            Description = "Registered system ID (optional). If omitted, auto-resolves from Azure subscription IDs in the CSV. " +
+            Description = "System GUID, name, or acronym (optional). If omitted, auto-resolves from Azure subscription IDs in the CSV. " +
                           "When provided, all alerts (including non-Azure) are imported to that system.",
             Type = "string",
             Required = false
@@ -287,7 +287,7 @@ public class ImportPrismaApiTool : BaseTool
         ["system_id"] = new()
         {
             Name = "system_id",
-            Description = "Registered system ID (optional). If omitted, auto-resolves from Azure subscription IDs in the JSON. " +
+            Description = "System GUID, name, or acronym (optional). If omitted, auto-resolves from Azure subscription IDs in the JSON. " +
                           "When provided, all alerts (including non-Azure) are imported to that system.",
             Type = "string",
             Required = false
@@ -488,7 +488,7 @@ public class ListPrismaPoliciesTool : BaseTool
         ["system_id"] = new()
         {
             Name = "system_id",
-            Description = "RegisteredSystem ID (required).",
+            Description = "System GUID, name, or acronym (required)",
             Type = "string",
             Required = true
         }
@@ -589,7 +589,7 @@ public class PrismaTrendTool : BaseTool
         ["system_id"] = new()
         {
             Name = "system_id",
-            Description = "RegisteredSystem ID (required).",
+            Description = "System GUID, name, or acronym (required)",
             Type = "string",
             Required = true
         },

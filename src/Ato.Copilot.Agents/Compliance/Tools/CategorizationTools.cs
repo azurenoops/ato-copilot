@@ -35,7 +35,7 @@ public class CategorizeSystemTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["information_types"] = new() { Name = "information_types", Description = "Array of info types with sp800_60_id, name, confidentiality_impact, integrity_impact, availability_impact (Low|Moderate|High)", Type = "array", Required = true },
         ["is_national_security_system"] = new() { Name = "is_national_security_system", Description = "Whether the system is designated NSS (affects IL derivation)", Type = "boolean", Required = false },
         ["justification"] = new() { Name = "justification", Description = "Overall categorization rationale", Type = "string", Required = false }
@@ -58,6 +58,14 @@ public class CategorizeSystemTool : BaseTool
         if (infoTypesRaw == null)
             return Error("INVALID_INPUT", "The 'information_types' parameter is required.");
 
+        // Debug: write raw value to file to bypass structured logging brace-eating
+        var rawDebugText = infoTypesRaw is JsonElement je2 ? je2.GetRawText() : infoTypesRaw?.ToString() ?? "null";
+        var rawDebugType = infoTypesRaw.GetType().FullName;
+        var rawDebugKind = infoTypesRaw is JsonElement je3 ? je3.ValueKind.ToString() : "N/A";
+        try { System.IO.File.WriteAllText("/tmp/categorize_debug.txt",
+            $"type={rawDebugType}\nkind={rawDebugKind}\nlength={rawDebugText.Length}\nvalue={rawDebugText}"); }
+        catch { /* ignore file write errors */ }
+
         List<InformationTypeInput> infoTypes;
         try
         {
@@ -65,8 +73,14 @@ public class CategorizeSystemTool : BaseTool
         }
         catch (Exception ex)
         {
+            Logger.LogWarning("compliance_categorize_system: parse failed: {Error}", ex.Message);
             return Error("INVALID_INPUT", $"Failed to parse information_types: {ex.Message}");
         }
+
+        Logger.LogInformation("compliance_categorize_system: parsed {Count} info types for system {SystemId}", infoTypes.Count, systemId);
+        foreach (var it in infoTypes)
+            Logger.LogInformation("  info_type: sp800_60_id={Id}, name={Name}, C={C}, I={I}, A={A}",
+                it.Sp80060Id, it.Name, it.ConfidentialityImpact, it.IntegrityImpact, it.AvailabilityImpact);
 
         if (infoTypes.Count == 0)
             return Error("INVALID_INPUT", "At least one information type is required.");
@@ -77,15 +91,18 @@ public class CategorizeSystemTool : BaseTool
                 systemId, infoTypes, "mcp-user", isNss, justification, cancellationToken);
 
             sw.Stop();
-            return JsonSerializer.Serialize(new
+            var response = JsonSerializer.Serialize(new
             {
                 status = "success",
                 data = FormatCategorization(result),
                 metadata = Meta(sw)
             }, JsonOpts);
+            Logger.LogInformation("compliance_categorize_system: returning success response ({Len} chars)", response.Length);
+            return response;
         }
         catch (InvalidOperationException ex)
         {
+            Logger.LogWarning("compliance_categorize_system: InvalidOperationException: {Error}", ex.Message);
             return Error("CATEGORIZATION_FAILED", ex.Message);
         }
         catch (Exception ex)
@@ -97,28 +114,78 @@ public class CategorizeSystemTool : BaseTool
 
     private static List<InformationTypeInput> ParseInformationTypes(object raw)
     {
+        var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
         // Handle JsonElement (from MCP JSON deserialization)
         if (raw is JsonElement jsonElement)
         {
-            if (jsonElement.ValueKind != JsonValueKind.Array)
-                throw new InvalidOperationException("information_types must be an array.");
+            var rawText = jsonElement.GetRawText();
 
-            var result = new List<InformationTypeInput>();
-            foreach (var item in jsonElement.EnumerateArray())
+            // Strategy 1: Try direct deserialization of the entire element as List<InformationTypeInput>
+            try
             {
-                result.Add(new InformationTypeInput
-                {
-                    Sp80060Id = item.GetProperty("sp800_60_id").GetString() ?? "",
-                    Name = item.GetProperty("name").GetString() ?? "",
-                    Category = item.TryGetProperty("category", out var cat) ? cat.GetString() : null,
-                    ConfidentialityImpact = item.GetProperty("confidentiality_impact").GetString() ?? "Low",
-                    IntegrityImpact = item.GetProperty("integrity_impact").GetString() ?? "Low",
-                    AvailabilityImpact = item.GetProperty("availability_impact").GetString() ?? "Low",
-                    UsesProvisional = item.TryGetProperty("uses_provisional", out var up) ? up.GetBoolean() : true,
-                    AdjustmentJustification = item.TryGetProperty("adjustment_justification", out var aj) ? aj.GetString() : null
-                });
+                var directList = JsonSerializer.Deserialize<List<InformationTypeInput>>(rawText, opts);
+                if (directList != null && directList.Count > 0 && directList.Any(x => !string.IsNullOrWhiteSpace(x.Sp80060Id)))
+                    return directList;
             }
-            return result;
+            catch { /* fall through */ }
+
+            // Strategy 2: If it's a string, it might be a JSON-encoded array or object
+            if (jsonElement.ValueKind == JsonValueKind.String)
+            {
+                var str = jsonElement.GetString();
+                if (!string.IsNullOrWhiteSpace(str))
+                {
+                    try
+                    {
+                        var list = JsonSerializer.Deserialize<List<InformationTypeInput>>(str, opts);
+                        if (list != null && list.Count > 0 && list.Any(x => !string.IsNullOrWhiteSpace(x.Sp80060Id)))
+                            return list;
+                    }
+                    catch { /* fall through */ }
+
+                    // Try as a single object
+                    try
+                    {
+                        var single = JsonSerializer.Deserialize<InformationTypeInput>(str, opts);
+                        if (single != null && !string.IsNullOrWhiteSpace(single.Sp80060Id))
+                            return [single];
+                    }
+                    catch { /* fall through */ }
+
+                    // Try parsing as JsonDocument and extract
+                    try
+                    {
+                        var inner = JsonDocument.Parse(str).RootElement;
+                        if (inner.ValueKind == JsonValueKind.Array)
+                            return ParseJsonArray(inner, opts);
+                        if (inner.ValueKind == JsonValueKind.Object)
+                            return ParseJsonArray(JsonDocument.Parse($"[{str}]").RootElement, opts);
+                    }
+                    catch { /* fall through */ }
+                }
+                throw new InvalidOperationException("information_types string could not be parsed as information type objects.");
+            }
+
+            // Strategy 3: Single object (not an array)
+            if (jsonElement.ValueKind == JsonValueKind.Object)
+            {
+                try
+                {
+                    var single = JsonSerializer.Deserialize<InformationTypeInput>(rawText, opts);
+                    if (single != null && !string.IsNullOrWhiteSpace(single.Sp80060Id))
+                        return [single];
+                }
+                catch { /* fall through */ }
+
+                return [ParseSingleObject(jsonElement)];
+            }
+
+            // Strategy 4: Array — parse element by element with fallbacks
+            if (jsonElement.ValueKind == JsonValueKind.Array)
+                return ParseJsonArray(jsonElement, opts);
+
+            throw new InvalidOperationException("information_types must be an array of info type objects.");
         }
 
         // Handle pre-deserialized List<InformationTypeInput>
@@ -129,10 +196,170 @@ public class CategorizeSystemTool : BaseTool
         if (raw is System.Collections.IEnumerable enumerable)
         {
             var json = JsonSerializer.Serialize(raw);
-            return JsonSerializer.Deserialize<List<InformationTypeInput>>(json) ?? [];
+            return JsonSerializer.Deserialize<List<InformationTypeInput>>(json, opts) ?? [];
         }
 
         throw new InvalidOperationException("information_types must be an array of info type objects.");
+    }
+
+    // Known property names for InformationTypeInput (used to detect flattened key-value arrays)
+    private static readonly HashSet<string> KnownInfoTypeKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "sp800_60_id", "sp80060id", "sp80060_id", "id",
+        "name", "info_type_name",
+        "category",
+        "confidentiality_impact", "confidentialityimpact", "confidentiality",
+        "integrity_impact", "integrityimpact", "integrity",
+        "availability_impact", "availabilityimpact", "availability",
+        "uses_provisional", "usesprovisional",
+        "adjustment_justification", "adjustmentjustification"
+    };
+
+    /// <summary>Parse a JSON array of information type objects into InformationTypeInput list.</summary>
+    private static List<InformationTypeInput> ParseJsonArray(JsonElement arrayElement, JsonSerializerOptions opts)
+    {
+        var result = new List<InformationTypeInput>();
+
+        // Collect all elements to check if this is a flat key-value string array
+        var elements = arrayElement.EnumerateArray().ToList();
+
+        // Check if ALL elements are strings (suggesting a flattened key-value pattern)
+        if (elements.Count > 0 && elements.All(e => e.ValueKind == JsonValueKind.String))
+        {
+            var strings = elements.Select(e => e.GetString() ?? "").ToList();
+
+            // Count how many elements match known property names
+            var keyMatchCount = strings.Count(s => KnownInfoTypeKeys.Contains(s));
+
+            // If at least 3 known keys are present, this is a flattened key-value array
+            if (keyMatchCount >= 3)
+            {
+                var reconstructed = ReconstructFromFlatKeyValueArray(strings);
+                if (reconstructed != null)
+                    return [reconstructed];
+            }
+        }
+
+        foreach (var item in elements)
+        {
+            // If an array item is itself a string (JSON-encoded object), try to parse it
+            if (item.ValueKind == JsonValueKind.String)
+            {
+                var itemStr = item.GetString();
+                if (!string.IsNullOrWhiteSpace(itemStr))
+                {
+                    try
+                    {
+                        var parsed = JsonSerializer.Deserialize<InformationTypeInput>(itemStr, opts);
+                        if (parsed != null && !string.IsNullOrWhiteSpace(parsed.Sp80060Id))
+                        {
+                            result.Add(parsed);
+                            continue;
+                        }
+                    }
+                    catch { /* not valid JSON, skip */ }
+                }
+                continue;
+            }
+
+            // Object items: try case-insensitive deserialization first
+            if (item.ValueKind == JsonValueKind.Object)
+            {
+                try
+                {
+                    var parsed = JsonSerializer.Deserialize<InformationTypeInput>(item.GetRawText(), opts);
+                    if (parsed != null && !string.IsNullOrWhiteSpace(parsed.Sp80060Id))
+                    {
+                        result.Add(parsed);
+                        continue;
+                    }
+                }
+                catch { /* fall through to manual extraction */ }
+
+                // Fallback: manual property extraction with name variations
+                result.Add(ParseSingleObject(item));
+            }
+        }
+        return result;
+    }
+
+    /// <summary>Reconstruct an InformationTypeInput from a flat array of alternating key-value strings.</summary>
+    private static InformationTypeInput? ReconstructFromFlatKeyValueArray(List<string> strings)
+    {
+        // Build a dictionary from alternating key-value pairs
+        // Skip elements that don't look like keys (junk like ":{")
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < strings.Count; i++)
+        {
+            var current = strings[i].Trim();
+
+            // If this element matches a known key, the next non-key element is its value
+            if (KnownInfoTypeKeys.Contains(current) && i + 1 < strings.Count)
+            {
+                var nextVal = strings[i + 1].Trim();
+                // If the next element is ALSO a known key, this key has no value — skip it
+                if (!KnownInfoTypeKeys.Contains(nextVal))
+                {
+                    dict[NormalizeKey(current)] = nextVal;
+                    i++; // skip the value element
+                }
+                // else: key with no value, leave it empty
+            }
+            // else: junk element like ":{", skip it
+        }
+
+        if (dict.Count == 0)
+            return null;
+
+        return new InformationTypeInput
+        {
+            Sp80060Id = dict.GetValueOrDefault("sp800_60_id", ""),
+            Name = dict.GetValueOrDefault("name", ""),
+            Category = dict.GetValueOrDefault("category"),
+            ConfidentialityImpact = dict.GetValueOrDefault("confidentiality_impact", "Low"),
+            IntegrityImpact = dict.GetValueOrDefault("integrity_impact", "Low"),
+            AvailabilityImpact = dict.GetValueOrDefault("availability_impact", "Low"),
+            AdjustmentJustification = dict.GetValueOrDefault("adjustment_justification")
+        };
+    }
+
+    /// <summary>Normalize property name variants to canonical snake_case form.</summary>
+    private static string NormalizeKey(string key) => key.ToLowerInvariant() switch
+    {
+        "sp800_60_id" or "sp80060id" or "sp80060_id" or "id" => "sp800_60_id",
+        "name" or "info_type_name" => "name",
+        "category" => "category",
+        "confidentiality_impact" or "confidentialityimpact" or "confidentiality" => "confidentiality_impact",
+        "integrity_impact" or "integrityimpact" or "integrity" => "integrity_impact",
+        "availability_impact" or "availabilityimpact" or "availability" => "availability_impact",
+        "uses_provisional" or "usesprovisional" => "uses_provisional",
+        "adjustment_justification" or "adjustmentjustification" => "adjustment_justification",
+        _ => key.ToLowerInvariant()
+    };
+
+    /// <summary>Manually extract InformationTypeInput from a JsonElement object using various property name conventions.</summary>
+    private static InformationTypeInput ParseSingleObject(JsonElement item) => new()
+    {
+        Sp80060Id = GetJsonProp(item, "sp800_60_id", "sp80060Id", "sp80060_id", "Sp80060Id", "SP800_60_ID", "id") ?? "",
+        Name = GetJsonProp(item, "name", "Name", "info_type_name", "infoTypeName") ?? "",
+        Category = GetJsonProp(item, "category", "Category"),
+        ConfidentialityImpact = GetJsonProp(item, "confidentiality_impact", "confidentialityImpact", "ConfidentialityImpact", "confidentiality") ?? "Low",
+        IntegrityImpact = GetJsonProp(item, "integrity_impact", "integrityImpact", "IntegrityImpact", "integrity") ?? "Low",
+        AvailabilityImpact = GetJsonProp(item, "availability_impact", "availabilityImpact", "AvailabilityImpact", "availability") ?? "Low",
+        UsesProvisional = item.TryGetProperty("uses_provisional", out var up) ? up.GetBoolean()
+            : item.TryGetProperty("usesProvisional", out up) ? up.GetBoolean() : true,
+        AdjustmentJustification = GetJsonProp(item, "adjustment_justification", "adjustmentJustification", "AdjustmentJustification")
+    };
+
+    /// <summary>Try multiple property name variations and return the first match.</summary>
+    private static string? GetJsonProp(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (element.TryGetProperty(name, out var prop))
+                return prop.GetString();
+        }
+        return null;
     }
 
     private static object FormatCategorization(SecurityCategorization sc) => new
@@ -203,7 +430,7 @@ public class GetCategorizationTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true }
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true }
     };
 
     public override async Task<string> ExecuteCoreAsync(
@@ -314,7 +541,7 @@ public class SuggestInfoTypesTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["description"] = new() { Name = "description", Description = "Additional context for better suggestions", Type = "string", Required = false }
     };
 

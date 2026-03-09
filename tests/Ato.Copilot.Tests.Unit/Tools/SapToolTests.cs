@@ -627,6 +627,7 @@ public class UpdateSapToolTests
     public void Parameters_ContainAllKeys()
     {
         _tool.Parameters.Should().ContainKey("sap_id");
+        _tool.Parameters.Should().ContainKey("system_id");
         _tool.Parameters.Should().ContainKey("schedule_start");
         _tool.Parameters.Should().ContainKey("schedule_end");
         _tool.Parameters.Should().ContainKey("scope_notes");
@@ -634,8 +635,9 @@ public class UpdateSapToolTests
         _tool.Parameters.Should().ContainKey("team_members");
         _tool.Parameters.Should().ContainKey("method_overrides");
 
-        _tool.Parameters["sap_id"].Required.Should().BeTrue();
-        _tool.Parameters.Should().HaveCount(7);
+        _tool.Parameters["sap_id"].Required.Should().BeFalse();
+        _tool.Parameters["system_id"].Required.Should().BeFalse();
+        _tool.Parameters.Should().HaveCount(8);
     }
 
     [Fact]
@@ -780,11 +782,13 @@ public class FinalizeSapToolTests
     }
 
     [Fact]
-    public void Parameters_ContainsSapIdOnly()
+    public void Parameters_ContainsSapIdAndSystemId()
     {
         _tool.Parameters.Should().ContainKey("sap_id");
-        _tool.Parameters["sap_id"].Required.Should().BeTrue();
-        _tool.Parameters.Should().HaveCount(1);
+        _tool.Parameters.Should().ContainKey("system_id");
+        _tool.Parameters["sap_id"].Required.Should().BeFalse();
+        _tool.Parameters["system_id"].Required.Should().BeFalse();
+        _tool.Parameters.Should().HaveCount(2);
     }
 
     [Fact]

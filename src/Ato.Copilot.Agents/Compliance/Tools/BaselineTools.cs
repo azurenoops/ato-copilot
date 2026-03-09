@@ -36,7 +36,7 @@ public class SelectBaselineTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["apply_overlay"] = new() { Name = "apply_overlay", Description = "Whether to apply the CNSSI 1253 overlay (default: true)", Type = "boolean", Required = false },
         ["overlay_name"] = new() { Name = "overlay_name", Description = "Override overlay name (e.g., 'CNSSI 1253 IL5')", Type = "string", Required = false }
     };
@@ -133,7 +133,7 @@ public class TailorBaselineTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["tailoring_actions"] = new() { Name = "tailoring_actions", Description = "Array of {control_id, action ('Added'|'Removed'), rationale}", Type = "array", Required = true }
     };
 
@@ -148,6 +148,12 @@ public class TailorBaselineTool : BaseTool
             return Error("INVALID_INPUT", "The 'system_id' parameter is required.");
 
         var actionsRaw = GetArg<object>(arguments, "tailoring_actions");
+
+        // DEBUG: capture all arguments
+        try { File.AppendAllText("/tmp/tailor_debug.txt",
+            "\n\n--- ALL ARGS ---\n" + string.Join("\n", arguments.Select(kv =>
+                kv.Key + " = " + (kv.Value is JsonElement je ? je.GetRawText() : kv.Value?.ToString() ?? "null")))); } catch { }
+
         if (actionsRaw == null)
             return Error("INVALID_INPUT", "The 'tailoring_actions' parameter is required.");
 
@@ -210,31 +216,155 @@ public class TailorBaselineTool : BaseTool
         }
     }
 
+    private static readonly JsonSerializerOptions CaseInsensitiveOpts = new() { PropertyNameCaseInsensitive = true };
+
+    // Known property names for tailoring actions
+    private static readonly HashSet<string> TailoringKeys = new(StringComparer.OrdinalIgnoreCase)
+    { "control_id", "controlid", "action", "rationale" };
+
     private static List<TailoringInput> ParseTailoringActions(object raw)
     {
         if (raw is JsonElement jsonElement)
         {
-            if (jsonElement.ValueKind != JsonValueKind.Array)
-                throw new InvalidOperationException("tailoring_actions must be an array.");
+            var rawText = jsonElement.GetRawText();
 
-            var result = new List<TailoringInput>();
-            foreach (var item in jsonElement.EnumerateArray())
+            // DEBUG: capture raw value for diagnosis
+            try { File.WriteAllText("/tmp/tailor_debug.txt",
+                "type=" + raw.GetType().FullName +
+                "\nkind=" + jsonElement.ValueKind +
+                "\nlength=" + rawText.Length +
+                "\nvalue=" + rawText); } catch { }
+
+            // Strategy 1: Direct deserialization of entire element
+            try
             {
-                result.Add(new TailoringInput
-                {
-                    ControlId = item.GetProperty("control_id").GetString() ?? "",
-                    Action = item.GetProperty("action").GetString() ?? "",
-                    Rationale = item.TryGetProperty("rationale", out var r) ? r.GetString() ?? "" : ""
-                });
+                var list = JsonSerializer.Deserialize<List<TailoringInput>>(rawText, CaseInsensitiveOpts);
+                if (list != null && list.Count > 0 && list.Any(x => !string.IsNullOrWhiteSpace(x.ControlId)))
+                    return list;
             }
-            return result;
+            catch { /* fall through */ }
+
+            // Strategy 2: String-encoded JSON
+            if (jsonElement.ValueKind == JsonValueKind.String)
+            {
+                var str = jsonElement.GetString();
+                if (!string.IsNullOrWhiteSpace(str))
+                {
+                    try
+                    {
+                        var list = JsonSerializer.Deserialize<List<TailoringInput>>(str, CaseInsensitiveOpts);
+                        if (list != null && list.Count > 0) return list;
+                    }
+                    catch { /* fall through */ }
+
+                    try
+                    {
+                        var single = JsonSerializer.Deserialize<TailoringInput>(str, CaseInsensitiveOpts);
+                        if (single != null && !string.IsNullOrWhiteSpace(single.ControlId)) return [single];
+                    }
+                    catch { /* fall through */ }
+                }
+            }
+
+            // Strategy 3: Single object
+            if (jsonElement.ValueKind == JsonValueKind.Object)
+            {
+                try
+                {
+                    var single = JsonSerializer.Deserialize<TailoringInput>(rawText, CaseInsensitiveOpts);
+                    if (single != null && !string.IsNullOrWhiteSpace(single.ControlId)) return [single];
+                }
+                catch { /* fall through */ }
+                return [ParseSingleTailoring(jsonElement)];
+            }
+
+            // Strategy 4: Array — parse element by element
+            if (jsonElement.ValueKind == JsonValueKind.Array)
+            {
+                var elements = jsonElement.EnumerateArray().ToList();
+
+                // Check for flat key-value string array
+                if (elements.Count > 0 && elements.All(e => e.ValueKind == JsonValueKind.String))
+                {
+                    var strings = elements.Select(e => e.GetString() ?? "").ToList();
+                    var keyCount = strings.Count(s => TailoringKeys.Contains(s));
+                    if (keyCount >= 2)
+                    {
+                        var reconstructed = ReconstructTailoring(strings);
+                        if (reconstructed != null) return [reconstructed];
+                    }
+                }
+
+                var result = new List<TailoringInput>();
+                foreach (var item in elements)
+                {
+                    if (item.ValueKind == JsonValueKind.Object)
+                    {
+                        try
+                        {
+                            var parsed = JsonSerializer.Deserialize<TailoringInput>(item.GetRawText(), CaseInsensitiveOpts);
+                            if (parsed != null && !string.IsNullOrWhiteSpace(parsed.ControlId))
+                            { result.Add(parsed); continue; }
+                        }
+                        catch { /* fall through */ }
+                        result.Add(ParseSingleTailoring(item));
+                    }
+                    else if (item.ValueKind == JsonValueKind.String)
+                    {
+                        var s = item.GetString();
+                        if (!string.IsNullOrWhiteSpace(s))
+                        {
+                            try
+                            {
+                                var parsed = JsonSerializer.Deserialize<TailoringInput>(s, CaseInsensitiveOpts);
+                                if (parsed != null && !string.IsNullOrWhiteSpace(parsed.ControlId))
+                                    result.Add(parsed);
+                            }
+                            catch { /* skip invalid strings */ }
+                        }
+                    }
+                }
+                return result;
+            }
         }
 
         if (raw is IEnumerable<TailoringInput> typed)
             return typed.ToList();
 
         var json = JsonSerializer.Serialize(raw);
-        return JsonSerializer.Deserialize<List<TailoringInput>>(json) ?? [];
+        return JsonSerializer.Deserialize<List<TailoringInput>>(json, CaseInsensitiveOpts) ?? [];
+    }
+
+    private static TailoringInput ParseSingleTailoring(JsonElement item)
+    {
+        string? Get(params string[] names) { foreach (var n in names) if (item.TryGetProperty(n, out var v)) return v.GetString(); return null; }
+        return new TailoringInput
+        {
+            ControlId = Get("control_id", "controlId", "ControlId") ?? "",
+            Action = Get("action", "Action") ?? "",
+            Rationale = Get("rationale", "Rationale") ?? ""
+        };
+    }
+
+    private static TailoringInput? ReconstructTailoring(List<string> strings)
+    {
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < strings.Count; i++)
+        {
+            var key = strings[i].Trim();
+            if (TailoringKeys.Contains(key) && i + 1 < strings.Count)
+            {
+                var val = strings[i + 1].Trim();
+                if (!TailoringKeys.Contains(val)) { dict[key.ToLowerInvariant()] = val; i++; }
+            }
+        }
+        if (dict.Count == 0) return null;
+        return new TailoringInput
+        {
+            ControlId = dict.GetValueOrDefault("control_id", dict.GetValueOrDefault("controlid", "")),
+            Action = dict.GetValueOrDefault("action", ""),
+            Rationale = dict.GetValueOrDefault("rationale", "")
+        };
     }
 
     private static string Error(string code, string message) =>
@@ -260,6 +390,7 @@ public class SetInheritanceTool : BaseTool
 {
     private readonly IBaselineService _baselineService;
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions CaseInsensitiveOpts = new() { PropertyNameCaseInsensitive = true };
 
     public SetInheritanceTool(
         IBaselineService baselineService,
@@ -276,8 +407,10 @@ public class SetInheritanceTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
-        ["inheritance_mappings"] = new() { Name = "inheritance_mappings", Description = "Array of {control_id, inheritance_type ('Inherited'|'Shared'|'Customer'), provider?, customer_responsibility?}", Type = "array", Required = true }
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
+        ["inheritance_mappings"] = new() { Name = "inheritance_mappings", Description = "Array of {control_id, inheritance_type ('Inherited'|'Shared'|'Customer'), provider?, customer_responsibility?} OR a simple array of control ID strings (e.g. [\"AC-1\",\"AC-2\"])", Type = "array", Required = true },
+        ["inheritance_type"] = new() { Name = "inheritance_type", Description = "Default inheritance type when inheritance_mappings is a simple control ID array: 'Inherited', 'Shared', or 'Customer'. Defaults to 'Inherited'.", Type = "string", Required = false },
+        ["provider"] = new() { Name = "provider", Description = "Default provider name when inheritance_mappings is a simple control ID array (e.g. 'Azure Government FedRAMP High')", Type = "string", Required = false }
     };
 
     public override async Task<string> ExecuteCoreAsync(
@@ -291,16 +424,31 @@ public class SetInheritanceTool : BaseTool
             return Error("INVALID_INPUT", "The 'system_id' parameter is required.");
 
         var mappingsRaw = GetArg<object>(arguments, "inheritance_mappings");
+
+        // DEBUG: capture all arguments
+        try { File.WriteAllText("/tmp/inherit_debug.txt",
+            "--- ALL ARGS ---\n" + string.Join("\n", arguments.Select(kv =>
+                kv.Key + " = " + (kv.Value is JsonElement je ? je.GetRawText() : kv.Value?.ToString() ?? "null")))); } catch { }
+
         if (mappingsRaw == null)
             return Error("INVALID_INPUT", "The 'inheritance_mappings' parameter is required.");
+
+        var defaultType = GetArg<string>(arguments, "inheritance_type") ?? "Inherited";
+        var defaultProvider = GetArg<string>(arguments, "provider");
 
         List<InheritanceInput> mappings;
         try
         {
-            mappings = ParseInheritanceMappings(mappingsRaw);
+            mappings = ParseInheritanceMappings(mappingsRaw, defaultType, defaultProvider);
+            // DEBUG: capture parsed result
+            try { File.AppendAllText("/tmp/inherit_debug.txt",
+                "\n\n--- PARSED ---\ncount=" + mappings.Count +
+                "\nitems=" + string.Join("; ", mappings.Select(m =>
+                    $"[{m.ControlId}|{m.InheritanceType}|{m.Provider}]"))); } catch { }
         }
         catch (Exception ex)
         {
+            try { File.AppendAllText("/tmp/inherit_debug.txt", "\n\n--- EXCEPTION ---\n" + ex); } catch { }
             return Error("INVALID_INPUT", $"Failed to parse inheritance_mappings: {ex.Message}");
         }
 
@@ -339,32 +487,146 @@ public class SetInheritanceTool : BaseTool
         }
     }
 
-    private static List<InheritanceInput> ParseInheritanceMappings(object raw)
+    // Known property names for inheritance mappings
+    private static readonly HashSet<string> InheritanceKeys = new(StringComparer.OrdinalIgnoreCase)
+    { "control_id", "controlid", "inheritance_type", "inheritancetype", "provider", "customer_responsibility", "customerresponsibility" };
+
+    private static List<InheritanceInput> ParseInheritanceMappings(object raw, string defaultType = "Inherited", string? defaultProvider = null)
     {
         if (raw is JsonElement jsonElement)
         {
-            if (jsonElement.ValueKind != JsonValueKind.Array)
-                throw new InvalidOperationException("inheritance_mappings must be an array.");
+            var rawText = jsonElement.GetRawText();
 
-            var result = new List<InheritanceInput>();
-            foreach (var item in jsonElement.EnumerateArray())
+            // DEBUG: capture raw value
+            try { File.AppendAllText("/tmp/inherit_debug.txt",
+                "\n\n--- PARSE ---\ntype=" + raw.GetType().FullName +
+                "\nkind=" + jsonElement.ValueKind +
+                "\nlength=" + rawText.Length +
+                "\nvalue=" + rawText); } catch { }
+
+            // Strategy 1: Direct deserialization
+            try
             {
-                result.Add(new InheritanceInput
-                {
-                    ControlId = item.GetProperty("control_id").GetString() ?? "",
-                    InheritanceType = item.GetProperty("inheritance_type").GetString() ?? "",
-                    Provider = item.TryGetProperty("provider", out var p) ? p.GetString() : null,
-                    CustomerResponsibility = item.TryGetProperty("customer_responsibility", out var cr) ? cr.GetString() : null
-                });
+                var list = JsonSerializer.Deserialize<List<InheritanceInput>>(rawText, CaseInsensitiveOpts);
+                if (list != null && list.Count > 0 && list.Any(x => !string.IsNullOrWhiteSpace(x.ControlId)))
+                    return list;
             }
-            return result;
+            catch { /* fall through */ }
+
+            // Strategy 2: String-encoded JSON
+            if (jsonElement.ValueKind == JsonValueKind.String)
+            {
+                var str = jsonElement.GetString();
+                if (!string.IsNullOrWhiteSpace(str))
+                {
+                    try { var list = JsonSerializer.Deserialize<List<InheritanceInput>>(str, CaseInsensitiveOpts); if (list != null && list.Count > 0) return list; } catch { }
+                    try { var single = JsonSerializer.Deserialize<InheritanceInput>(str, CaseInsensitiveOpts); if (single != null && !string.IsNullOrWhiteSpace(single.ControlId)) return [single]; } catch { }
+                }
+            }
+
+            // Strategy 3: Single object
+            if (jsonElement.ValueKind == JsonValueKind.Object)
+            {
+                try { var single = JsonSerializer.Deserialize<InheritanceInput>(rawText, CaseInsensitiveOpts); if (single != null && !string.IsNullOrWhiteSpace(single.ControlId)) return [single]; } catch { }
+                return [ParseSingleInheritance(jsonElement)];
+            }
+
+            // Strategy 4: Array
+            if (jsonElement.ValueKind == JsonValueKind.Array)
+            {
+                var elements = jsonElement.EnumerateArray().ToList();
+
+                // Check for flat key-value string array
+                if (elements.Count > 0 && elements.All(e => e.ValueKind == JsonValueKind.String))
+                {
+                    var strings = elements.Select(e => e.GetString() ?? "").ToList();
+                    var keyCount = strings.Count(s => InheritanceKeys.Contains(s));
+                    if (keyCount >= 2)
+                    {
+                        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                        for (int i = 0; i < strings.Count; i++)
+                        {
+                            var key = strings[i].Trim();
+                            if (InheritanceKeys.Contains(key) && i + 1 < strings.Count)
+                            {
+                                var val = strings[i + 1].Trim();
+                                if (!InheritanceKeys.Contains(val)) { dict[key.ToLowerInvariant()] = val; i++; }
+                            }
+                        }
+                        if (dict.Count > 0)
+                            return [new InheritanceInput
+                            {
+                                ControlId = dict.GetValueOrDefault("control_id", dict.GetValueOrDefault("controlid", "")),
+                                InheritanceType = dict.GetValueOrDefault("inheritance_type", dict.GetValueOrDefault("inheritancetype", "")),
+                                Provider = dict.GetValueOrDefault("provider"),
+                                CustomerResponsibility = dict.GetValueOrDefault("customer_responsibility", dict.GetValueOrDefault("customerresponsibility"))
+                            }];
+                    }
+
+                    // Flat array of control ID strings (e.g. ["AC-1", "AC-2", "AC-3"])
+                    // Convert each to an InheritanceInput using defaults
+                    if (strings.Any(s => System.Text.RegularExpressions.Regex.IsMatch(s, @"^[A-Z]{2}-\d+", System.Text.RegularExpressions.RegexOptions.IgnoreCase)))
+                    {
+                        return strings
+                            .Where(s => !string.IsNullOrWhiteSpace(s))
+                            .Select(s => new InheritanceInput
+                            {
+                                ControlId = s.Trim(),
+                                InheritanceType = defaultType,
+                                Provider = defaultProvider
+                            })
+                            .ToList();
+                    }
+                }
+
+                var result = new List<InheritanceInput>();
+                foreach (var item in elements)
+                {
+                    if (item.ValueKind == JsonValueKind.Object)
+                    {
+                        try { var parsed = JsonSerializer.Deserialize<InheritanceInput>(item.GetRawText(), CaseInsensitiveOpts); if (parsed != null && !string.IsNullOrWhiteSpace(parsed.ControlId)) { result.Add(parsed); continue; } } catch { }
+                        result.Add(ParseSingleInheritance(item));
+                    }
+                    else if (item.ValueKind == JsonValueKind.String)
+                    {
+                        var s = item.GetString();
+                        if (!string.IsNullOrWhiteSpace(s))
+                        {
+                            try { var parsed = JsonSerializer.Deserialize<InheritanceInput>(s, CaseInsensitiveOpts); if (parsed != null && !string.IsNullOrWhiteSpace(parsed.ControlId)) { result.Add(parsed); continue; } } catch { }
+                            // Treat as bare control ID string
+                            if (System.Text.RegularExpressions.Regex.IsMatch(s, @"^[A-Z]{2}-\d+", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                            {
+                                result.Add(new InheritanceInput
+                                {
+                                    ControlId = s.Trim(),
+                                    InheritanceType = defaultType,
+                                    Provider = defaultProvider
+                                });
+                            }
+                        }
+                    }
+                }
+                return result;
+            }
         }
 
         if (raw is IEnumerable<InheritanceInput> typed)
             return typed.ToList();
 
         var json = JsonSerializer.Serialize(raw);
-        return JsonSerializer.Deserialize<List<InheritanceInput>>(json) ?? [];
+        return JsonSerializer.Deserialize<List<InheritanceInput>>(json, CaseInsensitiveOpts) ?? [];
+    }
+
+    private static InheritanceInput ParseSingleInheritance(JsonElement item)
+    {
+        string? Get(params string[] names) { foreach (var n in names) if (item.TryGetProperty(n, out var v)) return v.GetString(); return null; }
+        return new InheritanceInput
+        {
+            ControlId = Get("control_id", "controlId", "ControlId") ?? "",
+            InheritanceType = Get("inheritance_type", "inheritanceType", "InheritanceType") ?? "",
+            Provider = Get("provider", "Provider"),
+            CustomerResponsibility = Get("customer_responsibility", "customerResponsibility", "CustomerResponsibility")
+        };
     }
 
     private static string Error(string code, string message) =>
@@ -405,7 +667,7 @@ public class GetBaselineTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["include_details"] = new() { Name = "include_details", Description = "Include tailoring and inheritance records (default: false)", Type = "boolean", Required = false },
         ["family_filter"] = new() { Name = "family_filter", Description = "Filter by control family prefix (e.g., 'AC', 'SI')", Type = "string", Required = false }
     };
@@ -541,7 +803,7 @@ public class GenerateCrmTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true }
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true }
     };
 
     public override async Task<string> ExecuteCoreAsync(

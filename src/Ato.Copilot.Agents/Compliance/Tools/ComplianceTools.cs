@@ -289,7 +289,7 @@ public class DocumentGenerationTool : BaseTool
         ["subscription_id"] = new() { Name = "subscription_id", Description = "Azure subscription for evidence", Type = "string" },
         ["framework"] = new() { Name = "framework", Description = "Compliance framework", Type = "string" },
         ["system_name"] = new() { Name = "system_name", Description = "System name for document", Type = "string" },
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID — required for DOCX/PDF output", Type = "string" },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym — required for DOCX/PDF output", Type = "string" },
         ["board_id"] = new() { Name = "board_id", Description = "Optional Kanban board ID — when provided for POA&M, includes open remediation tasks from the board", Type = "string" },
         ["format"] = new() { Name = "format", Description = "Output format: 'markdown' (default), 'docx', or 'pdf'", Type = "string" },
         ["template"] = new() { Name = "template", Description = "Template ID for custom DOCX template (optional, DOCX/PDF only)", Type = "string" }

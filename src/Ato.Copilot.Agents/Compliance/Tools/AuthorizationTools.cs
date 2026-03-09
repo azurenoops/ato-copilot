@@ -42,7 +42,7 @@ public class IssueAuthorizationTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["decision_type"] = new() { Name = "decision_type", Description = "ATO | AtoWithConditions | IATT | DATO", Type = "string", Required = true },
         ["expiration_date"] = new() { Name = "expiration_date", Description = "ISO-8601 expiration date (required for ATO/ATOwC/IATT)", Type = "string", Required = false },
         ["terms_and_conditions"] = new() { Name = "terms_and_conditions", Description = "Authorization terms and conditions text", Type = "string", Required = false },
@@ -172,7 +172,7 @@ public class AcceptRiskTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["finding_id"] = new() { Name = "finding_id", Description = "ComplianceFinding ID", Type = "string", Required = true },
         ["control_id"] = new() { Name = "control_id", Description = "NIST control ID (e.g., 'AC-2')", Type = "string", Required = true },
         ["cat_severity"] = new() { Name = "cat_severity", Description = "CatI | CatII | CatIII", Type = "string", Required = true },
@@ -285,7 +285,7 @@ public class ShowRiskRegisterTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["status_filter"] = new() { Name = "status_filter", Description = "active | expired | revoked | all (default: active)", Type = "string", Required = false }
     };
 
@@ -378,7 +378,7 @@ public class CreatePoamTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["finding_id"] = new() { Name = "finding_id", Description = "ComplianceFinding ID (optional link)", Type = "string", Required = false },
         ["weakness"] = new() { Name = "weakness", Description = "Weakness description (max 2000 chars)", Type = "string", Required = true },
         ["control_id"] = new() { Name = "control_id", Description = "NIST control ID (e.g., 'AC-2')", Type = "string", Required = true },
@@ -520,7 +520,7 @@ public class ListPoamTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["status_filter"] = new() { Name = "status_filter", Description = "Ongoing | Completed | Delayed | RiskAccepted", Type = "string", Required = false },
         ["severity_filter"] = new() { Name = "severity_filter", Description = "CatI | CatII | CatIII", Type = "string", Required = false },
         ["overdue_only"] = new() { Name = "overdue_only", Description = "true to show only overdue items", Type = "string", Required = false }
@@ -627,7 +627,7 @@ public class GenerateRarTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["assessment_id"] = new() { Name = "assessment_id", Description = "ComplianceAssessment ID", Type = "string", Required = true },
         ["format"] = new() { Name = "format", Description = "Output format: markdown (default)", Type = "string", Required = false }
     };
@@ -729,7 +729,7 @@ public class BundleAuthorizationPackageTool : BaseTool
 
     public override IReadOnlyDictionary<string, ToolParameter> Parameters => new Dictionary<string, ToolParameter>
     {
-        ["system_id"] = new() { Name = "system_id", Description = "RegisteredSystem ID (GUID)", Type = "string", Required = true },
+        ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["format"] = new() { Name = "format", Description = "Output format: markdown (default)", Type = "string", Required = false },
         ["include_evidence"] = new() { Name = "include_evidence", Description = "true to include evidence documents", Type = "string", Required = false }
     };
