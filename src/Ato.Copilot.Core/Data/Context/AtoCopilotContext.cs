@@ -181,6 +181,14 @@ public class AtoCopilotContext : DbContext
     /// <summary>ISA/MOU/SLA agreements governing system interconnections.</summary>
     public DbSet<InterconnectionAgreement> InterconnectionAgreements => Set<InterconnectionAgreement>();
 
+    // ─── SSP Sections (Feature 022) ──────────────────────────────────────────
+
+    /// <summary>Individual NIST SP 800-18 SSP sections with lifecycle tracking.</summary>
+    public DbSet<SspSection> SspSections => Set<SspSection>();
+
+    /// <summary>External contingency plan document references for SSP §13.</summary>
+    public DbSet<ContingencyPlanReference> ContingencyPlanReferences => Set<ContingencyPlanReference>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -854,11 +862,75 @@ public class AtoCopilotContext : DbContext
                 .HasForeignKey(i => i.RegisteredSystemId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // SSP section relationships (Feature 022)
+            entity.HasMany(e => e.SspSections)
+                .WithOne(s => s.RegisteredSystem)
+                .HasForeignKey(s => s.RegisteredSystemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.ContingencyPlanReference)
+                .WithOne(c => c.RegisteredSystem)
+                .HasForeignKey<ContingencyPlanReference>(c => c.RegisteredSystemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.Property(e => e.DitprId).HasMaxLength(50);
+            entity.Property(e => e.EmassId).HasMaxLength(50);
+            entity.Property(e => e.OperationalStatus)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
             // Indexes
             entity.HasIndex(e => e.Name).HasDatabaseName("IX_RegisteredSystem_Name");
             entity.HasIndex(e => e.Acronym).HasDatabaseName("IX_RegisteredSystem_Acronym");
             entity.HasIndex(e => new { e.IsActive, e.CurrentRmfStep }).HasDatabaseName("IX_RegisteredSystem_Active_Step");
             entity.HasIndex(e => e.CreatedBy).HasDatabaseName("IX_RegisteredSystem_CreatedBy");
+        });
+
+        // ─── SspSection (Feature 022) ────────────────────────────────────────────
+        modelBuilder.Entity<SspSection>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
+            entity.Property(e => e.RegisteredSystemId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.SectionTitle).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Content).HasMaxLength(32000);
+            entity.Property(e => e.AuthoredBy).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.ReviewedBy).HasMaxLength(200);
+            entity.Property(e => e.ReviewerComments).HasMaxLength(4000);
+
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            entity.Property(e => e.Version).IsConcurrencyToken();
+
+            entity.HasIndex(e => new { e.RegisteredSystemId, e.SectionNumber })
+                .IsUnique()
+                .HasDatabaseName("IX_SspSection_System_Number");
+
+            entity.HasIndex(e => e.Status)
+                .HasDatabaseName("IX_SspSection_Status");
+        });
+
+        // ─── ContingencyPlanReference (Feature 022) ──────────────────────────────
+        modelBuilder.Entity<ContingencyPlanReference>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
+            entity.Property(e => e.RegisteredSystemId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.DocumentTitle).HasMaxLength(500).IsRequired();
+            entity.Property(e => e.DocumentLocation).HasMaxLength(1000).IsRequired();
+            entity.Property(e => e.DocumentVersion).HasMaxLength(50);
+            entity.Property(e => e.TestType).HasMaxLength(50);
+            entity.Property(e => e.RecoveryTimeObjective).HasMaxLength(100);
+            entity.Property(e => e.RecoveryPointObjective).HasMaxLength(100);
+            entity.Property(e => e.AlternateProcessingSite).HasMaxLength(500);
+            entity.Property(e => e.BackupProceduresSummary).HasMaxLength(4000);
+            entity.Property(e => e.CreatedBy).HasMaxLength(200).IsRequired();
+
+            entity.HasIndex(e => e.RegisteredSystemId)
+                .IsUnique()
+                .HasDatabaseName("IX_ContingencyPlan_SystemId");
         });
 
         // ─── SecurityCategorization ──────────────────────────────────────────────

@@ -41,6 +41,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-21
 - N/A — no data model changes (020-persona-test-cases)
 - C# 13 / .NET 9.0 + EF Core 9.0.0, Azure.AI.OpenAI 2.1.0, Microsoft.Extensions.AI.OpenAI 9.4.0-preview, Serilog 4.2.0 (021-pia-interconnections)
 - EF Core with SQL Server (Docker, production) / SQLite (development). Adds 4 new DbSets (`PrivacyThresholdAnalyses`, `PrivacyImpactAssessments`, `SystemInterconnections`, `InterconnectionAgreements`). (021-pia-interconnections)
+- C# 13 / .NET 9.0 (`net9.0`, nullable enabled, implicit usings) + EF Core 9.0.0 (SQLite + SQL Server), System.Text.Json 9.0.5, Azure.AI.OpenAI 2.1.0, Serilog 4.2.0 (022-ssp-full-oscal)
+- EF Core with SQLite (dev) / SQL Server (prod); InMemory provider for tests (022-ssp-full-oscal)
 
 - C# 13 / .NET 9.0 + Azure.Identity 1.13, Azure.ResourceManager 1.13, Microsoft.Extensions.AI 9.4-preview, Microsoft.EntityFrameworkCore 9.0, Serilog 4.2, xUnit 2.9, FluentAssertions 7.0, Moq 4.20 (001-core-compliance)
 
@@ -60,9 +62,9 @@ dotnet build Ato.Copilot.sln [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMAN
 C# .NET 9: Follow standard conventions
 
 ## Recent Changes
-- 021-pia-interconnections: Added C# 13 / .NET 9.0 + EF Core 9.0.0, Azure.AI.OpenAI 2.1.0, Microsoft.Extensions.AI.OpenAI 9.4.0-preview, Serilog 4.2.0
-- 021-pia-interconnections: Added C# 13 / .NET 9.0 + EF Core 9.0.0, Azure.AI.OpenAI 2.1.0, Microsoft.Extensions.AI.OpenAI 9.4.0-preview, Serilog 4.2.0
-- 021-pia-interconnections: Added C# 13 / .NET 9.0 + EF Core 9.0.0, Azure.AI.OpenAI 2.1.0, Microsoft.Extensions.AI.OpenAI 9.4.0-preview, Serilog 4.2.0
+- 022-ssp-full-oscal: Added C# 13 / .NET 9.0 (`net9.0`, nullable enabled, implicit usings) + EF Core 9.0.0 (SQLite + SQL Server), System.Text.Json 9.0.5, Azure.AI.OpenAI 2.1.0, Serilog 4.2.0
+- 022-ssp-full-oscal: Added C# 13 / .NET 9.0 (`net9.0`, nullable enabled, implicit usings) + EF Core 9.0.0 (SQLite + SQL Server), System.Text.Json 9.0.5, Azure.AI.OpenAI 2.1.0, Serilog 4.2.0
+- 022-ssp-full-oscal: Added C# 13 / .NET 9.0 (`net9.0`, nullable enabled, implicit usings) + EF Core 9.0.0 (SQLite + SQL Server), System.Text.Json 9.0.5, Azure.AI.OpenAI 2.1.0, Serilog 4.2.0
 
 
 <!-- MANUAL ADDITIONS START -->

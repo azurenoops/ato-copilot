@@ -90,4 +90,55 @@ public interface ISspService
         IEnumerable<string>? sections = null,
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default);
+
+    // ─── SSP Section Management (Feature 022) ───────────────────────────────
+
+    /// <summary>
+    /// Write or update an individual SSP section (NIST 800-18 §1–§13).
+    /// Creates a new section if none exists; updates and resets status on subsequent writes.
+    /// </summary>
+    /// <param name="registeredSystemId">RegisteredSystem ID.</param>
+    /// <param name="sectionNumber">Section number (1–13).</param>
+    /// <param name="content">Markdown content (required for authored sections).</param>
+    /// <param name="authoredBy">Identity of the user.</param>
+    /// <param name="expectedVersion">Optimistic concurrency check (null skips check).</param>
+    /// <param name="submitForReview">If true, transitions Draft→UnderReview after writing.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The created or updated SspSection.</returns>
+    Task<SspSection> WriteSspSectionAsync(
+        string registeredSystemId,
+        int sectionNumber,
+        string? content,
+        string authoredBy,
+        int? expectedVersion = null,
+        bool submitForReview = false,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Review (approve or request revision) an SSP section currently in UnderReview status.
+    /// </summary>
+    /// <param name="registeredSystemId">RegisteredSystem ID.</param>
+    /// <param name="sectionNumber">Section number (1–13).</param>
+    /// <param name="decision">"approve" or "request_revision".</param>
+    /// <param name="reviewer">Identity of the reviewer.</param>
+    /// <param name="comments">Reviewer comments (required for request_revision).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The updated SspSection.</returns>
+    Task<SspSection> ReviewSspSectionAsync(
+        string registeredSystemId,
+        int sectionNumber,
+        string decision,
+        string reviewer,
+        string? comments = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get SSP section completeness status for a system across all 13 NIST 800-18 sections.
+    /// </summary>
+    /// <param name="registeredSystemId">RegisteredSystem ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Completeness report with per-section summaries and blocking issues.</returns>
+    Task<SspCompletenessReport> GetSspCompletenessAsync(
+        string registeredSystemId,
+        CancellationToken cancellationToken = default);
 }

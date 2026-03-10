@@ -14,6 +14,7 @@ using FluentAssertions;
 using Ato.Copilot.Agents.Compliance.Services;
 using Ato.Copilot.Agents.Compliance.Tools;
 using Ato.Copilot.Core.Data.Context;
+using Ato.Copilot.Core.Interfaces.Compliance;
 using Ato.Copilot.Core.Models.Compliance;
 
 namespace Ato.Copilot.Tests.Integration.Tools;
@@ -44,7 +45,8 @@ public class EmassIntegrationTests : IDisposable
         _scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
 
         var emassSvc = new EmassExportService(
-            _scopeFactory, Mock.Of<ILogger<EmassExportService>>());
+            _scopeFactory, Mock.Of<ILogger<EmassExportService>>(),
+            Mock.Of<IOscalSspExportService>());
 
         _exportTool = new ExportEmassTool(
             emassSvc, Mock.Of<ILogger<ExportEmassTool>>());
