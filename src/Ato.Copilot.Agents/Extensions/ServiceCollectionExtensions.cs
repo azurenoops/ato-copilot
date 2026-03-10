@@ -268,6 +268,19 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<NarrativeProgressTool>();
         services.AddSingleton<GenerateSspTool>();
 
+        // SSP Section Authoring tools (Feature 022)
+        services.AddSingleton<WriteSspSectionTool>();
+        services.AddSingleton<ReviewSspSectionTool>();
+        services.AddSingleton<SspCompletenessTool>();
+
+        // OSCAL SSP Export (Feature 022 Phase 5)
+        services.AddSingleton<IOscalSspExportService, OscalSspExportService>();
+        services.AddSingleton<ExportOscalSspTool>();
+
+        // OSCAL Validation (Feature 022 Phase 6)
+        services.AddSingleton<IOscalValidationService, OscalValidationService>();
+        services.AddSingleton<ValidateOscalSspTool>();
+
         // Assessment Artifact service and tools (Feature 015 - US7)
         services.AddSingleton<IAssessmentArtifactService, AssessmentArtifactService>();
         services.AddSingleton<AssessControlTool>();
@@ -435,6 +448,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<BatchPopulateNarrativesTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<NarrativeProgressTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<GenerateSspTool>());
+
+        // SSP Section Authoring tools as BaseTool (Feature 022)
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<WriteSspSectionTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ReviewSspSectionTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<SspCompletenessTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ExportOscalSspTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ValidateOscalSspTool>());
 
         // Assessment Artifact tools as BaseTool (Feature 015 - US7)
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<AssessControlTool>());

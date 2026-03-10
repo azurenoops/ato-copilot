@@ -126,6 +126,6 @@ public class SspInterconnectionTests
 
         var doc = await _service.GenerateSspAsync(system.Id, sections: new[] { "interconnections" });
 
-        doc.Content.Should().Contain("no interconnections");
+        doc.Content.Should().Contain("interconnections have not been documented");
     }
 }

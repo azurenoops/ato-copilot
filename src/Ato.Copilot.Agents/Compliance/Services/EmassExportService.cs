@@ -23,6 +23,7 @@ public class EmassExportService : IEmassExportService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<EmassExportService> _logger;
+    private readonly IOscalSspExportService _oscalSspExportService;
 
     private static readonly JsonSerializerOptions OscalJsonOpts = new()
     {
@@ -61,10 +62,12 @@ public class EmassExportService : IEmassExportService
 
     public EmassExportService(
         IServiceScopeFactory scopeFactory,
-        ILogger<EmassExportService> logger)
+        ILogger<EmassExportService> logger,
+        IOscalSspExportService oscalSspExportService)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _oscalSspExportService = oscalSspExportService;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -606,69 +609,10 @@ public class EmassExportService : IEmassExportService
         RegisteredSystem system,
         CancellationToken cancellationToken)
     {
-        var implementations = await db.ControlImplementations
-            .AsNoTracking()
-            .Where(ci => ci.RegisteredSystemId == system.Id)
-            .ToListAsync(cancellationToken);
-
-        var baseline = await db.ControlBaselines
-            .AsNoTracking()
-            .FirstOrDefaultAsync(b => b.RegisteredSystemId == system.Id,
-                cancellationToken);
-
-        var oscal = new Dictionary<string, object>
-        {
-            ["system-security-plan"] = new Dictionary<string, object>
-            {
-                ["uuid"] = Guid.NewGuid().ToString(),
-                ["metadata"] = new Dictionary<string, object>
-                {
-                    ["title"] = $"{system.Name} System Security Plan",
-                    ["last-modified"] = DateTime.UtcNow.ToString("o"),
-                    ["version"] = "1.0",
-                    ["oscal-version"] = "1.0.6"
-                },
-                ["system-characteristics"] = new Dictionary<string, object>
-                {
-                    ["system-name"] = system.Name,
-                    ["system-id"] = system.Id,
-                    ["description"] = system.Description ?? "",
-                    ["security-sensitivity-level"] = baseline?.BaselineLevel ?? "moderate",
-                    ["system-information"] = BuildOscalSystemInfo(system),
-                    ["security-impact-level"] = BuildOscalImpactLevel(system)
-                },
-                ["control-implementation"] = new Dictionary<string, object>
-                {
-                    ["description"] = "Control implementation narratives for " + system.Name,
-                    ["implemented-requirements"] = implementations.Select(impl =>
-                        new Dictionary<string, object>
-                        {
-                            ["uuid"] = Guid.NewGuid().ToString(),
-                            ["control-id"] = impl.ControlId.ToLowerInvariant(),
-                            ["description"] = impl.Narrative ?? "Not documented",
-                            ["props"] = new[]
-                            {
-                                new Dictionary<string, string>
-                                {
-                                    ["name"] = "implementation-status",
-                                    ["value"] = impl.ImplementationStatus switch
-                                    {
-                                        ImplementationStatus.Implemented => "implemented",
-                                        ImplementationStatus.PartiallyImplemented =>
-                                            "partial",
-                                        ImplementationStatus.Planned => "planned",
-                                        ImplementationStatus.NotApplicable =>
-                                            "not-applicable",
-                                        _ => "planned"
-                                    }
-                                }
-                            }
-                        }).ToList()
-                }
-            }
-        };
-
-        return JsonSerializer.Serialize(oscal, OscalJsonOpts);
+        // Delegate to the dedicated OSCAL 1.1.2 SSP export service
+        var result = await _oscalSspExportService.ExportAsync(
+            system.Id, includeBackMatter: true, prettyPrint: true, cancellationToken);
+        return result.OscalJson;
     }
 
     private async Task<string> BuildOscalAssessmentResults(
