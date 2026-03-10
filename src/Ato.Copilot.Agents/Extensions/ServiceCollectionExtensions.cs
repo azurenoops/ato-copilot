@@ -337,6 +337,22 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<GetSapTool>();
         services.AddSingleton<ListSapsTool>();
 
+        // ─── Feature 021: Privacy & Interconnection Services ─────────────────
+        services.AddSingleton<IPrivacyService, PrivacyService>();
+        services.AddSingleton<IInterconnectionService, InterconnectionService>();
+        services.AddSingleton<CreatePtaTool>();
+        services.AddSingleton<GeneratePiaTool>();
+        services.AddSingleton<ReviewPiaTool>();
+        services.AddSingleton<CheckPrivacyComplianceTool>();
+        services.AddSingleton<AddInterconnectionTool>();
+        services.AddSingleton<ListInterconnectionsTool>();
+        services.AddSingleton<UpdateInterconnectionTool>();
+        services.AddSingleton<GenerateIsaTool>();
+        services.AddSingleton<RegisterAgreementTool>();
+        services.AddSingleton<UpdateAgreementTool>();
+        services.AddSingleton<CertifyNoInterconnectionsTool>();
+        services.AddSingleton<ValidateAgreementsTool>();
+
         // Compliance Watch notification & escalation services (US4)
         services.AddSingleton<AlertNotificationService>();
         services.AddSingleton<IAlertNotificationService>(sp => sp.GetRequiredService<AlertNotificationService>());
@@ -476,6 +492,20 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ImportPrismaApiTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ListPrismaPoliciesTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<PrismaTrendTool>());
+
+        // Feature 021: Privacy tools BaseTool wrappers
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<CreatePtaTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<GeneratePiaTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ReviewPiaTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<CheckPrivacyComplianceTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<AddInterconnectionTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ListInterconnectionsTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<UpdateInterconnectionTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<GenerateIsaTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<RegisterAgreementTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<UpdateAgreementTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<CertifyNoInterconnectionsTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ValidateAgreementsTool>());
 
         // Register the agent
         services.AddSingleton<ComplianceAgent>();

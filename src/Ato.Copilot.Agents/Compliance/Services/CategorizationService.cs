@@ -17,13 +17,16 @@ public class CategorizationService : ICategorizationService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<CategorizationService> _logger;
+    private readonly IPrivacyService _privacyService;
 
     public CategorizationService(
         IServiceScopeFactory scopeFactory,
-        ILogger<CategorizationService> logger)
+        ILogger<CategorizationService> logger,
+        IPrivacyService privacyService)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _privacyService = privacyService;
     }
 
     /// <inheritdoc />
@@ -100,6 +103,16 @@ public class CategorizationService : ICategorizationService
         context.SecurityCategorizations.Add(categorization);
         system.ModifiedAt = DateTime.UtcNow;
         await context.SaveChangesAsync(cancellationToken);
+
+        // Invalidate existing PTA when info types change (Feature 021)
+        try
+        {
+            await _privacyService.InvalidatePtaAsync(systemId, cancellationToken);
+        }
+        catch (InvalidOperationException)
+        {
+            // No existing PTA to invalidate — not an error
+        }
 
         // Reload with navigation for computed properties
         var result = await context.SecurityCategorizations

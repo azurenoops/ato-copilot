@@ -44,7 +44,7 @@ public class SspAuthoringIntegrationTests : IDisposable
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
 
         var lifecycleSvc = new RmfLifecycleService(scopeFactory, Mock.Of<ILogger<RmfLifecycleService>>());
-        var categorizationSvc = new CategorizationService(scopeFactory, Mock.Of<ILogger<CategorizationService>>());
+        var categorizationSvc = new CategorizationService(scopeFactory, Mock.Of<ILogger<CategorizationService>>(), Mock.Of<IPrivacyService>());
         var referenceDataSvc = new ReferenceDataService(Mock.Of<ILogger<ReferenceDataService>>());
         var baselineSvc = new BaselineService(scopeFactory, referenceDataSvc, Mock.Of<ILogger<BaselineService>>());
         var sspSvc = new SspService(scopeFactory, Mock.Of<ILogger<SspService>>());
@@ -181,7 +181,7 @@ public class SspAuthoringIntegrationTests : IDisposable
         sspData.GetProperty("controls_with_narratives").GetInt32().Should().BeGreaterOrEqualTo(2); // 1 manual + at least 1 batch
         sspData.GetProperty("content").GetString().Should().Contain("System Security Plan");
         sspData.GetProperty("content").GetString().Should().Contain("SSP Integration System");
-        sspData.GetProperty("sections").GetArrayLength().Should().Be(4);
+        sspData.GetProperty("sections").GetArrayLength().Should().Be(5);
     }
 
     /// <summary>

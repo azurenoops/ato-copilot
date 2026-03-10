@@ -89,9 +89,58 @@ public class AuthorizationService : IAuthorizationService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
 
-        // Verify system exists
-        var system = await db.RegisteredSystems.FindAsync([systemId], cancellationToken)
+        // Verify system exists and load privacy/interconnection data
+        var system = await db.RegisteredSystems
+            .Include(s => s.PrivacyThresholdAnalysis)
+            .Include(s => s.PrivacyImpactAssessment)
+            .Include(s => s.SystemInterconnections)
+                .ThenInclude(ic => ic.Agreements)
+            .FirstOrDefaultAsync(s => s.Id == systemId, cancellationToken)
             ?? throw new InvalidOperationException($"System '{systemId}' not found.");
+
+        // ─── Privacy & Interconnection pre-checks (Feature 021) ────────
+        var warnings = new List<string>();
+
+        // Privacy: PTA must exist and PIA must be approved if required
+        if (system.PrivacyThresholdAnalysis is { } pta)
+        {
+            if (pta.Determination == PtaDetermination.PiaRequired
+                && system.PrivacyImpactAssessment?.Status != PiaStatus.Approved)
+            {
+                warnings.Add("PIA is required but not yet approved.");
+            }
+        }
+        else
+        {
+            warnings.Add("No Privacy Threshold Analysis (PTA) on file.");
+        }
+
+        // Interconnections: all active interconnections must have a signed, non-expired agreement
+        if (!system.HasNoExternalInterconnections)
+        {
+            var activeInterconnections = system.SystemInterconnections
+                .Where(ic => ic.Status == InterconnectionStatus.Active)
+                .ToList();
+
+            foreach (var ic in activeInterconnections)
+            {
+                var hasSigned = ic.Agreements.Any(a =>
+                    a.Status == AgreementStatus.Signed
+                    && (a.ExpirationDate == null || a.ExpirationDate > DateTime.UtcNow));
+
+                if (!hasSigned)
+                {
+                    warnings.Add($"Interconnection with '{ic.TargetSystemName}' lacks a signed, non-expired agreement.");
+                }
+            }
+        }
+
+        if (warnings.Count > 0)
+        {
+            _logger.LogWarning(
+                "Authorization pre-check warnings for system {SystemId}: {Warnings}",
+                systemId, string.Join("; ", warnings));
+        }
 
         // Calculate compliance score from latest assessment
         double complianceScore = 0;

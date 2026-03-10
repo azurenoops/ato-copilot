@@ -397,6 +397,11 @@ public class SspService : ISspService
             .Where(r => r.RegisteredSystemId == systemId && r.IsActive)
             .ToListAsync(cancellationToken);
 
+        var interconnections = await context.SystemInterconnections
+            .Include(ic => ic.Agreements)
+            .Where(ic => ic.RegisteredSystemId == systemId && ic.Status != InterconnectionStatus.Terminated)
+            .ToListAsync(cancellationToken);
+
         var sectionList = sections?.ToList();
         var includeAll = sectionList == null || sectionList.Count == 0;
 
@@ -570,6 +575,39 @@ public class SspService : ISspService
         if (doc.ControlsMissingNarratives > 0)
         {
             doc.Warnings.Add($"{doc.ControlsMissingNarratives} controls are missing implementation narratives.");
+        }
+
+        // ─── Section 10: System Interconnections (Feature 021) ──────────
+        progress?.Report("Generating system interconnections section...");
+        if (includeAll || sectionList!.Any(s => s.Equals("interconnections", StringComparison.OrdinalIgnoreCase)))
+        {
+            includedSections.Add("interconnections");
+            sb.AppendLine("## 10. System Interconnections");
+            sb.AppendLine();
+
+            if (interconnections.Count > 0)
+            {
+                sb.AppendLine("| Target System | Connection Type | Data Flow | Classification | Agreement Status | Security Measures |");
+                sb.AppendLine("|---------------|----------------|-----------|----------------|-----------------|-------------------|");
+                foreach (var ic in interconnections)
+                {
+                    var agreementStatus = ic.Agreements
+                        .Where(a => a.Status == AgreementStatus.Signed)
+                        .Any() ? "Signed" : ic.Agreements.Any() ? ic.Agreements.First().Status.ToString() : "None";
+
+                    var measures = ic.SecurityMeasures.Count > 0
+                        ? string.Join(", ", ic.SecurityMeasures)
+                        : "—";
+
+                    sb.AppendLine($"| {ic.TargetSystemName} | {ic.InterconnectionType} | {ic.DataFlowDirection} | {ic.DataClassification} | {agreementStatus} | {measures} |");
+                }
+                sb.AppendLine();
+            }
+            else
+            {
+                sb.AppendLine("*This system has no interconnections with external systems.*");
+                sb.AppendLine();
+            }
         }
 
         doc.Content = sb.ToString();

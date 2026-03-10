@@ -167,6 +167,20 @@ public class AtoCopilotContext : DbContext
     /// <summary>Assessment team members assigned to SAPs.</summary>
     public DbSet<SapTeamMember> SapTeamMembers => Set<SapTeamMember>();
 
+    // ─── Privacy & Interconnections (Feature 021) ────────────────────────────
+
+    /// <summary>Privacy Threshold Analyses — one per registered system.</summary>
+    public DbSet<PrivacyThresholdAnalysis> PrivacyThresholdAnalyses => Set<PrivacyThresholdAnalysis>();
+
+    /// <summary>Privacy Impact Assessments — one per registered system (when PTA determination = PiaRequired).</summary>
+    public DbSet<PrivacyImpactAssessment> PrivacyImpactAssessments => Set<PrivacyImpactAssessment>();
+
+    /// <summary>System interconnections crossing the authorization boundary.</summary>
+    public DbSet<SystemInterconnection> SystemInterconnections => Set<SystemInterconnection>();
+
+    /// <summary>ISA/MOU/SLA agreements governing system interconnections.</summary>
+    public DbSet<InterconnectionAgreement> InterconnectionAgreements => Set<InterconnectionAgreement>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -824,6 +838,22 @@ public class AtoCopilotContext : DbContext
                 .HasForeignKey(ra => ra.RegisteredSystemId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // Privacy & Interconnection relationships (Feature 021)
+            entity.HasOne(e => e.PrivacyThresholdAnalysis)
+                .WithOne()
+                .HasForeignKey<PrivacyThresholdAnalysis>(p => p.RegisteredSystemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.PrivacyImpactAssessment)
+                .WithOne()
+                .HasForeignKey<PrivacyImpactAssessment>(p => p.RegisteredSystemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(e => e.SystemInterconnections)
+                .WithOne()
+                .HasForeignKey(i => i.RegisteredSystemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             // Indexes
             entity.HasIndex(e => e.Name).HasDatabaseName("IX_RegisteredSystem_Name");
             entity.HasIndex(e => e.Acronym).HasDatabaseName("IX_RegisteredSystem_Acronym");
@@ -1398,6 +1428,126 @@ public class AtoCopilotContext : DbContext
                 .WithMany(s => s.TeamMembers)
                 .HasForeignKey(e => e.SecurityAssessmentPlanId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ─── PrivacyThresholdAnalysis (Feature 021) ──────────────────────────────
+        modelBuilder.Entity<PrivacyThresholdAnalysis>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
+            entity.Property(e => e.RegisteredSystemId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.Determination).HasConversion<string>().HasMaxLength(30);
+            entity.Property(e => e.AffectedIndividuals).HasMaxLength(200);
+            entity.Property(e => e.ExemptionRationale).HasMaxLength(2000);
+            entity.Property(e => e.Rationale).HasMaxLength(4000);
+            entity.Property(e => e.AnalyzedBy).HasMaxLength(200).IsRequired();
+
+            entity.Property(e => e.PiiCategories).HasConversion(stringListConverter);
+            entity.Property(e => e.PiiSourceInfoTypes).HasConversion(stringListConverter);
+
+            entity.HasIndex(e => e.RegisteredSystemId)
+                .IsUnique()
+                .HasDatabaseName("IX_PTA_SystemId");
+        });
+
+        // ─── PrivacyImpactAssessment (Feature 021) ──────────────────────────────
+        modelBuilder.Entity<PrivacyImpactAssessment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
+            entity.Property(e => e.RegisteredSystemId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.PtaId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.SystemDescription).HasMaxLength(4000);
+            entity.Property(e => e.PurposeOfCollection).HasMaxLength(4000);
+            entity.Property(e => e.IntendedUse).HasMaxLength(4000);
+            entity.Property(e => e.NoticeAndConsent).HasMaxLength(4000);
+            entity.Property(e => e.IndividualAccess).HasMaxLength(4000);
+            entity.Property(e => e.Safeguards).HasMaxLength(4000);
+            entity.Property(e => e.RetentionPeriod).HasMaxLength(500);
+            entity.Property(e => e.DisposalMethod).HasMaxLength(500);
+            entity.Property(e => e.SornReference).HasMaxLength(200);
+            entity.Property(e => e.NarrativeDocument).HasMaxLength(16000);
+            entity.Property(e => e.ReviewerComments).HasMaxLength(4000);
+            entity.Property(e => e.ApprovedBy).HasMaxLength(200);
+            entity.Property(e => e.CreatedBy).HasMaxLength(200).IsRequired();
+
+            entity.Property(e => e.SharingPartners).HasConversion(stringListConverter);
+            entity.Property(e => e.ReviewDeficiencies).HasConversion(stringListConverter);
+
+            var piaSectionsConverter = new ValueConverter<List<PiaSection>, string>(
+                v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                v => JsonSerializer.Deserialize<List<PiaSection>>(v, (JsonSerializerOptions?)null) ?? new List<PiaSection>()
+            );
+            entity.Property(e => e.Sections).HasConversion(piaSectionsConverter);
+
+            // PTA → PIA relationship (NoAction to avoid cascade cycles)
+            entity.HasOne<PrivacyThresholdAnalysis>()
+                .WithOne()
+                .HasForeignKey<PrivacyImpactAssessment>(e => e.PtaId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasIndex(e => e.RegisteredSystemId)
+                .IsUnique()
+                .HasDatabaseName("IX_PIA_SystemId");
+            entity.HasIndex(e => e.Status)
+                .HasDatabaseName("IX_PIA_Status");
+        });
+
+        // ─── SystemInterconnection (Feature 021) ─────────────────────────────────
+        modelBuilder.Entity<SystemInterconnection>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
+            entity.Property(e => e.RegisteredSystemId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.TargetSystemName).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.TargetSystemOwner).HasMaxLength(200);
+            entity.Property(e => e.TargetSystemAcronym).HasMaxLength(20);
+            entity.Property(e => e.InterconnectionType).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.DataFlowDirection).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.DataClassification).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.DataDescription).HasMaxLength(2000);
+            entity.Property(e => e.AuthenticationMethod).HasMaxLength(200);
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.StatusReason).HasMaxLength(1000);
+            entity.Property(e => e.CreatedBy).HasMaxLength(200).IsRequired();
+
+            entity.Property(e => e.ProtocolsUsed).HasConversion(stringListConverter);
+            entity.Property(e => e.PortsUsed).HasConversion(stringListConverter);
+            entity.Property(e => e.SecurityMeasures).HasConversion(stringListConverter);
+
+            entity.HasIndex(e => new { e.RegisteredSystemId, e.Status })
+                .HasDatabaseName("IX_Interconnection_System_Status");
+            entity.HasIndex(e => e.TargetSystemName)
+                .HasDatabaseName("IX_Interconnection_TargetSystem");
+        });
+
+        // ─── InterconnectionAgreement (Feature 021) ──────────────────────────────
+        modelBuilder.Entity<InterconnectionAgreement>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
+            entity.Property(e => e.SystemInterconnectionId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.AgreementType).HasConversion<string>().HasMaxLength(10);
+            entity.Property(e => e.Title).HasMaxLength(500).IsRequired();
+            entity.Property(e => e.DocumentReference).HasMaxLength(1000);
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.SignedByLocal).HasMaxLength(200);
+            entity.Property(e => e.SignedByRemote).HasMaxLength(200);
+            entity.Property(e => e.ReviewNotes).HasMaxLength(4000);
+            entity.Property(e => e.NarrativeDocument).HasMaxLength(16000);
+            entity.Property(e => e.CreatedBy).HasMaxLength(200).IsRequired();
+
+            // Relationship to parent interconnection
+            entity.HasOne<SystemInterconnection>()
+                .WithMany(i => i.Agreements)
+                .HasForeignKey(e => e.SystemInterconnectionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.Status)
+                .HasDatabaseName("IX_Agreement_Status");
+            entity.HasIndex(e => e.ExpirationDate)
+                .HasDatabaseName("IX_Agreement_Expiration");
         });
     }
 
