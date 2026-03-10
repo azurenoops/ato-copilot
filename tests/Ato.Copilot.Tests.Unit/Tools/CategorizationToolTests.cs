@@ -513,7 +513,8 @@ public class CategorizationToolTests
     {
         // ComputeHighWaterMark is a pure computation, doesn't need real DB
         return new(Mock.Of<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>(),
-            Mock.Of<ILogger<Ato.Copilot.Agents.Compliance.Services.CategorizationService>>());
+            Mock.Of<ILogger<Ato.Copilot.Agents.Compliance.Services.CategorizationService>>(),
+            Mock.Of<IPrivacyService>());
     }
 
     private static List<InformationTypeInput> CreateInfoTypeInputs() =>

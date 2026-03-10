@@ -134,6 +134,10 @@ public class RmfLifecycleService : IRmfLifecycleService
             .Include(s => s.ControlBaseline)
             .Include(s => s.AuthorizationBoundaries)
             .Include(s => s.RmfRoleAssignments)
+            .Include(s => s.PrivacyThresholdAnalysis)
+            .Include(s => s.PrivacyImpactAssessment)
+            .Include(s => s.SystemInterconnections)
+                .ThenInclude(ic => ic.Agreements)
             .AsSplitQuery()
             .FirstOrDefaultAsync(s => s.Id == systemId, cancellationToken);
 
@@ -247,6 +251,10 @@ public class RmfLifecycleService : IRmfLifecycleService
             .Include(s => s.ControlBaseline)
             .Include(s => s.AuthorizationBoundaries)
             .Include(s => s.RmfRoleAssignments)
+            .Include(s => s.PrivacyThresholdAnalysis)
+            .Include(s => s.PrivacyImpactAssessment)
+            .Include(s => s.SystemInterconnections)
+                .ThenInclude(ic => ic.Agreements)
             .AsSplitQuery()
             .FirstOrDefaultAsync(s => s.Id == systemId, cancellationToken);
 
@@ -329,6 +337,74 @@ public class RmfLifecycleService : IRmfLifecycleService
             Message = system.AuthorizationBoundaries.Any(b => b.IsInBoundary)
                 ? $"{system.AuthorizationBoundaries.Count(b => b.IsInBoundary)} resource(s) in boundary."
                 : "At least 1 resource must be in the authorization boundary.",
+            Severity = "Error"
+        };
+
+        // ─── Gate 3: Privacy Readiness (Feature 021) ─────────────────────
+        var pta = system.PrivacyThresholdAnalysis;
+        var piaApproved = system.PrivacyImpactAssessment?.Status == PiaStatus.Approved;
+        var privacyPassed = pta != null && pta.Determination switch
+        {
+            PtaDetermination.PiaNotRequired => true,
+            PtaDetermination.Exempt => true,
+            PtaDetermination.PiaRequired => piaApproved,
+            _ => false // PendingConfirmation or no PTA
+        };
+
+        yield return new GateCheckResult
+        {
+            GateName = "Privacy Readiness",
+            Passed = privacyPassed,
+            Message = privacyPassed
+                ? pta!.Determination == PtaDetermination.PiaRequired
+                    ? "PTA complete. PIA approved."
+                    : $"PTA complete. Determination: {pta!.Determination}."
+                : pta == null
+                    ? "Privacy Threshold Analysis (PTA) must be completed before categorization."
+                    : pta.Determination == PtaDetermination.PendingConfirmation
+                        ? "PTA determination is pending confirmation. Resolve ambiguous PII info types."
+                        : "PTA indicates PIA required, but PIA is not yet approved.",
+            Severity = "Error"
+        };
+
+        // ─── Gate 4: Interconnection Documentation (Feature 021) ─────────
+        var activeInterconnections = system.SystemInterconnections
+            .Where(ic => ic.Status == InterconnectionStatus.Active)
+            .ToList();
+
+        bool interconnectionPassed;
+        string interconnectionMessage;
+
+        if (system.HasNoExternalInterconnections)
+        {
+            interconnectionPassed = true;
+            interconnectionMessage = "System certified as having no external interconnections.";
+        }
+        else if (activeInterconnections.Count > 0)
+        {
+            var allCovered = activeInterconnections.All(ic =>
+                ic.Agreements.Any(a =>
+                    a.Status == AgreementStatus.Signed &&
+                    (!a.ExpirationDate.HasValue || a.ExpirationDate.Value > DateTime.UtcNow)));
+
+            interconnectionPassed = allCovered;
+            interconnectionMessage = allCovered
+                ? $"All {activeInterconnections.Count} active interconnection(s) have signed, current agreements."
+                : "One or more active interconnections lack a signed, current agreement.";
+        }
+        else
+        {
+            // No interconnections and not certified
+            interconnectionPassed = false;
+            interconnectionMessage = "No interconnections registered and system is not certified as having none. " +
+                "Register interconnections or certify no external interconnections.";
+        }
+
+        yield return new GateCheckResult
+        {
+            GateName = "Interconnection Documentation",
+            Passed = interconnectionPassed,
+            Message = interconnectionMessage,
             Severity = "Error"
         };
     }

@@ -148,6 +148,22 @@ public class RegisteredSystem
 
     /// <summary>Control baseline (one per system).</summary>
     public ControlBaseline? ControlBaseline { get; set; }
+
+    // ─── Privacy & Interconnection navigation (Feature 021) ──────────────────
+
+    /// <summary>Privacy Threshold Analysis (zero or one per system).</summary>
+    public PrivacyThresholdAnalysis? PrivacyThresholdAnalysis { get; set; }
+
+    /// <summary>Privacy Impact Assessment (zero or one per system).</summary>
+    public PrivacyImpactAssessment? PrivacyImpactAssessment { get; set; }
+
+    /// <summary>External system interconnections.</summary>
+    public ICollection<SystemInterconnection> SystemInterconnections { get; set; } = new List<SystemInterconnection>();
+
+    /// <summary>
+    /// Certifies the system has no external interconnections (satisfies Gate 4 without interconnection records).
+    /// </summary>
+    public bool HasNoExternalInterconnections { get; set; }
 }
 
 /// <summary>

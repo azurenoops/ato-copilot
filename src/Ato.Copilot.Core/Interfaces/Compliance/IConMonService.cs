@@ -41,11 +41,40 @@ public interface IConMonService
     Task<ReauthorizationResult> CheckReauthorizationAsync(
         string systemId, bool initiateIfTriggered,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Check ISA and PIA expiration status for a system. Creates SignificantChange for expired items.</summary>
+    Task<List<AgreementExpirationAlert>> CheckAgreementExpirationsAsync(
+        string systemId, CancellationToken cancellationToken = default);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DTOs
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>Alert for an expiring or expired ISA/PIA.</summary>
+public class AgreementExpirationAlert
+{
+    /// <summary>Type of item: "ISA" or "PIA".</summary>
+    public string ItemType { get; set; } = string.Empty;
+
+    /// <summary>Agreement or PIA title.</summary>
+    public string AgreementTitle { get; set; } = string.Empty;
+
+    /// <summary>Related interconnection target system (ISA only).</summary>
+    public string? TargetSystemName { get; set; }
+
+    /// <summary>Expiration date.</summary>
+    public DateTime? ExpirationDate { get; set; }
+
+    /// <summary>Days until expiration (negative = past due).</summary>
+    public int DaysUntilExpiration { get; set; }
+
+    /// <summary>Alert level: Info, Warning, Urgent, Expired.</summary>
+    public string AlertLevel { get; set; } = "None";
+
+    /// <summary>Descriptive message.</summary>
+    public string Message { get; set; } = string.Empty;
+}
 
 /// <summary>ATO expiration status with graduated alerts.</summary>
 public class ExpirationStatus

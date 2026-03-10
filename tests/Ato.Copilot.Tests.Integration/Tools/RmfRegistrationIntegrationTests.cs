@@ -127,7 +127,22 @@ public class RmfRegistrationIntegrationTests : IDisposable
         var roleJson = JsonDocument.Parse(roleResult);
         roleJson.RootElement.GetProperty("status").GetString().Should().Be("success");
 
-        // Step 5: Now advance should succeed (has boundary + role)
+        // Step 4b: Satisfy Gate 3 (Privacy) and Gate 4 (Interconnections)
+        using (var scope = _serviceProvider.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+            var system = await db.RegisteredSystems.FindAsync(systemId);
+            system!.HasNoExternalInterconnections = true;
+            system.PrivacyThresholdAnalysis = new PrivacyThresholdAnalysis
+            {
+                RegisteredSystemId = systemId,
+                Determination = PtaDetermination.PiaNotRequired,
+                AnalyzedBy = "integration-test"
+            };
+            await db.SaveChangesAsync();
+        }
+
+        // Step 5: Now advance should succeed (has boundary + role + privacy + interconnections)
         var advanceResult = await _advanceTool.ExecuteAsync(new Dictionary<string, object?>
         {
             ["system_id"] = systemId,

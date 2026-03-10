@@ -563,6 +563,130 @@ public class ConMonService : IConMonService
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // §4.8 — ISA & PIA Expiration Monitoring (Feature 021)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// <inheritdoc />
+    public async Task<List<AgreementExpirationAlert>> CheckAgreementExpirationsAsync(
+        string systemId, CancellationToken cancellationToken = default)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+
+        var system = await db.RegisteredSystems
+            .Include(s => s.PrivacyImpactAssessment)
+            .FirstOrDefaultAsync(s => s.Id == systemId, cancellationToken)
+            ?? throw new InvalidOperationException($"System '{systemId}' not found.");
+
+        var alerts = new List<AgreementExpirationAlert>();
+
+        // Check ISA/agreement expirations
+        var activeInterconnections = await db.SystemInterconnections
+            .Include(ic => ic.Agreements)
+            .Where(ic => ic.RegisteredSystemId == systemId && ic.Status == InterconnectionStatus.Active)
+            .ToListAsync(cancellationToken);
+
+        foreach (var ic in activeInterconnections)
+        {
+            foreach (var agreement in ic.Agreements.Where(a => a.Status == AgreementStatus.Signed && a.ExpirationDate.HasValue))
+            {
+                var daysUntil = (int)(agreement.ExpirationDate!.Value.Date - DateTime.UtcNow.Date).TotalDays;
+
+                if (daysUntil > 90) continue;
+
+                var alertLevel = daysUntil switch
+                {
+                    < 0 => "Expired",
+                    <= 30 => "Urgent",
+                    <= 60 => "Warning",
+                    _ => "Info"
+                };
+
+                alerts.Add(new AgreementExpirationAlert
+                {
+                    ItemType = "ISA",
+                    AgreementTitle = agreement.Title,
+                    TargetSystemName = ic.TargetSystemName,
+                    ExpirationDate = agreement.ExpirationDate,
+                    DaysUntilExpiration = daysUntil,
+                    AlertLevel = alertLevel,
+                    Message = daysUntil < 0
+                        ? $"ISA '{agreement.Title}' for {ic.TargetSystemName} expired {Math.Abs(daysUntil)} days ago."
+                        : $"ISA '{agreement.Title}' for {ic.TargetSystemName} expires in {daysUntil} days."
+                });
+
+                if (daysUntil < 0)
+                {
+                    // Create SignificantChange for expired ISA
+                    var change = new SignificantChange
+                    {
+                        RegisteredSystemId = systemId,
+                        ChangeType = "ISA Expiration",
+                        Description = $"ISA '{agreement.Title}' for interconnection with {ic.TargetSystemName} has expired.",
+                        DetectedAt = DateTime.UtcNow,
+                        DetectedBy = "ConMon-AutoCheck",
+                        RequiresReauthorization = false
+                    };
+                    db.SignificantChanges.Add(change);
+                }
+            }
+        }
+
+        // Check PIA expiration
+        var pia = system.PrivacyImpactAssessment;
+        if (pia is { Status: PiaStatus.Approved, ExpirationDate: not null })
+        {
+            var piaDaysUntil = (int)(pia.ExpirationDate.Value.Date - DateTime.UtcNow.Date).TotalDays;
+
+            if (piaDaysUntil <= 90)
+            {
+                var piaAlertLevel = piaDaysUntil switch
+                {
+                    < 0 => "Expired",
+                    <= 30 => "Urgent",
+                    <= 60 => "Warning",
+                    _ => "Info"
+                };
+
+                alerts.Add(new AgreementExpirationAlert
+                {
+                    ItemType = "PIA",
+                    AgreementTitle = "Privacy Impact Assessment",
+                    ExpirationDate = pia.ExpirationDate,
+                    DaysUntilExpiration = piaDaysUntil,
+                    AlertLevel = piaAlertLevel,
+                    Message = piaDaysUntil < 0
+                        ? $"PIA expired {Math.Abs(piaDaysUntil)} days ago."
+                        : $"PIA expires in {piaDaysUntil} days."
+                });
+
+                if (piaDaysUntil < 0)
+                {
+                    pia.Status = PiaStatus.Expired;
+                    var change = new SignificantChange
+                    {
+                        RegisteredSystemId = systemId,
+                        ChangeType = "PIA Expiration",
+                        Description = "Privacy Impact Assessment has expired. Annual review overdue.",
+                        DetectedAt = DateTime.UtcNow,
+                        DetectedBy = "ConMon-AutoCheck",
+                        RequiresReauthorization = false
+                    };
+                    db.SignificantChanges.Add(change);
+                }
+            }
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Checked agreement expirations for system '{SystemId}': {AlertCount} alert(s)",
+            systemId, alerts.Count);
+
+        return alerts;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Private helpers
     // ─────────────────────────────────────────────────────────────────────────
 
