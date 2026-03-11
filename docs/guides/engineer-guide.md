@@ -472,6 +472,70 @@ Returns a per-section status breakdown so engineers can see which sections remai
 
 ---
 
+## Narrative Governance
+
+> Feature 024: Version Control + Approval Workflow
+
+### Viewing Narrative History
+
+```
+@ato Show me the version history for AC-1 in Eagle Eye
+```
+
+Tool: `compliance_narrative_history` — returns all versions with author, timestamp, and change reason.
+
+### Comparing Versions
+
+```
+@ato Compare versions 1 and 3 of the AC-1 narrative for Eagle Eye
+```
+
+Tool: `compliance_narrative_diff` — shows a unified diff between two versions.
+
+### Rolling Back a Narrative
+
+```
+@ato Roll back the AC-2 narrative to version 2 for Eagle Eye
+```
+
+Tool: `compliance_rollback_narrative` — creates a new version with the old content. Blocked if the narrative is currently under review.
+
+### Submitting Narratives for Review
+
+```
+@ato Submit the AC-1 narrative for Eagle Eye for ISSM review
+```
+
+Tool: `compliance_submit_narrative` — transitions Draft/NeedsRevision → UnderReview.
+
+### Batch Submit by Family
+
+```
+@ato Submit all AC family narratives for Eagle Eye for review
+```
+
+Tool: `compliance_batch_submit_narratives` — submits all Draft narratives in a family at once.
+
+### Checking Approval Progress
+
+```
+@ato What is the narrative approval progress for Eagle Eye?
+```
+
+Tool: `compliance_narrative_approval_progress` — shows per-family approval %, review queue, and staleness warnings.
+
+### Engineer Narrative Governance Workflow
+
+```
+1. compliance_write_narrative (with change_reason)    ← Edit narrative
+2. compliance_narrative_history                       ← Verify version
+3. compliance_submit_narrative or batch_submit        ← Submit for review
+4. compliance_narrative_approval_progress             ← Track progress
+5. If NeedsRevision: fix and resubmit
+```
+
+---
+
 ## See Also
 
 - [Engineer Getting Started](../getting-started/engineer.md) — First-time setup and first 3 commands

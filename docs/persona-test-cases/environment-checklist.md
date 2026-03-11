@@ -53,6 +53,16 @@ Verify each tool is in the `/tools/list` response:
 - [ ] `compliance_generate_ssp`
 - [ ] `compliance_collect_evidence`
 
+**Narrative Governance (8)**
+- [ ] `compliance_narrative_history`
+- [ ] `compliance_narrative_diff`
+- [ ] `compliance_rollback_narrative`
+- [ ] `compliance_submit_narrative`
+- [ ] `compliance_review_narrative`
+- [ ] `compliance_batch_review_narratives`
+- [ ] `compliance_narrative_approval_progress`
+- [ ] `compliance_batch_submit_narratives`
+
 **Assessment (7)**
 - [ ] `compliance_take_snapshot`
 - [ ] `compliance_compare_snapshots`

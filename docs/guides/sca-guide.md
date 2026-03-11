@@ -420,6 +420,19 @@ Returns a per-section breakdown of the 13-section NIST 800-18 SSP:
 - Section status: Draft, InReview, Approved, or NotStarted
 - Overall completeness percentage
 - Sections requiring attention before authorization
+- **Staleness warnings** for unapproved narratives (Feature 024)
+
+### Narrative Approval Progress
+
+SCAs can review narrative governance status to verify control narratives are approved before assessment:
+
+```
+Tool: compliance_narrative_approval_progress
+Parameters:
+  system_id: "<system-guid>"
+```
+
+Returns overall approval percentage, per-family breakdown, review queue of controls awaiting ISSM review, and staleness warnings for unapproved narratives.
 
 ### OSCAL Validation
 

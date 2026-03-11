@@ -641,7 +641,9 @@ public enum SspSectionStatus
     /// <summary>Submitted for review.</summary>
     UnderReview,
     /// <summary>Approved by reviewer.</summary>
-    Approved
+    Approved,
+    /// <summary>Reviewer requested revision — needs rework before resubmission.</summary>
+    NeedsRevision
 }
 
 /// <summary>System operational lifecycle status per NIST SP 800-18 §4.</summary>

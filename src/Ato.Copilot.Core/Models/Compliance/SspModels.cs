@@ -59,10 +59,28 @@ public class ControlImplementation
     /// <summary>Last modification timestamp (UTC).</summary>
     public DateTime? ModifiedAt { get; set; }
 
+    // ─── Governance (Feature 024) ────────────────────────────────────────────
+
+    /// <summary>Approval lifecycle status for this narrative (Draft → UnderReview → Approved / NeedsRevision).</summary>
+    public SspSectionStatus ApprovalStatus { get; set; } = SspSectionStatus.Draft;
+
+    /// <summary>Current version number (monotonically increasing, 1-based).</summary>
+    public int CurrentVersion { get; set; } = 1;
+
+    /// <summary>FK to the most recently approved NarrativeVersion (null until first approval).</summary>
+    [MaxLength(36)]
+    public string? ApprovedVersionId { get; set; }
+
     // ─── Navigation ──────────────────────────────────────────────────────────
 
     /// <summary>Parent registered system.</summary>
     public RegisteredSystem RegisteredSystem { get; set; } = null!;
+
+    /// <summary>All version snapshots for this control implementation.</summary>
+    public ICollection<NarrativeVersion> Versions { get; set; } = new List<NarrativeVersion>();
+
+    /// <summary>The most recently approved version (null until first approval).</summary>
+    public NarrativeVersion? ApprovedVersion { get; set; }
 }
 
 // ─── SSP DTOs ────────────────────────────────────────────────────────────────

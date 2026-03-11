@@ -56,7 +56,7 @@ public class SspAuthoringIntegrationTests : IDisposable
         _writeNarrativeTool = new WriteNarrativeTool(sspSvc, Mock.Of<ILogger<WriteNarrativeTool>>());
         _suggestNarrativeTool = new SuggestNarrativeTool(sspSvc, Mock.Of<ILogger<SuggestNarrativeTool>>());
         _batchPopulateNarrativesTool = new BatchPopulateNarrativesTool(sspSvc, Mock.Of<ILogger<BatchPopulateNarrativesTool>>());
-        _narrativeProgressTool = new NarrativeProgressTool(sspSvc, Mock.Of<ILogger<NarrativeProgressTool>>());
+        _narrativeProgressTool = new NarrativeProgressTool(sspSvc, Mock.Of<INarrativeGovernanceService>(), Mock.Of<ILogger<NarrativeProgressTool>>());
         _generateSspTool = new GenerateSspTool(sspSvc, Mock.Of<ILogger<GenerateSspTool>>());
     }
 

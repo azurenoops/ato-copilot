@@ -44,6 +44,14 @@ This catalog documents the MCP tools introduced for RMF system registration, aut
 | `compliance_list_poam` | `ListPoamAsync` | List POA&M items with filtering |
 | `compliance_generate_rar` | `GenerateRarAsync` | Generate Risk Assessment Report |
 | `compliance_bundle_authorization_package` | `BundleAuthorizationPackageAsync` | Bundle complete authorization package |
+| `compliance_narrative_history` | `GetNarrativeHistoryAsync` | View version history for a control narrative |
+| `compliance_narrative_diff` | `GetNarrativeDiffAsync` | Compare two narrative versions with unified diff |
+| `compliance_rollback_narrative` | `RollbackNarrativeAsync` | Rollback to a previous narrative version |
+| `compliance_submit_narrative` | `SubmitNarrativeAsync` | Submit a Draft narrative for ISSM review |
+| `compliance_review_narrative` | `ReviewNarrativeAsync` | Approve or request revision of a narrative |
+| `compliance_batch_review_narratives` | `BatchReviewNarrativesAsync` | Batch review narratives by family or control IDs |
+| `compliance_narrative_approval_progress` | `GetNarrativeApprovalProgressAsync` | Aggregate approval status and progress dashboard |
+| `compliance_batch_submit_narratives` | `BatchSubmitNarrativesAsync` | Batch submit Draft narratives for review |
 
 ---
 
@@ -2950,5 +2958,107 @@ Generate OSCAL 1.1.2 SSP JSON for a system, then validate it for structural corr
   "status": "error",
   "error": "Tool 'compliance_write_ssp_section' not found. Feature 022 (SSP Authoring & OSCAL) may not be deployed in this environment.",
   "resolution": "Verify ISspService, IOscalSspExportService, and IOscalValidationService are registered and Feature022_SspOscal migration is applied."
+}
+```
+
+---
+
+## Feature 024: Narrative Governance Tools
+
+> Version Control + Approval Workflow for SSP control implementation narratives.
+
+### `compliance_narrative_history`
+
+View paginated version history for a control implementation narrative.
+
+- **RBAC**: All compliance roles (read-only)
+- **RMF Step**: Implement (Phase 3)
+- **Parameters**: `system_id` (required), `control_id` (required), `page` (optional, default 1), `page_size` (optional, default 20)
+- **Response**: Array of version records with `version_number`, `content`, `status`, `authored_by`, `authored_at`, `change_reason`
+
+### `compliance_narrative_diff`
+
+Compare two versions of a control narrative using unified diff format.
+
+- **RBAC**: All compliance roles (read-only)
+- **RMF Step**: Implement (Phase 3)
+- **Parameters**: `system_id` (required), `control_id` (required), `from_version` (required), `to_version` (required)
+- **Response**: `from_version`, `to_version`, `unified_diff` (text), `has_changes` (boolean)
+
+### `compliance_rollback_narrative`
+
+Rollback a control narrative to a previous version (creates a new version with the old content).
+
+- **RBAC**: Compliance.Analyst (ISSO), Compliance.PlatformEngineer (Engineer)
+- **RMF Step**: Implement (Phase 3)
+- **Parameters**: `system_id` (required), `control_id` (required), `target_version` (required)
+- **Response**: New `version_number`, `status`, `authored_by`, `authored_at`, `change_reason`
+- **Error**: `UNDER_REVIEW` if narrative is currently in UnderReview status
+
+### `compliance_submit_narrative`
+
+Submit a Draft narrative for ISSM review. Transitions status from Draft/NeedsRevision to UnderReview.
+
+- **RBAC**: Compliance.Analyst (ISSO), Compliance.PlatformEngineer (Engineer)
+- **RMF Step**: Implement (Phase 3)
+- **Parameters**: `system_id` (required), `control_id` (required)
+- **Response**: `version_number`, `previous_status`, `new_status`, `submitted_by`, `submitted_at`
+
+### `compliance_review_narrative`
+
+Approve or request revision of a narrative in UnderReview status.
+
+- **RBAC**: Compliance.SecurityLead (ISSM)
+- **RMF Step**: Implement (Phase 3)
+- **Parameters**: `system_id` (required), `control_id` (required), `decision` (required: `approve`|`request_revision`), `comments` (optional, required for `request_revision`)
+- **Response**: `decision`, `previous_status`, `new_status`, `reviewed_by`, `reviewed_at`, `comments`
+- **Error**: `COMMENTS_REQUIRED` when decision is `request_revision` but no comments provided
+
+### `compliance_batch_review_narratives`
+
+Batch approve or request revision of narratives for a control family or specific control IDs.
+
+- **RBAC**: Compliance.SecurityLead (ISSM)
+- **RMF Step**: Implement (Phase 3)
+- **Parameters**: `system_id` (required), `decision` (required), `comments` (optional), `family_filter` (optional), `control_ids` (optional, comma-separated)
+- **Response**: `reviewed_count`, `skipped_count`, `reviewed_controls`, `skipped_controls`
+- **Error**: `MUTUALLY_EXCLUSIVE_FILTERS` if both `family_filter` and `control_ids` provided
+
+### `compliance_narrative_approval_progress`
+
+Aggregate approval status counts, overall approval percentage, and per-family breakdown.
+
+- **RBAC**: All compliance roles (read-only)
+- **RMF Step**: Implement (Phase 3)
+- **Parameters**: `system_id` (required), `family_filter` (optional)
+- **Response**: `overall` (total/approved/draft/in_review/needs_revision/missing/approval_percentage), `families` array, `review_queue`, `staleness_warnings`
+
+### `compliance_batch_submit_narratives`
+
+Submit all Draft narratives for a control family (or all families) for ISSM review.
+
+- **RBAC**: Compliance.Analyst (ISSO), Compliance.PlatformEngineer (Engineer)
+- **RMF Step**: Implement (Phase 3)
+- **Parameters**: `system_id` (required), `family_filter` (optional)
+- **Response**: `submitted_count`, `skipped_count`, `submitted_controls`, `skipped_controls`
+- **Error**: `NO_DRAFT_NARRATIVES` if no Draft narratives found matching the filter
+
+### Enhanced: `compliance_write_narrative`
+
+> Feature 024 Enhancement: Now creates a `NarrativeVersion` record on every write, increments `CurrentVersion`, and supports optimistic concurrency control.
+
+- **New Parameters**: `expected_version` (optional int, concurrency check), `change_reason` (optional string)
+- **Enhanced Response**: Adds `version_number`, `approval_status`, `previous_version` fields
+- **New Error Codes**: `CONCURRENCY_CONFLICT` (expected_version mismatch), `UNDER_REVIEW` (narrative is in review)
+
+### Troubleshooting — Narrative Governance Tools
+
+**"Tool not found" error**: Narrative governance tools require Feature 024 to be deployed with `INarrativeGovernanceService` registered in DI. Verify the service is registered in `ServiceCollectionExtensions.cs` and the `Feature024_NarrativeGovernance` migration has been applied.
+
+```json
+{
+  "status": "error",
+  "error": "Tool 'compliance_narrative_history' not found. Feature 024 (Narrative Governance) may not be deployed in this environment.",
+  "resolution": "Verify INarrativeGovernanceService is registered and Feature024_NarrativeGovernance migration is applied."
 }
 ```

@@ -30,7 +30,7 @@ public class SspAuthoringToolTests
     {
         var ci = CreateImplementation("sys-1", "AC-1", "Implemented", "Policy docs stored in SharePoint.");
         _sspMock
-            .Setup(s => s.WriteNarrativeAsync("sys-1", "AC-1", "Policy docs stored in SharePoint.", null, "mcp-user", It.IsAny<CancellationToken>()))
+            .Setup(s => s.WriteNarrativeAsync("sys-1", "AC-1", "Policy docs stored in SharePoint.", null, "mcp-user", It.IsAny<int?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(ci);
 
         var tool = CreateWriteNarrativeTool();
@@ -53,7 +53,7 @@ public class SspAuthoringToolTests
     {
         var ci = CreateImplementation("sys-2", "AU-3", "PartiallyImplemented", "Audit logs capture basic events.");
         _sspMock
-            .Setup(s => s.WriteNarrativeAsync("sys-2", "AU-3", "Audit logs capture basic events.", "PartiallyImplemented", "mcp-user", It.IsAny<CancellationToken>()))
+            .Setup(s => s.WriteNarrativeAsync("sys-2", "AU-3", "Audit logs capture basic events.", "PartiallyImplemented", "mcp-user", It.IsAny<int?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(ci);
 
         var tool = CreateWriteNarrativeTool();
@@ -77,7 +77,7 @@ public class SspAuthoringToolTests
         ci.ModifiedAt = DateTime.UtcNow;
 
         _sspMock
-            .Setup(s => s.WriteNarrativeAsync("sys-1", "AC-1", "Updated narrative v2.", null, "mcp-user", It.IsAny<CancellationToken>()))
+            .Setup(s => s.WriteNarrativeAsync("sys-1", "AC-1", "Updated narrative v2.", null, "mcp-user", It.IsAny<int?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(ci);
 
         var tool = CreateWriteNarrativeTool();
@@ -143,7 +143,7 @@ public class SspAuthoringToolTests
     public async Task WriteNarrative_ServiceThrows_ReturnsError()
     {
         _sspMock
-            .Setup(s => s.WriteNarrativeAsync("sys-bad", "AC-1", "text", null, "mcp-user", It.IsAny<CancellationToken>()))
+            .Setup(s => s.WriteNarrativeAsync("sys-bad", "AC-1", "text", null, "mcp-user", It.IsAny<int?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("System 'sys-bad' not found."));
 
         var tool = CreateWriteNarrativeTool();
@@ -168,7 +168,7 @@ public class SspAuthoringToolTests
         ci.AiSuggested = false;
 
         _sspMock
-            .Setup(s => s.WriteNarrativeAsync("sys-1", "SI-2", "Flaw remediation via patching.", null, "mcp-user", It.IsAny<CancellationToken>()))
+            .Setup(s => s.WriteNarrativeAsync("sys-1", "SI-2", "Flaw remediation via patching.", null, "mcp-user", It.IsAny<int?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(ci);
 
         var tool = CreateWriteNarrativeTool();
@@ -782,7 +782,7 @@ public class SspAuthoringToolTests
         new(_sspMock.Object, Mock.Of<ILogger<BatchPopulateNarrativesTool>>());
 
     private NarrativeProgressTool CreateNarrativeProgressTool() =>
-        new(_sspMock.Object, Mock.Of<ILogger<NarrativeProgressTool>>());
+        new(_sspMock.Object, Mock.Of<INarrativeGovernanceService>(), Mock.Of<ILogger<NarrativeProgressTool>>());
 
     private GenerateSspTool CreateGenerateSspTool() =>
         new(_sspMock.Object, Mock.Of<ILogger<GenerateSspTool>>());

@@ -189,6 +189,14 @@ public class AtoCopilotContext : DbContext
     /// <summary>External contingency plan document references for SSP §13.</summary>
     public DbSet<ContingencyPlanReference> ContingencyPlanReferences => Set<ContingencyPlanReference>();
 
+    // ─── Narrative Governance (Feature 024) ───────────────────────────────────
+
+    /// <summary>Immutable version snapshots of control-implementation narratives.</summary>
+    public DbSet<NarrativeVersion> NarrativeVersions => Set<NarrativeVersion>();
+
+    /// <summary>Review decisions recorded against narrative versions.</summary>
+    public DbSet<NarrativeReview> NarrativeReviews => Set<NarrativeReview>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -1076,6 +1084,10 @@ public class AtoCopilotContext : DbContext
             entity.Property(e => e.AuthoredBy).HasMaxLength(200).IsRequired();
             entity.Property(e => e.ReviewedBy).HasMaxLength(200);
 
+            // Governance fields (Feature 024)
+            entity.Property(e => e.ApprovalStatus).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.ApprovedVersionId).HasMaxLength(36);
+
             // Unique constraint: one implementation per control per system
             entity.HasIndex(e => new { e.RegisteredSystemId, e.ControlId })
                 .IsUnique()
@@ -1084,12 +1096,19 @@ public class AtoCopilotContext : DbContext
             // Indexes
             entity.HasIndex(e => e.RegisteredSystemId).HasDatabaseName("IX_ControlImplementation_SystemId");
             entity.HasIndex(e => e.ImplementationStatus).HasDatabaseName("IX_ControlImplementation_Status");
+            entity.HasIndex(e => e.ApprovalStatus).HasDatabaseName("IX_ControlImplementation_ApprovalStatus");
 
             // FK to RegisteredSystem
             entity.HasOne(e => e.RegisteredSystem)
                 .WithMany()
                 .HasForeignKey(e => e.RegisteredSystemId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // FK to approved NarrativeVersion (optional)
+            entity.HasOne(e => e.ApprovedVersion)
+                .WithMany()
+                .HasForeignKey(e => e.ApprovedVersionId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -1620,6 +1639,57 @@ public class AtoCopilotContext : DbContext
                 .HasDatabaseName("IX_Agreement_Status");
             entity.HasIndex(e => e.ExpirationDate)
                 .HasDatabaseName("IX_Agreement_Expiration");
+        });
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // Narrative Governance Entities (Feature 024)
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        // ─── NarrativeVersion ────────────────────────────────────────────────────
+        modelBuilder.Entity<NarrativeVersion>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
+            entity.Property(e => e.ControlImplementationId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.Content).HasMaxLength(8000).IsRequired();
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.AuthoredBy).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.ChangeReason).HasMaxLength(1000);
+            entity.Property(e => e.SubmittedBy).HasMaxLength(200);
+
+            // Composite index for history queries (newest-first)
+            entity.HasIndex(e => new { e.ControlImplementationId, e.VersionNumber })
+                .IsUnique()
+                .HasDatabaseName("IX_NarrativeVersion_Impl_Version");
+
+            entity.HasIndex(e => e.Status)
+                .HasDatabaseName("IX_NarrativeVersion_Status");
+
+            // FK to ControlImplementation
+            entity.HasOne(e => e.ControlImplementation)
+                .WithMany(e => e.Versions)
+                .HasForeignKey(e => e.ControlImplementationId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ─── NarrativeReview ─────────────────────────────────────────────────────
+        modelBuilder.Entity<NarrativeReview>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
+            entity.Property(e => e.NarrativeVersionId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.ReviewedBy).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Decision).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.ReviewerComments).HasMaxLength(2000);
+
+            entity.HasIndex(e => e.NarrativeVersionId)
+                .HasDatabaseName("IX_NarrativeReview_VersionId");
+
+            // FK to NarrativeVersion
+            entity.HasOne(e => e.NarrativeVersion)
+                .WithMany(e => e.Reviews)
+                .HasForeignKey(e => e.NarrativeVersionId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 

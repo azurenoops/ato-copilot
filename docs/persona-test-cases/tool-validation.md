@@ -182,6 +182,19 @@ This document provides the cross-reference validation of all 106 MCP tools refer
 | 85 | `compliance_export_oscal_ssp` | ISSM-58, SCA-27, AO-16 | ⬜ | |
 | 86 | `compliance_validate_oscal_ssp` | ISSM-59, SCA-28 | ⬜ | |
 
+### Narrative Governance (8 tools) — F024
+
+| # | Tool Name | Spec TC-IDs | Present | Notes |
+|---|-----------|-------------|---------|-------|
+| 107 | `compliance_narrative_history` | ISSO-36, ENG-31 | ⬜ | |
+| 108 | `compliance_narrative_diff` | ISSO-37, ENG-32 | ⬜ | |
+| 109 | `compliance_rollback_narrative` | ISSO-38, ENG-33 | ⬜ | |
+| 110 | `compliance_submit_narrative` | ISSO-39, ENG-34 | ⬜ | |
+| 111 | `compliance_review_narrative` | ISSM-62 | ⬜ | |
+| 112 | `compliance_batch_review_narratives` | ISSM-63 | ⬜ | |
+| 113 | `compliance_narrative_approval_progress` | ISSM-64, ISSO-40, SCA-29, AO-17 | ⬜ | |
+| 114 | `compliance_batch_submit_narratives` | ISSO-41, ENG-35 | ⬜ | |
+
 ### CKL Export (1 tool) — F017
 
 | # | Tool Name | Spec TC-IDs | Present | Notes |
@@ -243,6 +256,7 @@ This document provides the cross-reference validation of all 106 MCP tools refer
 | Privacy Analysis | 4 | ___ | ___ |
 | Interconnection Management | 8 | ___ | ___ |
 | SSP Authoring & OSCAL | 5 | ___ | ___ |
+| Narrative Governance | 8 | ___ | ___ |
 | CKL Export | 1 | ___ | ___ |
 | Kanban | 11 | ___ | ___ |
 | PIM / Auth | 8 | ___ | ___ |

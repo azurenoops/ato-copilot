@@ -33,6 +33,8 @@ public class SspService : ISspService
         string narrative,
         string? status = null,
         string authoredBy = "mcp-user",
+        int? expectedVersion = null,
+        string? changeReason = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(systemId, nameof(systemId));
@@ -69,17 +71,44 @@ public class SspService : ISspService
 
         if (existing != null)
         {
+            // Guard: reject writes when narrative is under review (FR-010)
+            if (existing.ApprovalStatus == SspSectionStatus.UnderReview)
+                throw new InvalidOperationException(
+                    $"UNDER_REVIEW: Cannot modify narrative for control '{controlId}' while it is under review.");
+
+            // Optimistic concurrency check (FR-017)
+            if (expectedVersion.HasValue && expectedVersion.Value != existing.CurrentVersion)
+                throw new InvalidOperationException(
+                    $"CONCURRENCY_CONFLICT: Expected version {expectedVersion.Value} but current version is {existing.CurrentVersion}. " +
+                    $"Last modified by '{existing.AuthoredBy}' at {existing.ModifiedAt?.ToString("O") ?? existing.AuthoredAt.ToString("O")}.");
+
             existing.Narrative = narrative.Trim();
             existing.ImplementationStatus = implStatus;
             existing.ModifiedAt = DateTime.UtcNow;
             existing.AiSuggested = false;
             existing.IsAutoPopulated = false;
+            existing.CurrentVersion += 1;
+            existing.ApprovalStatus = SspSectionStatus.Draft;
+            existing.AuthoredBy = authoredBy;
+
+            // Create immutable version snapshot
+            var version = new NarrativeVersion
+            {
+                ControlImplementationId = existing.Id,
+                VersionNumber = existing.CurrentVersion,
+                Content = narrative.Trim(),
+                Status = SspSectionStatus.Draft,
+                AuthoredBy = authoredBy,
+                AuthoredAt = DateTime.UtcNow,
+                ChangeReason = changeReason
+            };
+            context.NarrativeVersions.Add(version);
 
             await context.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(
-                "Updated narrative for control '{ControlId}' in system '{SystemId}'",
-                controlId, systemId);
+                "Updated narrative for control '{ControlId}' in system '{SystemId}' (version={Version})",
+                controlId, systemId, existing.CurrentVersion);
 
             return existing;
         }
@@ -92,14 +121,30 @@ public class SspService : ISspService
             Narrative = narrative.Trim(),
             ImplementationStatus = implStatus,
             AuthoredBy = authoredBy,
-            AuthoredAt = DateTime.UtcNow
+            AuthoredAt = DateTime.UtcNow,
+            CurrentVersion = 1,
+            ApprovalStatus = SspSectionStatus.Draft
         };
 
         context.ControlImplementations.Add(implementation);
+
+        // Create initial version snapshot
+        var initialVersion = new NarrativeVersion
+        {
+            ControlImplementationId = implementation.Id,
+            VersionNumber = 1,
+            Content = narrative.Trim(),
+            Status = SspSectionStatus.Draft,
+            AuthoredBy = authoredBy,
+            AuthoredAt = DateTime.UtcNow,
+            ChangeReason = changeReason ?? "Initial narrative"
+        };
+        context.NarrativeVersions.Add(initialVersion);
+
         await context.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "Created narrative for control '{ControlId}' in system '{SystemId}' (status={Status})",
+            "Created narrative for control '{ControlId}' in system '{SystemId}' (status={Status}, version=1)",
             controlId, systemId, implStatus);
 
         return implementation;
@@ -393,6 +438,19 @@ public class SspService : ISspService
             .OrderBy(ci => ci.ControlId)
             .ToListAsync(cancellationToken);
 
+        // Load approved NarrativeVersion content for SSP generation (Feature 024)
+        var approvedVersionIds = narratives
+            .Where(ci => !string.IsNullOrWhiteSpace(ci.ApprovedVersionId))
+            .Select(ci => ci.ApprovedVersionId!)
+            .ToList();
+
+        var approvedVersions = approvedVersionIds.Count > 0
+            ? await context.Set<NarrativeVersion>()
+                .AsNoTracking()
+                .Where(nv => approvedVersionIds.Contains(nv.Id))
+                .ToDictionaryAsync(nv => nv.ControlImplementationId, nv => nv.Content, cancellationToken)
+            : new Dictionary<string, string>();
+
         var roles = await context.RmfRoleAssignments
             .Where(r => r.RegisteredSystemId == systemId && r.IsActive)
             .ToListAsync(cancellationToken);
@@ -512,7 +570,7 @@ public class SspService : ISspService
                     4 => GenerateSection4Content(system),
                     7 => GenerateSection7Content(interconnections, system, storedSection),
                     9 => GenerateSection9Content(baseline, narratives),
-                    10 => GenerateSection10Content(system, baseline, narratives),
+                    10 => GenerateSection10Content(system, baseline, narratives, approvedVersions),
                     11 => GenerateSection11Content(boundaries, storedSection),
                     _ => ""
                 };
@@ -578,7 +636,8 @@ public class SspService : ISspService
     private static string GenerateSection10Content(
         RegisteredSystem system,
         ControlBaseline? baseline,
-        List<ControlImplementation> narratives)
+        List<ControlImplementation> narratives,
+        Dictionary<string, string> approvedVersions)
     {
         var sb = new StringBuilder();
         var controlIds = baseline?.ControlIds ?? new List<string>();
@@ -617,8 +676,25 @@ public class SspService : ISspService
                     sb.AppendLine($"**Status**: {impl.ImplementationStatus}");
                     if (inheritanceMap.TryGetValue(controlId, out var inh))
                         sb.AppendLine($"**Responsibility**: {inh.InheritanceType}");
-                    sb.AppendLine();
-                    sb.AppendLine(impl.Narrative ?? "*No narrative provided.*");
+
+                    // Prefer approved version content; fall back to draft narrative
+                    if (approvedVersions.TryGetValue(impl.Id, out var approvedContent))
+                    {
+                        sb.AppendLine($"**Approval Status**: Approved");
+                        sb.AppendLine();
+                        sb.AppendLine(approvedContent);
+                    }
+                    else if (!string.IsNullOrWhiteSpace(impl.Narrative))
+                    {
+                        sb.AppendLine($"**Approval Status**: {impl.ApprovalStatus} ⚠️ No approved version");
+                        sb.AppendLine();
+                        sb.AppendLine(impl.Narrative);
+                    }
+                    else
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("*No narrative provided.*");
+                    }
                 }
                 else
                 {

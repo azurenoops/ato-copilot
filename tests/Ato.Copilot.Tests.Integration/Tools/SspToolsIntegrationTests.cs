@@ -56,7 +56,7 @@ public class SspToolsIntegrationTests : IDisposable
         _selectBaselineTool = new SelectBaselineTool(baselineSvc, Mock.Of<ILogger<SelectBaselineTool>>());
         _writeSspSectionTool = new WriteSspSectionTool(sspSvc, Mock.Of<ILogger<WriteSspSectionTool>>());
         _reviewSspSectionTool = new ReviewSspSectionTool(sspSvc, Mock.Of<ILogger<ReviewSspSectionTool>>());
-        _sspCompletenessTool = new SspCompletenessTool(sspSvc, Mock.Of<ILogger<SspCompletenessTool>>());
+        _sspCompletenessTool = new SspCompletenessTool(sspSvc, Mock.Of<INarrativeGovernanceService>(), Mock.Of<ILogger<SspCompletenessTool>>());
         _exportOscalSspTool = new ExportOscalSspTool(oscalExportSvc, Mock.Of<ILogger<ExportOscalSspTool>>());
         _validateOscalSspTool = new ValidateOscalSspTool(oscalExportSvc, oscalValidationSvc, Mock.Of<ILogger<ValidateOscalSspTool>>());
         _generateSspTool = new GenerateSspTool(sspSvc, Mock.Of<ILogger<GenerateSspTool>>());

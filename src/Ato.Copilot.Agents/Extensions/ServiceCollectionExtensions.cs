@@ -268,6 +268,19 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<NarrativeProgressTool>();
         services.AddSingleton<GenerateSspTool>();
 
+        // Narrative Governance service (Feature 024)
+        services.AddSingleton<INarrativeGovernanceService, NarrativeGovernanceService>();
+
+        // Narrative Governance tools (Feature 024)
+        services.AddSingleton<NarrativeHistoryTool>();
+        services.AddSingleton<NarrativeDiffTool>();
+        services.AddSingleton<RollbackNarrativeTool>();
+        services.AddSingleton<SubmitNarrativeTool>();
+        services.AddSingleton<ReviewNarrativeTool>();
+        services.AddSingleton<BatchReviewNarrativesTool>();
+        services.AddSingleton<NarrativeApprovalProgressTool>();
+        services.AddSingleton<BatchSubmitNarrativesTool>();
+
         // SSP Section Authoring tools (Feature 022)
         services.AddSingleton<WriteSspSectionTool>();
         services.AddSingleton<ReviewSspSectionTool>();
@@ -455,6 +468,16 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<SspCompletenessTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ExportOscalSspTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ValidateOscalSspTool>());
+
+        // Narrative Governance tools as BaseTool (Feature 024)
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<NarrativeHistoryTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<NarrativeDiffTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<RollbackNarrativeTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<SubmitNarrativeTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ReviewNarrativeTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<BatchReviewNarrativesTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<NarrativeApprovalProgressTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<BatchSubmitNarrativesTool>());
 
         // Assessment Artifact tools as BaseTool (Feature 015 - US7)
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<AssessControlTool>());

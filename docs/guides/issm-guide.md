@@ -1163,6 +1163,74 @@ Parameters:
 
 ---
 
+## Narrative Governance — Approval Workflow
+
+> Feature 024: Version Control + Approval Workflow
+
+ISSMs are responsible for reviewing and approving control implementation narratives before they are included in the SSP.
+
+### Reviewing a Single Narrative
+
+When an ISSO or Engineer submits a narrative for review, approve or request revision:
+
+```
+Tool: compliance_review_narrative
+Parameters:
+  system_id: "<system-guid>"
+  control_id: "AC-1"
+  decision: "approve"
+```
+
+```
+Tool: compliance_review_narrative
+Parameters:
+  system_id: "<system-guid>"
+  control_id: "AC-2"
+  decision: "request_revision"
+  comments: "Section 2 needs more detail on audit log retention periods."
+```
+
+### Batch Review by Family
+
+Approve all UnderReview narratives in a control family at once:
+
+```
+Tool: compliance_batch_review_narratives
+Parameters:
+  system_id: "<system-guid>"
+  family_filter: "AC"
+  decision: "approve"
+```
+
+### Checking Approval Progress
+
+```
+@ato What is the narrative approval progress for Eagle Eye?
+```
+
+Tool: `compliance_narrative_approval_progress` — shows overall %, per-family breakdown, review queue, and staleness warnings.
+
+### Viewing Version History
+
+```
+@ato Show me the version history for AC-1 in Eagle Eye
+```
+
+Tool: `compliance_narrative_history` — review all versions before making a decision.
+
+### ISSM Narrative Governance Workflow
+
+```
+1. compliance_narrative_approval_progress               ← Check review queue
+2. compliance_narrative_history (control_id)             ← Review version history
+3. compliance_narrative_diff (from/to versions)          ← Compare changes
+4. compliance_review_narrative (approve/request_revision) ← Make decision
+5. compliance_batch_review_narratives (family)           ← Batch approve family
+6. Repeat until approval_percentage = 100%
+```
+
+---
+
 ## OSCAL Export for Authorization Package
 
 > Feature 022: SSP Authoring & OSCAL Export
