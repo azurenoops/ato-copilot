@@ -927,6 +927,242 @@ Validate OSCAL SSP against NIST schema.
 
 ---
 
+## HW/SW Inventory (Feature 025)
+
+### `inventory_add_item`
+
+Register a hardware or software inventory item.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID, name, or acronym |
+| `item_name` | string | ✓ | Display name of the item |
+| `type` | string | ✓ | `hardware` or `software` |
+| `function` | string | ✓ | HW: `Server`, `Workstation`, `NetworkDevice`, `Storage`, `Other`; SW: `OperatingSystem`, `Database`, `Middleware`, `Application`, `SecurityTool`, `Other` |
+| `manufacturer` | string | | Manufacturer (required for hardware) |
+| `model` | string | | Hardware model |
+| `serial_number` | string | | Hardware serial number |
+| `ip_address` | string | | IP address (required for Server/NetworkDevice) |
+| `mac_address` | string | | MAC address |
+| `location` | string | | Physical location |
+| `vendor` | string | | Software vendor (required for software) |
+| `version` | string | | Software version (required for software) |
+| `patch_level` | string | | Current patch level |
+| `license_type` | string | | License type |
+| `parent_hardware_id` | string | | Parent hardware GUID (for software items) |
+
+**Response:** Created inventory item with generated GUID.
+
+### `inventory_update_item`
+
+Update fields on an existing inventory item. Only provided fields are changed.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `item_id` | string | ✓ | Inventory item GUID |
+| `item_name` | string | | Updated display name |
+| `manufacturer` | string | | Updated manufacturer |
+| `model` | string | | Updated model |
+| `serial_number` | string | | Updated serial number |
+| `ip_address` | string | | Updated IP address |
+| `mac_address` | string | | Updated MAC address |
+| `location` | string | | Updated location |
+| `vendor` | string | | Updated vendor |
+| `version` | string | | Updated version |
+| `patch_level` | string | | Updated patch level |
+| `license_type` | string | | Updated license type |
+
+**Response:** Updated inventory item.
+
+### `inventory_decommission_item`
+
+Soft-delete an inventory item with a decommission rationale. Cascades to child software.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `item_id` | string | ✓ | Inventory item GUID |
+| `rationale` | string | ✓ | Reason for decommissioning |
+
+**Response:** Decommissioned item with cascade count in metadata.
+
+### `inventory_list`
+
+List and filter inventory items with pagination.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID, name, or acronym |
+| `type` | string | | `hardware` or `software` |
+| `function` | string | | Function filter |
+| `vendor` | string | | Vendor/manufacturer filter |
+| `status` | string | | `active` (default) or `decommissioned` |
+| `search` | string | | Free-text search on item name |
+| `page_size` | integer | | Results per page (default 50) |
+| `page` | integer | | Page number (default 1) |
+
+**Response:** Paginated list of inventory items with count.
+
+### `inventory_get`
+
+Retrieve a single inventory item with installed software children.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `item_id` | string | ✓ | Inventory item GUID |
+
+**Response:** Inventory item with installed software array for hardware items.
+
+### `inventory_export`
+
+Export inventory to an eMASS-compatible Excel workbook.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID, name, or acronym |
+| `export_type` | string | | `all` (default), `hardware`, or `software` |
+| `include_decommissioned` | boolean | | Include decommissioned items (default false) |
+
+**Response:** Base64-encoded Excel workbook with Hardware and Software worksheets.
+
+### `inventory_import`
+
+Import inventory from an eMASS-format Excel workbook.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID, name, or acronym |
+| `file_base64` | string | ✓ | Base64-encoded Excel file |
+| `dry_run` | boolean | | Preview import without persisting (default false) |
+
+**Response:** Import result with `hardware_created`, `software_created`, `rows_skipped`, and row-level errors.
+
+### `inventory_completeness`
+
+Check inventory completeness against boundary and field requirements.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID, name, or acronym |
+
+**Response:** Completeness report with `completeness_score`, `is_complete`, items with missing fields, unmatched boundary resources, and hardware without software.
+
+### `inventory_auto_seed`
+
+Auto-create hardware inventory items from authorization boundary resources.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID, name, or acronym |
+
+**Response:** List of created items with `created_count`. Idempotent — re-running skips existing items.
+
+---
+
+## Narrative Governance (Feature 024)
+
+**Service**: `INarrativeGovernanceService`
+
+### `compliance_narrative_history`
+
+Retrieve paginated version history for a control narrative (newest first).
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID, name, or acronym |
+| `control_id` | string | ✓ | NIST 800-53 control ID (e.g., "AC-1") |
+| `page` | integer | | Page number (default: 1) |
+| `page_size` | integer | | Items per page (default: 50) |
+
+**Response:** Array of `versions` with `version_number`, `content`, `status`, `authored_by`, `authored_at`, `change_reason`. Includes `total_versions` count. Error codes: `SYSTEM_NOT_FOUND`, `CONTROL_NOT_FOUND`.
+
+### `compliance_narrative_diff`
+
+Compare two versions of a control narrative with line-level unified diff.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID, name, or acronym |
+| `control_id` | string | ✓ | NIST 800-53 control ID |
+| `from_version` | integer | ✓ | Base version number |
+| `to_version` | integer | ✓ | Target version number |
+
+**Response:** Unified diff text with `lines_added` and `lines_removed` counts. Error codes: `SYSTEM_NOT_FOUND`, `CONTROL_NOT_FOUND`, `VERSION_NOT_FOUND`.
+
+### `compliance_rollback_narrative`
+
+Roll back to a prior narrative version (copy-forward — creates new version with old content, resets to Draft).
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID, name, or acronym |
+| `control_id` | string | ✓ | NIST 800-53 control ID |
+| `target_version` | integer | ✓ | Version number to roll back to |
+| `change_reason` | string | | Reason for rollback |
+
+**Response:** New version details with `new_version_number`, `rolled_back_to`, `status` (Draft). Error codes: `SYSTEM_NOT_FOUND`, `CONTROL_NOT_FOUND`, `VERSION_NOT_FOUND`, `UNDER_REVIEW`.
+
+### `compliance_submit_narrative`
+
+Submit a Draft narrative for ISSM review (transitions status to InReview).
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID, name, or acronym |
+| `control_id` | string | ✓ | NIST 800-53 control ID |
+
+**Response:** Updated version with `previous_status`, `new_status` (InReview), `submitted_by`, `submitted_at`. Error codes: `SYSTEM_NOT_FOUND`, `CONTROL_NOT_FOUND`, `INVALID_STATUS`.
+
+### `compliance_review_narrative`
+
+Approve or request revision of a narrative under review. ISSM only.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID, name, or acronym |
+| `control_id` | string | ✓ | NIST 800-53 control ID |
+| `decision` | string | ✓ | `approve` or `request_revision` |
+| `comments` | string | | Reviewer comments (required for `request_revision`) |
+
+**Response:** Review result with `decision`, `new_status` (Approved or NeedsRevision), `reviewed_by`, `reviewed_at`. Error codes: `SYSTEM_NOT_FOUND`, `CONTROL_NOT_FOUND`, `INVALID_STATUS`, `COMMENTS_REQUIRED`.
+
+### `compliance_batch_review_narratives`
+
+Batch approve or request revision of narratives by family or control IDs. ISSM only.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID, name, or acronym |
+| `decision` | string | ✓ | `approve` or `request_revision` |
+| `comments` | string | | Reviewer comments (required for `request_revision`) |
+| `family_filter` | string | | Control family prefix (e.g., "AC"). Mutually exclusive with `control_ids` |
+| `control_ids` | string | | Comma-separated control IDs. Mutually exclusive with `family_filter` |
+
+**Response:** `reviewed_count`, `skipped_count`, `reviewed_controls`, `skipped_controls`. Error codes: `SYSTEM_NOT_FOUND`, `NO_REVIEWABLE_NARRATIVES`, `COMMENTS_REQUIRED`, `MUTUALLY_EXCLUSIVE_FILTERS`.
+
+### `compliance_narrative_approval_progress`
+
+Return aggregate approval status, per-family breakdown, review queue, and staleness warnings.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID, name, or acronym |
+| `family_filter` | string | | Control family prefix to filter results |
+
+**Response:** Overall counts (`total_controls`, `approved`, `draft`, `in_review`, `needs_revision`, `missing`, `approval_percentage`), `families` breakdown, `review_queue` (InReview control IDs), `staleness_warnings`. Error codes: `SYSTEM_NOT_FOUND`.
+
+### `compliance_batch_submit_narratives`
+
+Submit all Draft narratives for a control family (or all families) for ISSM review.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID, name, or acronym |
+| `family_filter` | string | | Control family prefix. If omitted, submits all Draft narratives |
+
+**Response:** `submitted_count`, `skipped_count`, `submitted_controls`, `skipped_controls`, `skipped_reason`. Error codes: `SYSTEM_NOT_FOUND`, `NO_DRAFT_NARRATIVES`.
+
+---
+
 ## Document Templates
 
 ### `compliance_upload_template`

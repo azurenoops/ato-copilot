@@ -71,6 +71,8 @@ ATO Copilot integrates directly into your VS Code workflow:
 - **Quick Fix** — Lightbulb Code Actions to apply suggested fixes from STIG findings
 - **Hover Info** — Shows NIST control + STIG rule + CAT severity on hover
 - **`@ato` Chat Participant** — Ask compliance questions in natural language from the Copilot Chat panel
+- **Narrative Governance** — View narrative version history, compare changes, and submit narratives for ISSM review (`compliance_narrative_history`, `compliance_narrative_diff`, `compliance_submit_narrative`)
+- **HW/SW Inventory** — Register deployed software components and keep versions current (`inventory_add_item`, `inventory_update_item`)
 
 ## What's Next
 

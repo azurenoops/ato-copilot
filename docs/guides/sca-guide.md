@@ -459,6 +459,45 @@ Before generating the SAR, verify:
 
 ---
 
+## Inventory Verification
+
+> **Feature 025** — Before assessment, verify that the HW/SW inventory is complete and accurate.
+
+### Check Inventory Completeness
+
+```
+Tool: inventory_completeness
+Parameters: { "system_id": "{system-id}" }
+```
+
+Review the completeness report for:
+- Items with missing required fields
+- Boundary resources without corresponding inventory entries
+- Hardware items without any registered software
+
+### Review Inventory List
+
+```
+Tool: inventory_list
+Parameters: {
+  "system_id": "{system-id}",
+  "type": "hardware"
+}
+```
+
+Cross-reference against the authorization boundary to verify all in-scope resources are registered.
+
+### Pre-Assessment Inventory Checklist
+
+```
+1. inventory_completeness             ← Verify is_complete = true
+2. inventory_list (type=hardware)     ← Verify HW entries match boundary
+3. inventory_list (type=software)     ← Verify SW entries with versions
+4. inventory_export                   ← Archive inventory snapshot
+```
+
+---
+
 ## See Also
 
 - [SCA Getting Started](../getting-started/sca.md) — First-time setup and first 3 commands

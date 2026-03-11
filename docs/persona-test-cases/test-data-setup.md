@@ -35,6 +35,18 @@ These values are used throughout all test cases. If you change any value, update
 | `AGREEMENT_TYPE` | Memorandum of Agreement (MOA) | ISSM-53 |
 | `SSP_SECTION_5` | System Architecture | ISSO-31, ENG-29 |
 | `SSP_SECTION_6` | Technical Controls | ISSO-32, ENG-29 |
+| `HW_ITEM_NAME` | web-server-01 | INV-01, INV-02, INV-03 |
+| `HW_MANUFACTURER` | Dell | INV-01 |
+| `HW_IP_ADDRESS` | 10.0.0.1 | INV-01 |
+| `SW_ITEM_NAME` | RHEL 9.2 | INV-01 (software) |
+| `SW_VENDOR` | Red Hat | INV-01 (software) |
+| `SW_VERSION` | 9.2 | INV-01 (software) |
+| `NGV_CONTROL_ID` | AC-1 | NGV-01 through NGV-07 |
+| `NGV_CONTROL_FAMILY` | AC | NGV-06, NGV-07 |
+| `NGV_NARRATIVE_TEXT` | The organization develops, documents, and disseminates an access control policy... | NGV-01 |
+| `NGV_UPDATED_TEXT` | Updated: The organization maintains access control policy consistent with... | NGV-02 |
+| `NGV_CHANGE_REASON` | Updated per ISSM feedback on 2026 assessment | NGV-02 |
+| `NGV_REVIEWER` | ISSM (SecurityLead) | NGV-04, NGV-06 |
 
 ---
 

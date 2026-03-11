@@ -197,6 +197,11 @@ public class AtoCopilotContext : DbContext
     /// <summary>Review decisions recorded against narrative versions.</summary>
     public DbSet<NarrativeReview> NarrativeReviews => Set<NarrativeReview>();
 
+    // ─── HW/SW Inventory (Feature 025) ──────────────────────────────────────
+
+    /// <summary>Hardware and software inventory items for registered systems.</summary>
+    public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -1690,6 +1695,64 @@ public class AtoCopilotContext : DbContext
                 .WithMany(e => e.Reviews)
                 .HasForeignKey(e => e.NarrativeVersionId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ─── Inventory Item (Feature 025) ────────────────────────────────────────
+        modelBuilder.Entity<InventoryItem>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(36);
+            entity.Property(e => e.RegisteredSystemId).HasMaxLength(36).IsRequired();
+            entity.Property(e => e.ItemName).HasMaxLength(300).IsRequired();
+            entity.Property(e => e.Type).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.HardwareFunction).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.SoftwareFunction).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.Manufacturer).HasMaxLength(300);
+            entity.Property(e => e.Model).HasMaxLength(300);
+            entity.Property(e => e.SerialNumber).HasMaxLength(200);
+            entity.Property(e => e.IpAddress).HasMaxLength(45);
+            entity.Property(e => e.MacAddress).HasMaxLength(17);
+            entity.Property(e => e.Location).HasMaxLength(500);
+            entity.Property(e => e.Vendor).HasMaxLength(300);
+            entity.Property(e => e.Version).HasMaxLength(100);
+            entity.Property(e => e.PatchLevel).HasMaxLength(200);
+            entity.Property(e => e.LicenseType).HasMaxLength(200);
+            entity.Property(e => e.ParentHardwareId).HasMaxLength(36);
+            entity.Property(e => e.BoundaryResourceId).HasMaxLength(36);
+            entity.Property(e => e.DecommissionRationale).HasMaxLength(2000);
+            entity.Property(e => e.CreatedBy).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.ModifiedBy).HasMaxLength(200);
+
+            // FK → RegisteredSystem (required)
+            entity.HasOne(e => e.RegisteredSystem)
+                .WithMany()
+                .HasForeignKey(e => e.RegisteredSystemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Self-referencing FK: SW → parent HW (optional)
+            entity.HasOne(e => e.ParentHardware)
+                .WithMany(e => e.InstalledSoftware)
+                .HasForeignKey(e => e.ParentHardwareId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // FK → AuthorizationBoundary (optional, for auto-seed idempotency)
+            entity.HasOne(e => e.BoundaryResource)
+                .WithMany()
+                .HasForeignKey(e => e.BoundaryResourceId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Indexes
+            entity.HasIndex(e => e.RegisteredSystemId)
+                .HasDatabaseName("IX_InventoryItem_SystemId");
+            entity.HasIndex(e => new { e.RegisteredSystemId, e.Type })
+                .HasDatabaseName("IX_InventoryItem_System_Type");
+            entity.HasIndex(e => new { e.RegisteredSystemId, e.IpAddress })
+                .IsUnique()
+                .HasFilter("[IpAddress] IS NOT NULL")
+                .HasDatabaseName("IX_InventoryItem_System_Ip");
+            entity.HasIndex(e => e.BoundaryResourceId)
+                .HasDatabaseName("IX_InventoryItem_BoundaryResourceId");
         });
     }
 

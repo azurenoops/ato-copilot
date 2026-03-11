@@ -752,7 +752,7 @@ public class SspServiceSectionTests : IDisposable
             RegisteredSystemId = "sys-1", SectionTitle = "Authorization Boundary"
         };
 
-        var content = SspService.GenerateSection11Content(boundaries, section);
+        var content = SspService.GenerateSection11Content(boundaries, new List<InventoryItem>(), section);
 
         content.Should().Contain("### Boundary Description");
         content.Should().Contain("all Azure resources in RG-Web");
@@ -765,7 +765,7 @@ public class SspServiceSectionTests : IDisposable
     [Fact]
     public void Section11_NoBoundaries_ReturnsPlaceholder()
     {
-        var content = SspService.GenerateSection11Content([], null);
+        var content = SspService.GenerateSection11Content([], new List<InventoryItem>(), null);
 
         content.Should().Contain("not been defined");
     }

@@ -1278,6 +1278,110 @@ Before submitting the authorization package, verify:
 
 ---
 
+## HW/SW Inventory Management
+
+> **Feature 025** — Register, manage, import/export, and verify completeness of hardware and software inventory items for eMASS and SSP §11.
+
+### Quick-Start: Auto-Seed from Boundary
+
+If the system already has an authorization boundary defined, auto-seed creates inventory items from boundary resources:
+
+```
+Tool: inventory_auto_seed
+Parameters: { "system_id": "{system-id}" }
+```
+
+The tool maps Azure resource types to hardware functions (VMs → Server, NSGs → NetworkDevice, Storage → Storage) and links each item back to its boundary resource for traceability.
+
+### Registering Inventory Items
+
+```
+Tool: inventory_add_item
+Parameters: {
+  "system_id": "{system-id}",
+  "item_name": "web-server-01",
+  "type": "hardware",
+  "function": "Server",
+  "manufacturer": "Dell",
+  "ip_address": "10.0.0.1"
+}
+```
+
+For software installed on hardware:
+
+```
+Tool: inventory_add_item
+Parameters: {
+  "system_id": "{system-id}",
+  "item_name": "RHEL 9.2",
+  "type": "software",
+  "function": "OperatingSystem",
+  "vendor": "Red Hat",
+  "version": "9.2",
+  "parent_hardware_id": "{hw-item-id}"
+}
+```
+
+### Completeness Check
+
+Before exporting to eMASS, verify inventory completeness:
+
+```
+Tool: inventory_completeness
+Parameters: { "system_id": "{system-id}" }
+```
+
+The tool checks three dimensions:
+1. **Missing required fields** — items lacking manufacturer, IP (for servers), vendor (for software)
+2. **Unmatched boundary resources** — boundary resources with no corresponding inventory entry
+3. **Hardware without software** — servers/workstations with no installed software registered
+
+### Export to eMASS Excel
+
+```
+Tool: inventory_export
+Parameters: { "system_id": "{system-id}" }
+```
+
+Produces an Excel workbook with separate Hardware and Software worksheets matching the eMASS format.
+
+### Import from Excel
+
+```
+Tool: inventory_import
+Parameters: {
+  "system_id": "{system-id}",
+  "file_base64": "{base64-encoded-xlsx}",
+  "dry_run": true
+}
+```
+
+Use `dry_run: true` to preview the import before persisting. Row-level errors are reported with worksheet name, row number, and error detail.
+
+### Decommissioning
+
+```
+Tool: inventory_decommission_item
+Parameters: {
+  "item_id": "{item-id}",
+  "rationale": "End of life — replaced by web-server-02"
+}
+```
+
+Decommissioning a hardware item automatically cascades to all installed software.
+
+### ISSM Inventory Workflow
+
+```
+1. inventory_auto_seed                ← Quick-start from boundary
+2. inventory_add_item (repeat)        ← Add items not in boundary
+3. inventory_completeness             ← Verify coverage
+4. inventory_export                   ← Export for eMASS
+5. compliance_generate_ssp            ← §11 includes HW/SW tables
+```
+
+---
+
 ## See Also
 
 - [ISSM Getting Started](../getting-started/issm.md) — First-time setup and first 3 commands

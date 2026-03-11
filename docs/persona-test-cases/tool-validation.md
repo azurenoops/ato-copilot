@@ -235,6 +235,20 @@ This document provides the cross-reference validation of all 106 MCP tools refer
 | 105 | `pim_deny_request` | AUTH-07 | ⬜ | |
 | 106 | `jit_request_access` | AUTH-05 | ⬜ | |
 
+### HW/SW Inventory (9 tools) — F025
+
+| # | Tool Name | Spec TC-IDs | Present | Notes |
+|---|-----------|-------------|---------|-------|
+| 107 | `inventory_add_item` | INV-01 | ⬜ | |
+| 108 | `inventory_update_item` | INV-02 | ⬜ | |
+| 109 | `inventory_decommission_item` | INV-03 | ⬜ | |
+| 110 | `inventory_list` | INV-04 | ⬜ | |
+| 111 | `inventory_get` | INV-05 | ⬜ | |
+| 112 | `inventory_export` | INV-06 | ⬜ | |
+| 113 | `inventory_import` | INV-07 | ⬜ | |
+| 114 | `inventory_completeness` | INV-08 | ⬜ | |
+| 115 | `inventory_auto_seed` | INV-09 | ⬜ | |
+
 ---
 
 ## Validation Summary
@@ -260,7 +274,8 @@ This document provides the cross-reference validation of all 106 MCP tools refer
 | CKL Export | 1 | ___ | ___ |
 | Kanban | 11 | ___ | ___ |
 | PIM / Auth | 8 | ___ | ___ |
-| **Total** | **106** | **___** | **___** |
+| HW/SW Inventory | 9 | ___ | ___ |
+| **Total** | **115** | **___** | **___** |
 
 ---
 
@@ -276,7 +291,7 @@ If any tools are missing, document them here for T007 blocked items:
 
 ## Validation Result
 
-- ⬜ **PASS** — All 106 tools present. Proceed to persona testing.
+- ⬜ **PASS** — All 115 tools present. Proceed to persona testing.
 - ⬜ **FAIL** — Missing tools detected. Resolve before proceeding.
 
 **Validated By**: _______________ | **Date**: _______________

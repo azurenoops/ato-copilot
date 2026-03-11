@@ -791,6 +791,53 @@ ISCP reference for SSP §13 (Feature 022).
 
 ---
 
+## Inventory Entities
+
+### InventoryItem
+
+HW/SW inventory item linked to a registered system (Feature 025).
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Id` | `string(36)` | Primary key (GUID) |
+| `RegisteredSystemId` | `string` | FK → RegisteredSystem |
+| `ItemName` | `string(200)` | Display name |
+| `Type` | `InventoryItemType` | `Hardware` or `Software` |
+| `HardwareFunction` | `HardwareFunction?` | Server, Workstation, NetworkDevice, Storage, Other |
+| `SoftwareFunction` | `SoftwareFunction?` | OperatingSystem, Database, Middleware, Application, SecurityTool, Other |
+| `Manufacturer` | `string?` | Hardware manufacturer |
+| `Model` | `string?` | Hardware model |
+| `SerialNumber` | `string?` | Hardware serial number |
+| `IpAddress` | `string?` | IP address (unique within system for active items) |
+| `MacAddress` | `string?` | MAC address |
+| `Location` | `string?` | Physical location |
+| `Vendor` | `string?` | Software vendor |
+| `Version` | `string?` | Software version |
+| `PatchLevel` | `string?` | Current patch level |
+| `LicenseType` | `string?` | License type |
+| `Status` | `InventoryItemStatus` | `Active` or `Decommissioned` |
+| `ParentHardwareId` | `string?` | Self-referencing FK for SW installed on HW |
+| `BoundaryResourceId` | `string?` | FK linking to AuthorizationBoundary resource |
+| `DecommissionDate` | `DateTime?` | When decommissioned |
+| `DecommissionRationale` | `string?` | Reason for decommissioning |
+| `CreatedBy` | `string` | Identity of creator |
+| `CreatedAt` | `DateTime` | Creation timestamp |
+| `ModifiedBy` | `string?` | Last modifier identity |
+| `ModifiedAt` | `DateTime?` | Last modification timestamp |
+
+**Relationships:**
+
+- Many InventoryItems → one RegisteredSystem
+- Self-referencing: Software → parent Hardware via `ParentHardwareId`
+- Optional link to AuthorizationBoundary via `BoundaryResourceId` (auto-seed)
+
+**Indexes:**
+
+- Composite: `RegisteredSystemId` + `Type`
+- Unique: `IpAddress` within system (for active items)
+
+---
+
 ## Core Compliance Entities
 
 | Entity | Purpose |

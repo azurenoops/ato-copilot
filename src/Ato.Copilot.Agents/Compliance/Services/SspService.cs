@@ -464,6 +464,11 @@ public class SspService : ISspService
             .Where(b => b.RegisteredSystemId == systemId && b.IsInBoundary)
             .ToListAsync(cancellationToken);
 
+        var inventoryItems = await context.InventoryItems
+            .Where(i => i.RegisteredSystemId == systemId && i.Status != InventoryItemStatus.Decommissioned)
+            .OrderBy(i => i.Type).ThenBy(i => i.ItemName)
+            .ToListAsync(cancellationToken);
+
         var sspSections = await context.SspSections
             .Where(s => s.RegisteredSystemId == systemId)
             .ToDictionaryAsync(s => s.SectionNumber, cancellationToken);
@@ -571,7 +576,7 @@ public class SspService : ISspService
                     7 => GenerateSection7Content(interconnections, system, storedSection),
                     9 => GenerateSection9Content(baseline, narratives),
                     10 => GenerateSection10Content(system, baseline, narratives, approvedVersions),
-                    11 => GenerateSection11Content(boundaries, storedSection),
+                    11 => GenerateSection11Content(boundaries, inventoryItems, storedSection),
                     _ => ""
                 };
 
@@ -1372,9 +1377,10 @@ public class SspService : ISspService
         return sb.ToString().TrimEnd();
     }
 
-    /// <summary>§11 Authorization Boundary: resource inventory + authored boundary narrative.</summary>
+    /// <summary>§11 Authorization Boundary: resource inventory + HW/SW inventory tables + authored boundary narrative.</summary>
     internal static string GenerateSection11Content(
         List<AuthorizationBoundary> boundaries,
+        List<InventoryItem> inventoryItems,
         SspSection? section)
     {
         var sb = new StringBuilder();
@@ -1425,6 +1431,42 @@ public class SspService : ISspService
             {
                 sb.AppendLine($"| {b.ResourceId} | {b.ResourceType} | {b.ExclusionRationale ?? "—"} |");
             }
+        }
+
+        // ─── HW/SW Inventory Tables (FR-015) ────────────────────────────────
+        var hwItems = inventoryItems.Where(i => i.Type == InventoryItemType.Hardware).ToList();
+        var swItems = inventoryItems.Where(i => i.Type == InventoryItemType.Software).ToList();
+
+        if (hwItems.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("### Hardware Inventory");
+            sb.AppendLine();
+            sb.AppendLine("| Name | Manufacturer | Model | Serial Number | Function | IP Address | MAC Address | Location |");
+            sb.AppendLine("|------|-------------|-------|---------------|----------|------------|-------------|----------|");
+            foreach (var h in hwItems)
+            {
+                sb.AppendLine($"| {h.ItemName} | {h.Manufacturer ?? "—"} | {h.Model ?? "—"} | {h.SerialNumber ?? "—"} | {h.HardwareFunction?.ToString() ?? "—"} | {h.IpAddress ?? "—"} | {h.MacAddress ?? "—"} | {h.Location ?? "—"} |");
+            }
+        }
+
+        if (swItems.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("### Software Inventory");
+            sb.AppendLine();
+            sb.AppendLine("| Name | Vendor | Version | Patch Level | Function | License Type |");
+            sb.AppendLine("|------|--------|---------|-------------|----------|-------------|");
+            foreach (var s in swItems)
+            {
+                sb.AppendLine($"| {s.ItemName} | {s.Vendor ?? "—"} | {s.Version ?? "—"} | {s.PatchLevel ?? "—"} | {s.SoftwareFunction?.ToString() ?? "—"} | {s.LicenseType ?? "—"} |");
+            }
+        }
+
+        if (hwItems.Count == 0 && swItems.Count == 0 && boundaries.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("*No hardware/software inventory items have been registered. Use `inventory_auto_seed` to populate from boundary resources.*");
         }
 
         return sb.ToString().TrimEnd();

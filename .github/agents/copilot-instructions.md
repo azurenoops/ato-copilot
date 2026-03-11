@@ -47,6 +47,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-21
 - Static markdown files in `docs/` directory, served via MkDocs (023-feature-docs-update)
 - C# 13 / .NET 9.0 + ASP.NET Core, EF Core 9.0.0, Serilog, DiffPlex (new — MIT, .NET Standard 2.0) (024-narrative-governance)
 - SQLite (dev) / SQL Server (prod) via EF Core dual-provider (024-narrative-governance)
+- C# 13 / .NET 9.0 + EF Core 9.0.0 (SQLite dev / SQL Server prod), ClosedXML (Excel I/O), System.Text.Json, FluentAssertions + xUnit + Moq (tests) (025-hw-sw-inventory)
+- EF Core — `AtoCopilotContext` with `DbSet<InventoryItem>`. SQLite for dev, SQL Server for prod. (025-hw-sw-inventory)
 
 - C# 13 / .NET 9.0 + Azure.Identity 1.13, Azure.ResourceManager 1.13, Microsoft.Extensions.AI 9.4-preview, Microsoft.EntityFrameworkCore 9.0, Serilog 4.2, xUnit 2.9, FluentAssertions 7.0, Moq 4.20 (001-core-compliance)
 
@@ -66,9 +68,9 @@ dotnet build Ato.Copilot.sln [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMAN
 C# .NET 9: Follow standard conventions
 
 ## Recent Changes
+- 025-hw-sw-inventory: Added C# 13 / .NET 9.0 + EF Core 9.0.0 (SQLite dev / SQL Server prod), ClosedXML (Excel I/O), System.Text.Json, FluentAssertions + xUnit + Moq (tests)
+- 025-hw-sw-inventory: Added C# 13 / .NET 9.0 + EF Core 9.0.0 (SQLite dev / SQL Server prod), ClosedXML (Excel I/O), System.Text.Json, FluentAssertions + xUnit + Moq (tests)
 - 024-narrative-governance: Added C# 13 / .NET 9.0 + ASP.NET Core, EF Core 9.0.0, Serilog, DiffPlex (new — MIT, .NET Standard 2.0)
-- 024-narrative-governance: Added [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION] + [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
-- 023-feature-docs-update: Added Markdown (MkDocs Material theme) + MkDocs with Material theme, pymdownx extensions (admonition, superfences, tabbed, tasklist)
 
 
 <!-- MANUAL ADDITIONS START -->

@@ -771,3 +771,182 @@ CAC revocation within 24 hours of departure.
 | SSP Completion | ___% | ISSO-34 |
 
 **Checkpoint**: ⬜ ISSO (35 tests) complete. SSP sections authored, scans imported, CKL exported, privacy analyzed, interconnections registered, monitoring active. SCA testing can begin.
+
+---
+
+## HW/SW Inventory Management (ISSO-INV-01 to ISSO-INV-07)
+
+### ISSO-INV-01: Auto-Seed from Boundary
+
+**Task**: Create initial inventory from boundary resources
+**Precondition**: Authorization boundary defined (ISSM phase)
+
+```text
+@ato Auto-seed the hardware inventory for Eagle Eye from the authorization boundary
+```
+
+**Expected Tool**: `inventory_auto_seed`
+**Expected Output**: List of created hardware items mapped from boundary resources
+**Verification**: `created_count` > 0; re-running returns `created_count` = 0 (idempotent)
+**Record**: created = ___
+
+### ISSO-INV-02: Add Hardware Item
+
+**Task**: Register a hardware item not in the boundary
+
+```text
+@ato Add hardware item "web-server-01" to Eagle Eye — it's a Dell Server at 10.0.0.1
+```
+
+**Expected Tool**: `inventory_add_item`
+**Expected Output**: Created item with `id`, `type` = "Hardware", `status` = "Active"
+**Record**: item_id = ___
+
+### ISSO-INV-03: Add Software on Hardware
+
+**Task**: Register software installed on the hardware item
+
+```text
+@ato Add software "RHEL 9.2" by Red Hat on web-server-01 in Eagle Eye — it's an OperatingSystem
+```
+
+**Expected Tool**: `inventory_add_item` with `parent_hardware_id`
+**Expected Output**: Created software item linked to parent hardware
+**Record**: item_id = ___
+
+### ISSO-INV-04: Update Hardware Location
+
+**Task**: Update the location field on an existing hardware item
+
+```text
+@ato Update web-server-01 location to "DC-East Rack A-12"
+```
+
+**Expected Tool**: `inventory_update_item`
+**Expected Output**: Updated item with new location, `modified_at` timestamp updated
+
+### ISSO-INV-05: Check Inventory Completeness
+
+**Task**: Verify inventory completeness before export
+
+```text
+@ato Check the inventory completeness for Eagle Eye
+```
+
+**Expected Tool**: `inventory_completeness`
+**Expected Output**: `completeness_score`, `is_complete`, lists of issues (if any)
+**Record**: score = ___, is_complete = ___
+
+### ISSO-INV-06: Export to eMASS Excel
+
+**Task**: Export inventory to Excel for eMASS upload
+
+```text
+@ato Export the HW/SW inventory for Eagle Eye to Excel
+```
+
+**Expected Tool**: `inventory_export`
+**Expected Output**: Base64-encoded Excel with Hardware and Software worksheets
+**Verification**: Decode and open file — verify two worksheets with correct column headers
+
+### ISSO-INV-07: Decommission Hardware (Cascade)
+
+**Task**: Decommission a hardware item and verify cascade to child software
+
+```text
+@ato Decommission web-server-01 — rationale: "End of life, replaced by web-server-02"
+```
+
+**Expected Tool**: `inventory_decommission_item`
+**Expected Output**: Item status = Decommissioned, child software also decommissioned
+**Record**: cascaded_children = ___
+
+---
+
+## Narrative Governance (ISSO-NGV-01 to ISSO-NGV-07)
+
+> Feature 024: Narrative version history, diff, rollback, and approval submission workflows.
+
+### ISSO-NGV-01: Write Narrative (Version 1)
+
+**Task**: Write a control narrative for AC-1 to create the initial version
+
+```text
+@ato Write the AC-1 narrative for Eagle Eye: "The organization develops, documents, and disseminates an access control policy..."
+```
+
+**Expected Tool**: `compliance_write_narrative`
+**Expected Output**: Narrative saved with `version_number: 1`, `approval_status: Draft`
+**Record**: version_number = ___
+
+### ISSO-NGV-02: Update Narrative (Version 2)
+
+**Task**: Update the AC-1 narrative with a change reason to create version 2
+
+```text
+@ato Update the AC-1 narrative for Eagle Eye: "Updated: The organization maintains access control policy consistent with..." — change reason: "Updated per ISSM feedback on 2026 assessment"
+```
+
+**Expected Tool**: `compliance_write_narrative` with `change_reason` parameter
+**Expected Output**: `version_number: 2`, `previous_version: 1`, `approval_status: Draft`
+**Record**: version_number = ___
+
+### ISSO-NGV-03: View Narrative Version History
+
+**Task**: Retrieve the full version history for AC-1
+
+```text
+@ato Show the version history for the AC-1 narrative of Eagle Eye
+```
+
+**Expected Tool**: `compliance_narrative_history`
+**Expected Output**: List of versions (newest first) with `total_versions: 2`, each showing `version_number`, `authored_by`, `authored_at`, `change_reason`
+**Record**: total_versions = ___
+
+### ISSO-NGV-04: Diff Narrative Versions
+
+**Task**: Compare versions 1 and 2 of the AC-1 narrative
+
+```text
+@ato Show the diff between version 1 and version 2 of the AC-1 narrative for Eagle Eye
+```
+
+**Expected Tool**: `compliance_narrative_diff`
+**Expected Output**: Unified diff text with `lines_added` and `lines_removed` counts
+**Record**: lines_added = ___ | lines_removed = ___
+
+### ISSO-NGV-05: Rollback Narrative
+
+**Task**: Roll back AC-1 narrative to version 1 (creates version 3 as copy-forward)
+
+```text
+@ato Roll back the AC-1 narrative for Eagle Eye to version 1
+```
+
+**Expected Tool**: `compliance_rollback_narrative`
+**Expected Output**: `new_version_number: 3`, `rolled_back_to: 1`, `status: Draft`
+**Record**: new_version_number = ___
+
+### ISSO-NGV-06: Submit Narrative for ISSM Review
+
+**Task**: Submit the AC-1 narrative for ISSM review
+
+```text
+@ato Submit the AC-1 narrative for Eagle Eye for ISSM review
+```
+
+**Expected Tool**: `compliance_submit_narrative`
+**Expected Output**: `previous_status: Draft`, `new_status: InReview`, `submitted_by`, `submitted_at`
+**Record**: new_status = ___
+
+### ISSO-NGV-07: Batch Submit AC Family Narratives
+
+**Task**: Submit all Draft narratives in the AC family for ISSM review
+
+```text
+@ato Submit all AC family narratives for Eagle Eye for ISSM review
+```
+
+**Expected Tool**: `compliance_batch_submit_narratives` with `family_filter` = "AC"
+**Expected Output**: `submitted_count`, `skipped_count`, `submitted_controls`, `skipped_controls`
+**Record**: submitted_count = ___ | skipped_count = ___

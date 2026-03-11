@@ -752,3 +752,82 @@ All configurations are enforced via Bicep IaC templates.
 - [ ] Issues documented
 
 **Engineer Section Status**: ☐ PASS / ☐ FAIL | **Tester**: __________ | **Date**: __________
+
+---
+
+## HW/SW Inventory — Component Registration (ENG-INV-01 to ENG-INV-03)
+
+### ENG-INV-01: Register Software Component
+
+**Task**: Register a deployed application in the inventory
+
+```text
+@ato Add software "my-api-service" version 1.2.0 to Eagle Eye — vendor Internal, function Application, installed on web-server-01
+```
+
+**Expected Tool**: `inventory_add_item`
+**Expected Output**: Created software item linked to parent hardware
+
+### ENG-INV-02: Update Software Version
+
+**Task**: Update version after a deployment
+
+```text
+@ato Update my-api-service version to 1.3.0, patch level 2024-01-15
+```
+
+**Expected Tool**: `inventory_update_item`
+**Expected Output**: Updated item with new version and patch level
+
+### ENG-INV-03: List Software Components
+
+**Task**: List all software items for the system
+
+```text
+@ato List all software inventory items for Eagle Eye
+```
+
+**Expected Tool**: `inventory_list` with `type` = "software"
+**Expected Output**: Paginated list including newly registered component
+
+---
+
+## Narrative Governance (ENG-NGV-01 to ENG-NGV-03)
+
+> Feature 024: Engineers can view narrative version history, compare versions, and submit narratives for ISSM review.
+
+### ENG-NGV-01: View Narrative Version History
+
+**Task**: View the version history for a control narrative the engineer has written
+
+```text
+@ato Show the version history for the SC-7 narrative of Eagle Eye
+```
+
+**Expected Tool**: `compliance_narrative_history`
+**Expected Output**: List of versions (newest first) with `total_versions`, each showing `version_number`, `authored_by`, `change_reason`
+**Record**: total_versions = ___
+
+### ENG-NGV-02: Diff Narrative Versions
+
+**Task**: Compare two versions of a control narrative
+
+```text
+@ato Show the diff between version 1 and version 2 of the SC-7 narrative for Eagle Eye
+```
+
+**Expected Tool**: `compliance_narrative_diff`
+**Expected Output**: Unified diff text with `lines_added` and `lines_removed`
+**Record**: lines_added = ___ | lines_removed = ___
+
+### ENG-NGV-03: Submit Narrative for ISSM Review
+
+**Task**: Submit a completed narrative for ISSM review
+
+```text
+@ato Submit the SC-7 narrative for Eagle Eye for ISSM review
+```
+
+**Expected Tool**: `compliance_submit_narrative`
+**Expected Output**: `previous_status: Draft`, `new_status: InReview`
+**Record**: new_status = ___

@@ -3062,3 +3062,130 @@ Submit all Draft narratives for a control family (or all families) for ISSM revi
   "resolution": "Verify INarrativeGovernanceService is registered and Feature024_NarrativeGovernance migration is applied."
 }
 ```
+
+---
+
+## HW/SW Inventory Tools (Feature 025)
+
+> **Feature 025**: HW/SW Inventory Management — Register, manage, import/export, and assess completeness of hardware and software inventory items.
+
+### `inventory_add_item`
+
+Register a hardware or software inventory item with function-based field validation.
+
+- **RBAC**: Compliance.Analyst (ISSO), Compliance.SecurityLead (ISSM), Compliance.PlatformEngineer (Engineer)
+- **RMF Step**: Implement (Phase 3)
+- **Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID, name, or acronym |
+| `item_name` | string | ✓ | Display name |
+| `type` | string | ✓ | `hardware` or `software` |
+| `function` | string | ✓ | HW: Server, Workstation, NetworkDevice, Storage, Other; SW: OperatingSystem, Database, Middleware, Application, SecurityTool, Other |
+| `manufacturer` | string | | Required for hardware |
+| `model` | string | | Hardware model |
+| `serial_number` | string | | Serial number |
+| `ip_address` | string | | Required for Server/NetworkDevice |
+| `mac_address` | string | | MAC address |
+| `location` | string | | Physical location |
+| `vendor` | string | | Required for software |
+| `version` | string | | Required for software |
+| `patch_level` | string | | Patch level |
+| `license_type` | string | | License type |
+| `parent_hardware_id` | string | | Parent HW GUID (for SW items) |
+
+- **Response**: Created item with `id`, `item_name`, `type`, `status`
+- **Errors**: `SYSTEM_NOT_FOUND`, `VALIDATION_FAILED`, `DUPLICATE_IP`, `INVALID_INPUT`
+
+### `inventory_update_item`
+
+Update fields on an existing inventory item (partial update — null fields unchanged).
+
+- **RBAC**: Compliance.Analyst (ISSO), Compliance.SecurityLead (ISSM), Compliance.PlatformEngineer (Engineer)
+- **RMF Step**: Implement (Phase 3)
+- **Parameters**: `item_id` (required), plus optional `item_name`, `manufacturer`, `model`, `serial_number`, `ip_address`, `mac_address`, `location`, `vendor`, `version`, `patch_level`, `license_type`
+- **Response**: Updated item
+- **Errors**: `ITEM_NOT_FOUND`, `DUPLICATE_IP`, `INVALID_INPUT`
+
+### `inventory_decommission_item`
+
+Soft-delete an inventory item. Cascades to child software items.
+
+- **RBAC**: Compliance.Analyst (ISSO), Compliance.SecurityLead (ISSM)
+- **RMF Step**: Implement (Phase 3)
+- **Parameters**: `item_id` (required), `rationale` (required)
+- **Response**: Decommissioned item with cascaded child count in metadata
+- **Errors**: `ITEM_NOT_FOUND`, `ALREADY_DECOMMISSIONED`, `INVALID_INPUT`
+
+### `inventory_list`
+
+List and filter inventory items with pagination.
+
+- **RBAC**: Compliance.Analyst (ISSO), Compliance.Auditor (SCA), Compliance.PlatformEngineer (Engineer)
+- **RMF Step**: Implement (Phase 3), Assess (Phase 5)
+- **Parameters**: `system_id` (required), optional `type`, `function`, `vendor`, `status`, `search`, `page_size`, `page`
+- **Response**: `count`, `page`, `page_size`, `items[]`
+- **Errors**: `SYSTEM_NOT_FOUND`, `INVALID_INPUT`
+
+### `inventory_get`
+
+Retrieve a single inventory item with installed software children.
+
+- **RBAC**: All compliance roles
+- **RMF Step**: Any
+- **Parameters**: `item_id` (required)
+- **Response**: Item detail with `installed_software[]` for hardware items
+- **Errors**: `ITEM_NOT_FOUND`, `INVALID_INPUT`
+
+### `inventory_export`
+
+Export inventory to an eMASS-compatible Excel workbook with Hardware and Software worksheets.
+
+- **RBAC**: Compliance.Analyst (ISSO), Compliance.SecurityLead (ISSM)
+- **RMF Step**: Implement (Phase 3), Authorize (Phase 6)
+- **Parameters**: `system_id` (required), optional `export_type` (`all`/`hardware`/`software`), `include_decommissioned`
+- **Response**: `file_base64` (base64-encoded .xlsx)
+- **Errors**: `SYSTEM_NOT_FOUND`, `NO_INVENTORY_DATA`
+
+### `inventory_import`
+
+Import inventory from an eMASS-format Excel workbook with dry-run support.
+
+- **RBAC**: Compliance.Analyst (ISSO), Compliance.SecurityLead (ISSM)
+- **RMF Step**: Implement (Phase 3)
+- **Parameters**: `system_id` (required), `file_base64` (required), optional `dry_run`
+- **Response**: `hardware_created`, `software_created`, `rows_skipped`, `dry_run`, `errors[]`
+- **Errors**: `SYSTEM_NOT_FOUND`, `INVALID_BASE64`
+
+### `inventory_completeness`
+
+Check inventory completeness — missing fields, unmatched boundary resources, hardware without software.
+
+- **RBAC**: Compliance.Analyst (ISSO), Compliance.Auditor (SCA)
+- **RMF Step**: Implement (Phase 3), Assess (Phase 5)
+- **Parameters**: `system_id` (required)
+- **Response**: `completeness_score`, `is_complete`, `items_with_missing_fields[]`, `unmatched_boundary_resources[]`, `hardware_without_software[]`
+- **Errors**: `SYSTEM_NOT_FOUND`
+
+### `inventory_auto_seed`
+
+Auto-create hardware inventory items from authorization boundary resources. Idempotent via BoundaryResourceId FK.
+
+- **RBAC**: Compliance.Analyst (ISSO), Compliance.SecurityLead (ISSM)
+- **RMF Step**: Implement (Phase 3)
+- **Parameters**: `system_id` (required)
+- **Response**: `created_count`, `items[]`
+- **Errors**: `SYSTEM_NOT_FOUND`, `NO_BOUNDARY_DATA`
+
+### Troubleshooting — HW/SW Inventory Tools
+
+**"Tool not found" error**: Inventory tools require Feature 025 to be deployed with `IInventoryService` registered in DI. Verify the service is registered in `ServiceCollectionExtensions.cs`.
+
+```json
+{
+  "status": "error",
+  "error": "Tool 'inventory_add_item' not found. Feature 025 (HW/SW Inventory) may not be deployed in this environment.",
+  "resolution": "Verify IInventoryService is registered and database migration is applied."
+}
+```

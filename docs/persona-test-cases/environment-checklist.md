@@ -17,7 +17,7 @@ This checklist must be completed **before** any persona test case execution begi
 | 1.1 | Solution builds | `dotnet build Ato.Copilot.sln` | Build succeeded, 0 errors | ⬜ | |
 | 1.2 | MCP server starts | `dotnet run --project src/Ato.Copilot.Mcp` | Server listening on configured port | ⬜ | Port: ___ |
 | 1.3 | Health endpoint responds | `curl http://localhost:{port}/health` | 200 OK within 5s | ⬜ | |
-| 1.4 | Tool count ≥ 136 | Query `/tools/list` endpoint | Returns ≥ 136 registered tools | ⬜ | Actual: ___ |
+| 1.4 | Tool count ≥ 145 | Query `/tools/list` endpoint | Returns ≥ 145 registered tools | ⬜ | Actual: ___ |
 | 1.5 | All 106 spec tools present | Cross-reference `/tools/list` against research.md tool list | 0 missing tools | ⬜ | Missing: ___ |
 
 ### 106 Spec-Referenced Tools
@@ -182,6 +182,19 @@ Verify each tool is in the `/tools/list` response:
 - [ ] `jit_request_access`
 
 **Tool Count**: 106 tools | **Verified**: ___/106
+
+**HW/SW Inventory (9)** — F025
+- [ ] `inventory_add_item`
+- [ ] `inventory_update_item`
+- [ ] `inventory_decommission_item`
+- [ ] `inventory_list`
+- [ ] `inventory_get`
+- [ ] `inventory_export`
+- [ ] `inventory_import`
+- [ ] `inventory_completeness`
+- [ ] `inventory_auto_seed`
+
+**Inventory Tool Count**: 9 tools | **Verified**: ___/9
 
 </details>
 
