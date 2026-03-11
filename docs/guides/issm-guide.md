@@ -919,6 +919,297 @@ Lists all unique Prisma policies observed, with NIST control mappings, open/reso
 
 ---
 
+## Security Assessment Plan Review
+
+> Feature 018: SAP Generation
+
+As ISSM, you review and verify SAP scope before the SCA finalizes it.
+
+### Review SAP Status
+
+Check if a SAP exists and its current status:
+
+```
+Tool: compliance_list_saps
+Parameters:
+  system_id: "<system-guid>"
+```
+
+### Review SAP Content
+
+Retrieve the full SAP document to verify scope, team assignments, and assessment methods:
+
+```
+Tool: compliance_get_sap
+Parameters:
+  system_id: "<system-guid>"
+```
+
+Review:
+
+- **Schedule**: Assessment window is realistic and coordinated with stakeholders
+- **Team composition**: All required roles are assigned (SCA, ISSO, ISSM, AO representative)
+- **Scope notes**: Assessment scope covers all applicable controls
+- **Method overrides**: Any non-standard assessment methods have documented rationale
+
+### Request SAP Updates
+
+If changes are needed before finalization, update the Draft SAP:
+
+```
+Tool: compliance_update_sap
+Parameters:
+  system_id: "<system-guid>"
+  schedule_start: "2026-04-01T00:00:00Z"
+  schedule_end: "2026-04-30T00:00:00Z"
+  scope_notes: "Include interconnection controls per ISA review findings"
+```
+
+### Confirm Finalization
+
+After the SCA finalizes the SAP, verify the integrity hash:
+
+```
+Tool: compliance_get_sap
+Parameters:
+  system_id: "<system-guid>"
+```
+
+A finalized SAP will have `status: "Finalized"` and a `content_hash` (SHA-256) for tamper detection. Finalized SAPs are immutable.
+
+---
+
+## Privacy Oversight
+
+> Feature 021: Privacy & Interconnection
+
+### PTA Determination Review
+
+After an ISSO conducts the Privacy Threshold Analysis, review the determination:
+
+```
+Tool: compliance_check_privacy_compliance
+Parameters:
+  system_id: "<system-guid>"
+```
+
+Check `pta_determination` — if `PiaRequired`, verify the PIA has been generated and submitted for your review.
+
+### PIA Approval/Rejection
+
+Review and approve (or request revision) on the Privacy Impact Assessment:
+
+```
+Tool: compliance_review_pia
+Parameters:
+  system_id: "<system-guid>"
+  decision: "Approved"
+  reviewer_comments: "All 8 sections adequately address PII handling, retention, and disposal."
+```
+
+To request revisions:
+
+```
+Tool: compliance_review_pia
+Parameters:
+  system_id: "<system-guid>"
+  decision: "RequestRevision"
+  reviewer_comments: "Section 3 lacks specificity on PII retention periods."
+  deficiencies: '["Section 3: Missing retention period details", "Section 5: No data sharing agreements referenced"]'
+```
+
+!!! note "PIA Expiration"
+    Approved PIAs expire annually. Track expiration via `compliance_check_privacy_compliance` — the `expiring_within_90_days` field alerts you to upcoming renewals.
+
+---
+
+## Interconnection Agreement Management
+
+> Feature 021: Privacy & Interconnection
+
+### Validate Agreement Compliance
+
+Check that all active interconnections have signed, current agreements:
+
+```
+Tool: compliance_validate_agreements
+Parameters:
+  system_id: "<system-guid>"
+```
+
+Review:
+
+- `isFullyCompliant`: Must be `true` for Gate 4 (Interconnection Documentation) to pass
+- `expiringWithin90DaysCount`: Schedule renewal before expiration
+- `missingAgreementCount`: Any interconnection without an agreement blocks authorization
+
+### Generate ISA for New Interconnections
+
+When a new interconnection is registered, generate the ISA document:
+
+```
+Tool: compliance_generate_isa
+Parameters:
+  interconnection_id: "<interconnection-guid>"
+```
+
+Review the AI-drafted ISA for completeness, then register it:
+
+```
+Tool: compliance_register_agreement
+Parameters:
+  interconnection_id: "<interconnection-guid>"
+  agreement_type: "isa"
+  title: "ISA — Eagle Eye ↔ JIRA Cloud"
+  status: "pending_signature"
+  expiration_date: "2027-06-01T00:00:00Z"
+```
+
+### Agreement Lifecycle
+
+Update agreement status as signatures are obtained:
+
+```
+Tool: compliance_update_agreement
+Parameters:
+  agreement_id: "<agreement-guid>"
+  status: "signed"
+  signed_by_local: "Jane Smith, ISSM"
+  signed_by_local_date: "2026-03-15T00:00:00Z"
+  signed_by_remote: "Bob Jones, External ISSM"
+  signed_by_remote_date: "2026-03-18T00:00:00Z"
+```
+
+### Certify No Interconnections
+
+If a system has no external interconnections, certify to satisfy the gate:
+
+```
+Tool: compliance_certify_no_interconnections
+Parameters:
+  system_id: "<system-guid>"
+  certify: true
+```
+
+### ISA/MOU Expiration Monitoring
+
+Include agreement expiration tracking in your ConMon routine:
+
+```
+1. compliance_validate_agreements (system_id)        ← Check all agreements
+2. Review expiringWithin90DaysCount                  ← Identify upcoming renewals
+3. compliance_update_agreement (status: "expired")   ← Mark expired agreements
+4. compliance_generate_isa (interconnection_id)      ← Draft renewal ISA
+5. compliance_register_agreement                     ← Register renewed agreement
+```
+
+---
+
+## SSP Section Review
+
+> Feature 022: SSP Authoring & OSCAL Export
+
+### Check SSP Completeness
+
+Monitor the overall SSP readiness:
+
+```
+Tool: compliance_ssp_completeness
+Parameters:
+  system_id: "<system-guid>"
+```
+
+Review:
+
+- `overall_readiness_percent`: Target 100% before authorization
+- `blocking_issues`: Lists sections still in Draft or not yet authored
+- Per-section status: `Draft` → `UnderReview` → `Approved`
+
+### Review SSP Sections
+
+When ISSOs or Engineers submit sections for review, approve or request revision:
+
+```
+Tool: compliance_review_ssp_section
+Parameters:
+  system_id: "<system-guid>"
+  section_number: 5
+  decision: "approve"
+  reviewer: "jane.smith@agency.gov"
+  comments: "Section accurately describes the system environment and deployment topology."
+```
+
+To request revision:
+
+```
+Tool: compliance_review_ssp_section
+Parameters:
+  system_id: "<system-guid>"
+  section_number: 12
+  decision: "request_revision"
+  reviewer: "jane.smith@agency.gov"
+  comments: "Personnel screening requirements need to reference agency-specific policy."
+```
+
+### SSP Section Review Workflow
+
+```
+1. compliance_ssp_completeness (system_id)              ← Check overall status
+2. Identify sections in "UnderReview" status
+3. compliance_write_ssp_section (read section content)   ← Read current content
+4. compliance_review_ssp_section (approve/revise)        ← Make decision
+5. Repeat until overall_readiness_percent = 100%
+```
+
+---
+
+## OSCAL Export for Authorization Package
+
+> Feature 022: SSP Authoring & OSCAL Export
+
+### Export OSCAL SSP
+
+Generate the OSCAL 1.1.2 SSP JSON for inclusion in the authorization package:
+
+```
+Tool: compliance_export_oscal_ssp
+Parameters:
+  system_id: "<system-guid>"
+  include_back_matter: true
+  pretty_print: true
+```
+
+### Validate Before Submission
+
+Always validate the OSCAL output before including in the authorization package:
+
+```
+Tool: compliance_validate_oscal_ssp
+Parameters:
+  system_id: "<system-guid>"
+```
+
+Check:
+
+- `is_valid`: Must be `true`
+- `errors`: Must be empty
+- `warnings`: Review and address if possible (e.g., missing back-matter references)
+
+### Pre-Authorization Checklist
+
+Before submitting the authorization package, verify:
+
+```
+1. compliance_ssp_completeness    ← 100% readiness
+2. compliance_validate_oscal_ssp  ← Valid OSCAL output
+3. compliance_check_privacy_compliance ← Privacy gate satisfied
+4. compliance_validate_agreements ← Interconnection gate satisfied
+5. compliance_list_saps           ← SAP finalized
+6. compliance_bundle_authorization_package ← Package everything
+```
+
+---
+
 ## See Also
 
 - [ISSM Getting Started](../getting-started/issm.md) — First-time setup and first 3 commands

@@ -40,13 +40,17 @@ The Assess phase uses **two distinct assessment tools** that serve different pur
 
 **Tasks in this phase**:
 
-1. Assess each control → Tool: `compliance_assess_control`
-2. Take assessment snapshots → Tool: `compliance_take_snapshot`
-3. Verify evidence integrity → Tool: `compliance_verify_evidence`
-4. Check evidence completeness → Tool: `compliance_check_evidence_completeness`
-5. Compare assessment cycles → Tool: `compliance_compare_snapshots`
-6. Generate SAR → Tool: `compliance_generate_sar`
-7. Generate RAR → Tool: `compliance_generate_rar`
+1. Generate Security Assessment Plan → Tool: `compliance_generate_sap`
+2. Customize assessment methods → Tool: `compliance_update_sap`
+3. Finalize SAP → Tool: `compliance_finalize_sap`
+4. Assess each control → Tool: `compliance_assess_control`
+5. Take assessment snapshots → Tool: `compliance_take_snapshot`
+6. Verify evidence integrity → Tool: `compliance_verify_evidence`
+7. Check evidence completeness → Tool: `compliance_check_evidence_completeness`
+8. Compare assessment cycles → Tool: `compliance_compare_snapshots`
+9. Generate SAR → Tool: `compliance_generate_sar`
+10. Generate RAR → Tool: `compliance_generate_rar`
+11. Validate OSCAL SSP → Tool: `compliance_validate_oscal_ssp`
 
 **Natural Language Queries**:
 
@@ -63,6 +67,12 @@ The Assess phase uses **two distinct assessment tools** that serve different pur
 > **"Generate the Security Assessment Report for system {id}"** → `compliance_generate_sar` — SAR with executive summary and CAT breakdown
 
 > **"Generate the Risk Assessment Report for system {id}"** → `compliance_generate_rar` — RAR with per-family risk breakdown
+
+> **"Generate a security assessment plan for system {id}"** → `compliance_generate_sap` — SAP with scope, methodology, and schedule
+
+> **"Finalize the SAP"** → `compliance_finalize_sap` — locks SAP with SHA-256 hash, no further edits
+
+> **"Validate the OSCAL SSP for system {id}"** → `compliance_validate_oscal_ssp` — validates exported OSCAL against schema
 
 !!! info "Air-Gapped Note"
     All SCA assessment tools work fully offline — they operate on locally stored assessment data. Evidence collection (`compliance_collect_evidence`) requires network access to Azure resources; in air-gapped environments, evidence must be imported from prior scans or manual artifact uploads.
@@ -87,11 +97,17 @@ The Assess phase uses **two distinct assessment tools** that serve different pur
 
 **Tasks in this phase**:
 
-1. Run automated compliance assessment → Tool: `compliance_assess`
-2. Collect evidence → Tool: `compliance_collect_evidence`
-3. Create remediation board → Tool: `kanban_create_board`
-4. Assign tasks to engineers → Tool: `kanban_assign_task`
-5. Fix alerts → Tool: `watch_fix_alert`
+1. Import CKL scan results → Tool: `compliance_import_ckl`
+2. Import XCCDF scan results → Tool: `compliance_import_xccdf`
+3. Run automated compliance assessment → Tool: `compliance_assess`
+4. Collect evidence → Tool: `compliance_collect_evidence`
+5. Import Prisma Cloud scans → Tool: `compliance_import_prisma_csv`, `compliance_import_prisma_api`
+6. Write SSP sections → Tool: `compliance_write_ssp_section`
+7. Check SSP completeness → Tool: `compliance_ssp_completeness`
+8. Export CKL for external review → Tool: `compliance_export_ckl`
+9. Create remediation board → Tool: `kanban_create_board`
+10. Assign tasks to engineers → Tool: `kanban_assign_task`
+11. Fix alerts → Tool: `watch_fix_alert`
 
 **Natural Language Queries**:
 
@@ -104,6 +120,16 @@ The Assess phase uses **two distinct assessment tools** that serve different pur
 > **"Create a remediation board from the latest assessment"** → `kanban_create_board` — creates Kanban board from findings
 
 > **"Assign task REM-003 to engineer Bob Jones"** → `kanban_assign_task` — assigns remediation work
+
+> **"Import the CKL checklist for the Windows Server 2022 STIG"** → `compliance_import_ckl` — maps STIG findings to NIST controls
+
+> **"Import SCAP scan results for system {id}"** → `compliance_import_xccdf` — parses XCCDF automated scan output
+
+> **"Write SSP section 5 (System Environment) for system {id}"** → `compliance_write_ssp_section` — authors NIST 800-18 SSP section
+
+> **"What is the SSP completeness for system {id}?"** → `compliance_ssp_completeness` — per-section status and completion percentage
+
+> **"Export a CKL checklist for eMASS upload"** → `compliance_export_ckl` — generates DISA STIG Viewer compatible file
 
 ### ISSM (Support — POA&M & Package)
 
@@ -155,28 +181,36 @@ Engineers can remediate findings using **standalone tools** (direct finding reme
 ## Typical SCA Assessment Cycle
 
 ```
- 1. compliance_assess              ← ISSO runs automated scan (quick/policy/full)
- 2. compliance_collect_evidence    ← ISSO collects evidence from Azure
- 3. compliance_import_prisma_csv   ← ISSO imports Prisma Cloud scan results
- 4. compliance_assess_control      ← SCA formally assesses each control (batch)
- 5. compliance_take_snapshot       ← SCA snapshots current state
- 6. compliance_verify_evidence     ← SCA spot-checks evidence integrity
- 7. compliance_check_evidence_completeness ← SCA verifies coverage
- 8. compliance_generate_sar        ← SCA generates SAR
+ 1. compliance_generate_sap          ← SCA generates Security Assessment Plan
+ 2. compliance_update_sap            ← SCA customizes methodology per control (optional)
+ 3. compliance_finalize_sap          ← SCA locks SAP — assessment scope finalized
+ 4. compliance_import_ckl            ← ISSO imports STIG CKL scan results
+ 5. compliance_import_xccdf          ← ISSO imports SCAP XCCDF scan results
+ 6. compliance_assess                ← ISSO runs automated scan (quick/policy/full)
+ 7. compliance_collect_evidence      ← ISSO collects evidence from Azure
+ 8. compliance_import_prisma_csv     ← ISSO imports Prisma Cloud scan results
+ 9. compliance_write_ssp_section     ← ISSO authors SSP sections
+10. compliance_assess_control        ← SCA formally assesses each control (batch)
+11. compliance_take_snapshot         ← SCA snapshots current state
+12. compliance_verify_evidence       ← SCA spot-checks evidence integrity
+13. compliance_check_evidence_completeness ← SCA verifies coverage
+14. compliance_ssp_completeness      ← SCA verifies SSP readiness
+15. compliance_generate_sar          ← SCA generates SAR
     ── (Remediation occurs) ──
- 9. compliance_assess              ← ISSO re-runs automated scan
-10. compliance_import_prisma_csv   ← ISSO re-imports post-remediation Prisma scan
-11. compliance_prisma_trend        ← SCA validates remediation progress
-12. compliance_assess_control      ← SCA re-assesses remediated controls
-13. compliance_take_snapshot       ← SCA snapshots after remediation
-14. compliance_compare_snapshots   ← SCA shows improvement
-15. compliance_generate_sar        ← SCA produces updated SAR for AO
-16. compliance_generate_rar        ← SCA/ISSM produces final RAR
+16. compliance_assess                ← ISSO re-runs automated scan
+17. compliance_import_prisma_csv     ← ISSO re-imports post-remediation Prisma scan
+18. compliance_prisma_trend          ← SCA validates remediation progress
+19. compliance_assess_control        ← SCA re-assesses remediated controls
+20. compliance_take_snapshot         ← SCA snapshots after remediation
+21. compliance_compare_snapshots     ← SCA shows improvement
+22. compliance_validate_oscal_ssp    ← SCA validates OSCAL SSP export
+23. compliance_generate_sar          ← SCA produces updated SAR for AO
+24. compliance_generate_rar          ← SCA/ISSM produces final RAR
 ```
 
 ### Prisma Cloud Scan Import as Assessment Input
 
-Step 3 above introduces Prisma Cloud as an assessment data source alongside STIG/SCAP imports. Prisma imports:
+Step 8 above introduces Prisma Cloud as an assessment data source alongside STIG/SCAP imports. Prisma imports:
 
 - Create `ComplianceFinding` records with `Source="Prisma Cloud"` and `ScanSource=Cloud`
 - Auto-generate `ControlEffectiveness` records for in-baseline NIST controls

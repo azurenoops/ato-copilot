@@ -3,7 +3,7 @@
 **Feature**: 020 | **Persona**: Engineer (Platform Engineer)
 **Role**: `Compliance.PlatformEngineer` (default for CAC-authenticated users)
 **Interface**: VS Code (`@ato` chat participant)
-**Test Cases**: ENG-01 through ENG-26 (26 total)
+**Test Cases**: ENG-01 through ENG-30 (30 total)
 
 ---
 
@@ -28,6 +28,8 @@
 - ✓ Tasks assigned to engineer (ISSO/ISSM)
 - ✓ Findings exist from assessments and scans (SCA/ISSM)
 - ✓ ATO issued (AO-04) — system in Monitor phase
+- ✓ PTA created (ISSM-44) and PIA generated (ISSM-46)
+- ✓ Interconnection registered (ISSM-48) with ISA generated (ISSM-52)
 
 ---
 
@@ -510,6 +512,97 @@
 
 ---
 
+## CKL Export, Interconnections & SSP Authoring (ENG-27 to ENG-30)
+
+### ENG-27: Export CKL for STIG Evidence
+
+**Task**: Export a DISA CKL file after STIG-based remediation
+**Type**: Positive test | **Precondition**: STIG data imported (ISSO-06), findings remediated (ENG-08)
+
+```text
+@ato Export a CKL file for Eagle Eye Windows Server 2022 STIG
+```
+
+**Expected Tool**: `compliance_export_ckl`
+**Expected Output**:
+- CKL XML file generated
+- Per-rule status: Open / NotAFinding / Not_Applicable
+- Benchmark and version info populated
+- Download link or inline preview
+
+**Verification**: CKL contains Windows Server 2022 STIG rules; remediated findings show as NotAFinding
+
+**Record**: CKL filename: __________ | Rules: Open ___ / NotAFinding ___ / N/A ___
+
+---
+
+### ENG-28: Register an Interconnection
+
+**Task**: Register a system interconnection from the engineering perspective
+**Type**: Positive test | **Precondition**: System registered, Engineer role active
+
+```text
+@ato Add an interconnection for Eagle Eye — outbound HTTPS to Azure
+DevOps (dev.azure.com) for CI/CD pipeline integration, port 443
+```
+
+**Expected Tool**: `compliance_add_interconnection`
+**Expected Output**:
+- Interconnection record created
+- Direction: Outbound
+- Protocol: HTTPS, port 443
+- Remote system: Azure DevOps
+- Status: Registered (pending ISA)
+
+**Verification**: Interconnection ID returned; direction and protocol correct
+
+**Record**: Interconnection ID: __________
+
+---
+
+### ENG-29: Write SSP Technical Section
+
+**Task**: Contribute to SSP §6 (Technical Controls) as the platform engineer
+**Type**: Positive test | **Precondition**: System in Implement phase or later
+
+```text
+@ato Write SSP section 6 for Eagle Eye: Technical controls are
+implemented using Azure Policy, Microsoft Defender for Cloud, NSG
+micro-segmentation, and Azure Key Vault for secrets management.
+All configurations are enforced via Bicep IaC templates.
+```
+
+**Expected Tool**: `compliance_write_ssp_section`
+**Expected Output**:
+- SSP §6 content saved
+- Section status: Draft (pending ISSM review)
+- Author: current Engineer identity
+
+**Verification**: Section 6 saved with correct content; status is Draft
+
+---
+
+### ENG-30: Check SSP Completion Status
+
+**Task**: Verify SSP completion status to see remaining work
+**Type**: Positive test | **Precondition**: SSP sections partially authored
+
+```text
+@ato Show SSP completeness for Eagle Eye
+```
+
+**Expected Tool**: `compliance_ssp_completeness`
+**Expected Output**:
+- Overall completion percentage
+- Per-section status (complete / draft / missing)
+- §6 shows as Draft (from ENG-29)
+
+**Verification**: Completion percentage returned; §6 reflects recent authoring
+
+**Record**: SSP completion: ____%
+
+---
+
 ## Engineer Separation-of-Duties Verification (ENG-23 to ENG-26)
 
 > **Purpose**: Confirm that Engineers CANNOT perform actions reserved for other personas.
@@ -619,6 +712,9 @@
 | Evidence hash | ENG-17 | __________ |
 | Prisma findings count | ENG-20 | __________ |
 | Auto-remediable count | ENG-20 | __________ |
+| CKL filename | ENG-27 | __________ |
+| Interconnection ID | ENG-28 | __________ |
+| SSP completion | ENG-30 | ____% |
 
 ---
 
@@ -628,11 +724,11 @@
 
 | Metric | Value |
 |--------|-------|
-| **Total Test Cases** | 26 |
-| **Passed** | ___/26 |
-| **Failed** | ___/26 |
-| **Blocked** | ___/26 |
-| **Skipped** | ___/26 |
+| **Total Test Cases** | 30 |
+| **Passed** | ___/30 |
+| **Failed** | ___/30 |
+| **Blocked** | ___/30 |
+| **Skipped** | ___/30 |
 | **RBAC Denials (403)** | ___/4 |
 | **Avg Response Time** | ____s |
 
@@ -649,6 +745,7 @@
 - [ ] All 10 Implement tests executed (ENG-01 to ENG-10)
 - [ ] All 9 Kanban workflow tests executed (ENG-11 to ENG-19)
 - [ ] All 3 Prisma remediation tests executed (ENG-20 to ENG-22)
+- [ ] All 4 CKL/Interconnection/SSP tests executed (ENG-27 to ENG-30)
 - [ ] All 4 RBAC denial tests verified as 403 (ENG-23 to ENG-26)
 - [ ] Key artifacts tracker completed
 - [ ] Results summary filled

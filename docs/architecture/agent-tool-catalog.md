@@ -640,49 +640,69 @@ Get SSP narrative completion status for a system. Shows per-family progress (tot
 
 ### `compliance_generate_ssp`
 
-Generate the System Security Plan (SSP) document for a registered system. Produces a Markdown document containing system information, security categorization, control baseline, and per-control implementation narratives. Warns about controls with missing narratives.
+Generate the System Security Plan (SSP) document for a registered system. Produces a 13-section Markdown document following NIST 800-18 structure with YAML front-matter, completeness warnings, and per-control implementation narratives.
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `system_id` | string | Yes | RegisteredSystem ID (GUID) |
+| `system_id` | string | Yes | System GUID, name, or acronym |
 | `format` | string | No | Output format: `markdown` (default) or `docx` |
-| `sections` | string | No | Specific sections to include (comma-separated): `system_information`, `categorization`, `baseline`, `controls`. Default: all. |
+| `sections` | string | No | Specific sections to include (comma-separated). Default: all 13 sections. See section key table below. |
 
 **Response (success):**
 ```json
 {
   "status": "success",
   "data": {
-    "system_id": "guid",
-    "system_name": "My Application System",
+    "system_id": "...",
+    "system_name": "Eagle Eye",
     "format": "markdown",
-    "total_controls": 335,
+    "total_controls": 325,
     "controls_with_narratives": 310,
-    "controls_missing_narratives": 25,
-    "sections": ["system_information", "categorization", "baseline", "controls"],
+    "controls_missing_narratives": 15,
+    "sections": ["system_identification", "categorization", "personnel", "system_type", "description", "environment", "interconnections", "laws_regulations", "minimum_controls", "control_implementations", "authorization_boundary", "personnel_security", "contingency_plan"],
     "warnings": [
       "Control AC-3 has no implementation narrative",
-      "Control AU-7 has no implementation narrative"
+      "§12 (Personnel Security) has not been authored",
+      "§13 (Contingency Plan) has not been authored"
     ],
-    "content": "# System Security Plan (SSP)\n\n## 1. System Information\n...",
-    "generated_at": "2025-01-15T10:30:00Z"
+    "content": "---\ntitle: System Security Plan\nsystem: Eagle Eye\nbaseline: Moderate\n---\n\n# System Security Plan (SSP)\n\n## §1 System Identification\n...",
+    "generated_at": "2026-03-11T10:30:00Z"
   },
-  "metadata": { "tool": "compliance_generate_ssp", "timestamp": "..." }
+  "metadata": { "tool": "compliance_generate_ssp", "duration_ms": 2500, "timestamp": "..." }
 }
 ```
 
-**SSP Document Sections:**
+**SSP Document Sections (NIST 800-18):**
 
-| Section | Content |
-|---------|---------|
-| `system_information` | System name, type, mission criticality, hosting environment, RMF status |
-| `categorization` | FIPS 199 notation, C/I/A impacts, DoD IL, information types |
-| `baseline` | Baseline level, overlay applied, total controls, tailoring/inheritance summary |
-| `controls` | Per-family grouped controls with narratives, status, inheritance type |
+| §  | New Section Key | Content | Auto/Authored |
+|----|-----------------|---------|---------------|
+| §1  | `system_identification` | System name, type, mission criticality, hosting environment, RMF status | Auto |
+| §2  | `categorization` | FIPS 199 notation, C/I/A impacts, DoD IL, information types | Auto |
+| §3  | `personnel` | RMF role assignments, contact information | Auto |
+| §4  | `system_type` | Major/minor application, enclave classification | Auto |
+| §5  | `description` | System purpose, functions, user base | Authored |
+| §6  | `environment` | Deployment topology, hardware, software inventory | Authored |
+| §7  | `interconnections` | System-to-system connections from Feature 021 data | Auto |
+| §8  | `laws_regulations` | Applicable laws, Executive Orders, directives | Authored |
+| §9  | `minimum_controls` | Baseline level, overlay, total controls, tailoring/inheritance summary | Auto |
+| §10 | `control_implementations` | Per-family grouped controls with narratives, status, inheritance type | Auto |
+| §11 | `authorization_boundary` | Authorization boundary description and diagram references | Auto |
+| §12 | `personnel_security` | Personnel screening, access agreements, separation procedures | Authored |
+| §13 | `contingency_plan` | Contingency plan overview, recovery objectives, testing schedule | Authored |
+
+**Backward-Compatible Section Keys:**
+
+| Old Key | Maps To | § |
+|---------|---------|---|
+| `system_information` | `system_identification` | §1 |
+| `baseline` | `minimum_controls` | §9 |
+| `controls` | `control_implementations` | §10 |
 
 **Progress Reporting:** When called programmatically with `IProgress<string>`, reports progress per section and per control family.
+
+> **Feature 022 Enhancement**: SSP generation now produces a 13-section NIST 800-18 document with YAML front-matter metadata. Sections §7 (Interconnections) pulls data from Feature 021 interconnection records. Authored sections (§5, §6, §8, §12, §13) are populated from `SspSection` entities written via `compliance_write_ssp_section`.
 
 ---
 
@@ -1588,6 +1608,8 @@ conflict resolution (skip, overwrite, merge) and dry-run preview.
 Export system data in OSCAL JSON format (v1.0.6). Supports SSP,
 assessment-results, and POA&M OSCAL models.
 
+> **Feature 022 Enhancement**: When `model=ssp`, SSP export now delegates to `OscalSspExportService` which produces OSCAL 1.1.2-compliant SSP JSON with full section content, component mappings, and back-matter resources. For dedicated SSP export with additional options (`include_back_matter`, `pretty_print`), use `compliance_export_oscal_ssp` instead.
+
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `system_id` | string | yes | RegisteredSystem ID |
@@ -1757,6 +1779,7 @@ Accepts base64-encoded file content (max 5 MB after decoding).
       "pass": 260,
       "not_applicable": 10,
       "not_reviewed": 5,
+      "error": 0,
       "skipped": 0,
       "unmatched": 3
     },
@@ -1767,7 +1790,8 @@ Accepts base64-encoded file content (max 5 MB after decoding).
       "effectiveness_updated": 0,
       "nist_controls_affected": 8
     },
-    "warnings": ["3 STIG rule(s) not found in curated library: V-99997, V-99998, V-99999"]
+    "warnings": ["3 STIG rule(s) not found in curated library: V-99997, V-99998, V-99999"],
+    "error_message": null
   }
 }
 ```
@@ -1886,12 +1910,16 @@ summary statistics. Supports pagination and filtering.
         "file_name": "windows_2022.ckl",
         "import_type": "Ckl",
         "benchmark_id": "Windows_Server_2022_STIG",
+        "benchmark_title": "Windows Server 2022 STIG",
         "status": "Completed",
+        "imported_by": "mcp-user",
         "imported_at": "2026-03-15T10:30:00Z",
+        "is_dry_run": false,
         "total_entries": 287,
         "open_count": 12,
         "pass_count": 260,
-        "findings_created": 12
+        "findings_created": 12,
+        "findings_updated": 0
       }
     ]
   }
@@ -1922,13 +1950,25 @@ breakdown, unmatched rules, and import configuration.
     "import_type": "Ckl",
     "import_status": "CompletedWithWarnings",
     "benchmark_id": "Windows_Server_2022_STIG",
+    "benchmark_title": "Windows Server 2022 STIG",
+    "target_host": "DC01.agency.mil",
+    "imported_by": "mcp-user",
     "imported_at": "2026-03-15T10:30:00Z",
+    "is_dry_run": false,
     "conflict_resolution": "Skip",
     "counts": {
       "total": 287,
       "open": 12,
       "pass": 260,
+      "not_applicable": 10,
+      "not_reviewed": 5,
+      "error": 0,
+      "skipped": 0,
+      "unmatched": 3,
       "findings_created": 12,
+      "findings_updated": 0,
+      "effectiveness_created": 8,
+      "effectiveness_updated": 0,
       "nist_controls_affected": 8
     },
     "findings": [
@@ -1959,29 +1999,48 @@ Import a Prisma Cloud CSPM compliance CSV export file. Supports multi-subscripti
 | `file_content` | string | Yes | Base64-encoded Prisma Cloud CSV file |
 | `file_name` | string | Yes | Original file name |
 | `system_id` | string | No | Registered system ID (if omitted, auto-resolves from Azure subscription IDs) |
-| `conflict_resolution` | string | No | `"skip"` (default), `"overwrite"` |
+| `conflict_resolution` | string | No | `"Skip"` (default), `"Overwrite"`, `"Merge"` |
 | `dry_run` | boolean | No | Preview import without persisting (default: false) |
 | `assessment_id` | string | No | Existing assessment ID (auto-resolved if omitted) |
 
 ```json
 {
   "status": "success",
-  "imports": [
-    {
-      "import_record_id": "...",
-      "system_id": "...",
-      "system_name": "ACME Portal",
-      "total_alerts": 47,
-      "open_count": 32,
-      "resolved_count": 12,
-      "findings_created": 32,
-      "nist_controls_affected": 22,
-      "is_dry_run": false
-    }
-  ],
-  "unresolved_subscriptions": [],
-  "total_processed": 47,
-  "duration_ms": 2340
+  "data": {
+    "total_processed": 47,
+    "total_skipped": 0,
+    "duration_ms": 2340,
+    "dry_run": false,
+    "imports": [
+      {
+        "system_id": "...",
+        "system_name": "ACME Portal",
+        "import_record_id": "...",
+        "import_status": "Completed",
+        "total_alerts": 47,
+        "summary": {
+          "open": 32,
+          "resolved": 12,
+          "dismissed": 2,
+          "snoozed": 1
+        },
+        "changes": {
+          "findings_created": 32,
+          "findings_updated": 0,
+          "skipped": 0,
+          "unmapped_policies": 3,
+          "effectiveness_created": 22,
+          "effectiveness_updated": 0,
+          "nist_controls_affected": 22,
+          "evidence_created": 32
+        },
+        "file_hash": "abc123...",
+        "warnings": []
+      }
+    ],
+    "unresolved_subscriptions": [],
+    "skipped_non_azure": null
+  }
 }
 ```
 
@@ -1999,20 +2058,22 @@ Import Prisma Cloud API JSON (RQL alert response) with enhanced remediation cont
 | `file_content` | string | Yes | Base64-encoded JSON file |
 | `file_name` | string | Yes | Original file name |
 | `system_id` | string | No | Registered system ID |
-| `conflict_resolution` | string | No | `"skip"` (default), `"overwrite"` |
+| `conflict_resolution` | string | No | `"Skip"` (default), `"Overwrite"`, `"Merge"` |
 | `dry_run` | boolean | No | Preview without persisting (default: false) |
 | `assessment_id` | string | No | Existing assessment ID |
 
-Returns the same format as CSV import, plus enhanced fields:
+Returns the same format as CSV import, plus enhanced fields per import:
 
 ```json
 {
   "imports": [
     {
-      "remediable_count": 28,
-      "cli_scripts_extracted": 22,
-      "policy_labels_found": ["CSPM", "Azure", "Storage"],
-      "alerts_with_history": 47
+      "enhanced": {
+        "remediable_count": 28,
+        "cli_scripts_extracted": 22,
+        "policy_labels_found": ["CSPM", "Azure", "Storage"],
+        "alerts_with_history": 47
+      }
     }
   ]
 }
@@ -2045,6 +2106,7 @@ List unique Prisma Cloud policies observed across imports for a system, with NIS
       "resolved_count": 7,
       "dismissed_count": 1,
       "affected_resource_types": ["Microsoft.Storage/storageAccounts"],
+      "last_seen_import_id": "...",
       "last_seen_at": "2026-03-05T10:30:00Z"
     }
   ]
@@ -2084,3 +2146,809 @@ Compare Prisma Cloud findings across scan imports to show remediation progress, 
 
 - **RBAC**: `SecurityLead`, `Analyst`, `Assessor`, `Administrator`
 - **RMF Step**: Assess (Step 4), Monitor (Step 6)
+
+---
+
+## SAP Generation Tools (Feature 018)
+
+### `compliance_generate_sap`
+
+Generate a Security Assessment Plan (SAP) for a registered system. Auto-populates from control baseline, OSCAL assessment objectives, STIG mappings, and evidence data. All optional parameters are auto-populated with sensible defaults — call with just the `system_id`. Produces a Markdown SAP document with 15 sections.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | System GUID, name, or acronym |
+| `assessment_id` | string | No | Optional assessment cycle ID to link SAP to |
+| `schedule_start` | string | No | Assessment start date (ISO 8601) |
+| `schedule_end` | string | No | Assessment end date (ISO 8601) |
+| `team_members` | string | No | JSON array of `{ name, organization, role, contact_info? }` |
+| `scope_notes` | string | No | SCA-provided assessment scope notes |
+| `method_overrides` | string | No | JSON array of `{ control_id, methods[], rationale? }` |
+| `rules_of_engagement` | string | No | Assessment constraints and availability windows |
+| `format` | string | No | Output format: `markdown` (default), `docx`, or `pdf` |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "sap_id": "...",
+    "system_id": "...",
+    "assessment_id": "...",
+    "title": "Security Assessment Plan — Eagle Eye",
+    "status": "Draft",
+    "format": "markdown",
+    "baseline_level": "Moderate",
+    "total_controls": 325,
+    "customer_controls": 180,
+    "inherited_controls": 100,
+    "shared_controls": 45,
+    "stig_benchmark_count": 3,
+    "controls_with_objectives": 325,
+    "evidence_gaps": 12,
+    "family_summaries": [
+      { "family": "AC", "control_count": 25, "customer_count": 15, "inherited_count": 7, "methods": ["Test", "Interview"] }
+    ],
+    "content": "# Security Assessment Plan\n...",
+    "generated_at": "2026-03-11T10:00:00Z",
+    "warnings": ["12 controls have no evidence artifacts"]
+  },
+  "metadata": { "tool": "compliance_generate_sap", "duration_ms": 1500, "timestamp": "..." }
+}
+```
+
+- **RBAC**: `Analyst` (SCA), `SecurityLead` (ISSM)
+- **RMF Step**: Assess (Step 4)
+- **Auto-Population**: Schedule defaults to 30-day window, team populated from RMF role assignments, methods derived from OSCAL objectives
+
+---
+
+### `compliance_update_sap`
+
+Update a Draft SAP's schedule, scope, team, assessment methods, or rules of engagement. Team replacement is atomic. Method overrides are additive (only specified controls updated). Finalized SAPs cannot be modified.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `sap_id` | string | No | SAP ID to update (optional if `system_id` is provided) |
+| `system_id` | string | No | System GUID, name, or acronym — looks up the latest Draft SAP |
+| `schedule_start` | string | No | Updated assessment start date (ISO 8601) |
+| `schedule_end` | string | No | Updated assessment end date (ISO 8601) |
+| `scope_notes` | string | No | Updated scope notes |
+| `rules_of_engagement` | string | No | Updated rules of engagement |
+| `team_members` | string | No | JSON array of `{ name, organization, role, contact_info? }` — replaces entire team |
+| `method_overrides` | string | No | JSON array of `{ control_id, methods[], rationale? }` — additive per-control overrides |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "sap_id": "...",
+    "status": "Draft",
+    "content": "# Security Assessment Plan\n...",
+    "updated_at": "2026-03-11T11:00:00Z"
+  },
+  "metadata": { "tool": "compliance_update_sap", "duration_ms": 800, "timestamp": "..." }
+}
+```
+
+- **RBAC**: `Analyst` (SCA), `SecurityLead` (ISSM)
+- **RMF Step**: Assess (Step 4)
+- **Lookup Behavior**: If only `system_id` is provided and no Draft SAP exists, auto-generates one first
+
+---
+
+### `compliance_finalize_sap`
+
+Finalize a Draft SAP — locks it with SHA-256 content hash. Finalized SAPs are immutable: no updates, no re-finalization. Sets `FinalizedBy`, `FinalizedAt`, and `ContentHash` fields.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `sap_id` | string | No | SAP ID to finalize (optional if `system_id` is provided) |
+| `system_id` | string | No | System GUID, name, or acronym — looks up the latest SAP |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "sap_id": "...",
+    "status": "Finalized",
+    "content_hash": "sha256:a1b2c3d4...",
+    "finalized_by": "mcp-user",
+    "finalized_at": "2026-03-11T12:00:00Z",
+    "total_controls": 325,
+    "title": "Security Assessment Plan — Eagle Eye"
+  },
+  "metadata": { "tool": "compliance_finalize_sap", "duration_ms": 400, "timestamp": "..." }
+}
+```
+
+- **RBAC**: `Analyst` (SCA)
+- **RMF Step**: Assess (Step 4)
+- **Integrity**: SHA-256 hash enables tamper detection for finalized assessment plans
+
+---
+
+### `compliance_get_sap`
+
+Retrieve a specific SAP by its ID, or the latest SAP for a system. If both `sap_id` and `system_id` are provided, `sap_id` takes precedence. When retrieving by `system_id`, prefers Finalized SAPs over Drafts.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `sap_id` | string | No | Specific SAP ID to retrieve |
+| `system_id` | string | No | System GUID, name, or acronym — returns latest SAP (prefers Finalized) |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "sap_id": "...",
+    "system_id": "...",
+    "assessment_id": "...",
+    "title": "Security Assessment Plan — Eagle Eye",
+    "status": "Finalized",
+    "format": "markdown",
+    "baseline_level": "Moderate",
+    "total_controls": 325,
+    "customer_controls": 180,
+    "inherited_controls": 100,
+    "shared_controls": 45,
+    "stig_benchmark_count": 3,
+    "controls_with_objectives": 325,
+    "content": "# Security Assessment Plan\n...",
+    "content_hash": "sha256:a1b2c3d4...",
+    "generated_at": "2026-03-11T10:00:00Z",
+    "finalized_at": "2026-03-11T12:00:00Z",
+    "family_summaries": [
+      { "family": "AC", "control_count": 25, "customer_count": 15, "inherited_count": 7, "methods": ["Test", "Interview"] }
+    ]
+  },
+  "metadata": { "tool": "compliance_get_sap", "duration_ms": 200, "timestamp": "..." }
+}
+```
+
+- **RBAC**: All roles
+- **RMF Step**: Assess (Step 4)
+
+---
+
+### `compliance_list_saps`
+
+List all Security Assessment Plans (SAPs) for a system, including Draft and Finalized history. Returns status, dates, and scope summary per SAP. Content is omitted for brevity.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | System GUID, name, or acronym |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "system_id": "...",
+    "sap_count": 2,
+    "saps": [
+      {
+        "sap_id": "...",
+        "title": "Security Assessment Plan — Eagle Eye",
+        "status": "Finalized",
+        "baseline_level": "Moderate",
+        "total_controls": 325,
+        "customer_controls": 180,
+        "inherited_controls": 100,
+        "shared_controls": 45,
+        "generated_at": "2026-03-11T10:00:00Z",
+        "finalized_at": "2026-03-11T12:00:00Z"
+      }
+    ]
+  },
+  "metadata": { "tool": "compliance_list_saps", "duration_ms": 150, "timestamp": "..." }
+}
+```
+
+- **RBAC**: All roles
+- **RMF Step**: Assess (Step 4)
+
+### Troubleshooting — SAP Tools
+
+**"Tool not found" error**: SAP tools require Feature 018 to be deployed and `ISapService` registered in DI. If you receive a tool-not-found response, verify the service is registered in `ServiceCollectionExtensions.cs` and the `Feature018_SapGeneration` migration has been applied.
+
+```json
+{
+  "status": "error",
+  "error": "Tool 'compliance_generate_sap' not found. Feature 018 (SAP Generation) may not be deployed in this environment.",
+  "resolution": "Verify ISapService is registered and Feature018_SapGeneration migration is applied."
+}
+```
+
+---
+
+## Privacy & Interconnection Tools (Feature 021)
+
+### `compliance_create_pta`
+
+Conduct a Privacy Threshold Analysis (PTA) for a registered system. Auto-detects PII from categorized information types or accepts manual PII flags.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | System GUID, name, or acronym |
+| `manual_mode` | boolean | No | If true, use explicit PII flags instead of auto-detection |
+| `collects_pii` | boolean | No | Manual mode: whether system collects PII |
+| `maintains_pii` | boolean | No | Manual mode: whether system maintains PII |
+| `disseminates_pii` | boolean | No | Manual mode: whether system disseminates PII |
+| `pii_categories` | string | No | JSON array of PII categories |
+| `estimated_record_count` | integer | No | Estimated number of PII records |
+| `exemption_rationale` | string | No | Exemption justification if exempt |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "pta_id": "...",
+    "determination": "PiaRequired",
+    "collects_pii": true,
+    "maintains_pii": true,
+    "disseminates_pii": false,
+    "pii_categories": ["SSN", "Name", "Email"],
+    "pii_source_info_types": ["D.3.5.1 – Civilian Personnel"],
+    "rationale": "System processes SSN for personnel records. PIA required per OMB M-03-22."
+  }
+}
+```
+
+- **RBAC**: `Analyst` (ISSO), `SecurityLead` (ISSM)
+- **RMF Step**: Prepare (Step 1)
+- **Auto-Detection**: When `manual_mode` is false, scans SP 800-60 information types from system categorization for PII indicators
+
+---
+
+### `compliance_generate_pia`
+
+Generate a Privacy Impact Assessment (PIA) with 8 OMB M-03-22 sections. Requires a completed PTA with `PiaRequired` determination.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | System GUID, name, or acronym |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "pia_id": "...",
+    "pia_status": "Draft",
+    "version": 1,
+    "total_sections": 8,
+    "pre_populated_sections": 5,
+    "sections": [
+      {
+        "section_id": "1",
+        "title": "Authority to Collect",
+        "question": "What legal authority allows the collection of this PII?",
+        "answer": "10 USC §136, DoD Instruction 5400.11...",
+        "is_pre_populated": true
+      }
+    ]
+  }
+}
+```
+
+- **RBAC**: `Analyst` (ISSO), `SecurityLead` (ISSM)
+- **RMF Step**: Prepare (Step 1)
+- **Prerequisite**: PTA must exist with `PiaRequired` determination
+
+---
+
+### `compliance_review_pia`
+
+Review a Privacy Impact Assessment — approve or request revision with deficiency notes.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | System GUID, name, or acronym |
+| `decision` | string | Yes | Review decision: `Approved` or `RequestRevision` |
+| `reviewer_comments` | string | Yes | Reviewer notes and observations |
+| `deficiencies` | string | No | JSON array of deficiency strings (required for `RequestRevision`) |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "pia_id": "...",
+    "decision": "Approved",
+    "new_status": "Approved",
+    "reviewer_comments": "All sections adequately address PII handling and retention.",
+    "deficiencies": [],
+    "expiration_date": "2027-03-11T00:00:00Z"
+  }
+}
+```
+
+- **RBAC**: `SecurityLead` (ISSM)
+- **RMF Step**: Prepare (Step 1)
+- **Expiration**: Approved PIAs expire annually and must be re-reviewed
+
+---
+
+### `compliance_check_privacy_compliance`
+
+Get privacy compliance dashboard for a system — aggregates PTA, PIA, and gate status including interconnection agreement health.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | System GUID, name, or acronym |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "system_id": "...",
+    "system_name": "Eagle Eye",
+    "pta_determination": "PiaRequired",
+    "pia_status": "Approved",
+    "privacy_gate_satisfied": true,
+    "active_interconnections": 3,
+    "interconnections_with_agreements": 3,
+    "expired_agreements": 0,
+    "expiring_within_90_days": 1,
+    "interconnection_gate_satisfied": true,
+    "has_no_external_interconnections": false,
+    "overall_status": "Compliant"
+  }
+}
+```
+
+- **RBAC**: All roles
+- **RMF Step**: Prepare (Step 1)
+
+---
+
+### `compliance_add_interconnection`
+
+Register a system-to-system interconnection that crosses the authorization boundary. Clears `HasNoExternalInterconnections` flag if previously set.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | System GUID, name, or acronym |
+| `target_system_name` | string | Yes | Name of external system |
+| `connection_type` | string | Yes | Connection type: `direct`, `vpn`, `api`, `federated`, `wireless`, `remote_access` |
+| `data_flow_direction` | string | Yes | Data flow: `inbound`, `outbound`, `bidirectional` |
+| `data_classification` | string | Yes | Data classification: `unclassified`, `cui`, `secret`, `top_secret` |
+| `target_system_owner` | string | No | Organization/POC owning target system |
+| `target_system_acronym` | string | No | Target system abbreviation |
+| `data_description` | string | No | Description of data exchanged |
+| `protocols` | string | No | JSON array of protocols used |
+| `ports` | string | No | JSON array of ports used |
+| `security_measures` | string | No | JSON array of security controls |
+| `authentication_method` | string | No | How systems authenticate to each other |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "interconnectionId": "...",
+    "targetSystemName": "JIRA Cloud",
+    "interconnectionStatus": "Proposed",
+    "hasAgreement": false
+  }
+}
+```
+
+- **RBAC**: `PlatformEngineer` (Eng), `Analyst` (ISSO), `SecurityLead` (ISSM)
+- **RMF Step**: Prepare (Step 1)
+
+---
+
+### `compliance_list_interconnections`
+
+List all system interconnections with agreement status summaries. Optionally filter by status.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | System GUID, name, or acronym |
+| `status_filter` | string | No | Filter: `proposed`, `active`, `suspended`, `terminated` |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "systemId": "...",
+    "totalInterconnections": 3,
+    "interconnections": [
+      {
+        "id": "...",
+        "targetSystemName": "JIRA Cloud",
+        "interconnectionStatus": "Active",
+        "hasAgreement": true
+      }
+    ]
+  }
+}
+```
+
+- **RBAC**: All roles
+- **RMF Step**: Prepare (Step 1)
+
+---
+
+### `compliance_update_interconnection`
+
+Update an existing interconnection's details or status. Requires `status_reason` when suspending or terminating.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `interconnection_id` | string | Yes | SystemInterconnection ID (GUID) |
+| `status` | string | No | New status: `proposed`, `active`, `suspended`, `terminated` |
+| `status_reason` | string | No | Reason for status change (required for `suspended`/`terminated`) |
+| `connection_type` | string | No | Updated connection type |
+| `data_classification` | string | No | Updated data classification |
+| `protocols` | string | No | Updated protocols (JSON array) |
+| `ports` | string | No | Updated ports (JSON array) |
+| `security_measures` | string | No | Updated security controls (JSON array) |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "interconnectionId": "...",
+    "targetSystemName": "JIRA Cloud",
+    "interconnectionStatus": "Active",
+    "hasAgreement": true
+  }
+}
+```
+
+- **RBAC**: `Analyst` (ISSO), `SecurityLead` (ISSM)
+- **RMF Step**: Prepare (Step 1)
+
+---
+
+### `compliance_generate_isa`
+
+Generate an AI-drafted Interconnection Security Agreement (ISA) from interconnection data using NIST SP 800-47 structure.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `interconnection_id` | string | Yes | SystemInterconnection ID (GUID) |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "agreementId": "...",
+    "title": "ISA — Eagle Eye ↔ JIRA Cloud",
+    "agreementType": "Isa",
+    "narrativeDocument": "# Interconnection Security Agreement\n..."
+  }
+}
+```
+
+- **RBAC**: `SecurityLead` (ISSM)
+- **RMF Step**: Prepare (Step 1)
+
+---
+
+### `compliance_register_agreement`
+
+Register a pre-existing ISA, MOU, or SLA agreement for a system interconnection.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `interconnection_id` | string | Yes | SystemInterconnection ID |
+| `agreement_type` | string | Yes | Agreement type: `isa`, `mou`, `sla` |
+| `title` | string | Yes | Agreement title |
+| `document_reference` | string | No | URL or path to agreement document |
+| `status` | string | No | Initial status: `draft`, `pending_signature`, `signed` |
+| `effective_date` | string | No | ISO 8601 effective date |
+| `expiration_date` | string | No | ISO 8601 expiration date |
+| `signed_by_local` | string | No | Local signatory name/title |
+| `signed_by_remote` | string | No | Remote signatory name/title |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "agreementId": "...",
+    "title": "ISA — Eagle Eye ↔ JIRA Cloud",
+    "agreementType": "Isa",
+    "agreementStatus": "Signed",
+    "expirationDate": "2027-03-11T00:00:00Z"
+  }
+}
+```
+
+- **RBAC**: `SecurityLead` (ISSM)
+- **RMF Step**: Prepare (Step 1)
+
+---
+
+### `compliance_update_agreement`
+
+Update an existing agreement's status, metadata, or signatories. Terminated agreements can only have `review_notes` updated.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `agreement_id` | string | Yes | InterconnectionAgreement ID (GUID) |
+| `status` | string | No | New status: `draft`, `pending_signature`, `signed`, `expired`, `terminated` |
+| `effective_date` | string | No | Updated ISO 8601 effective date |
+| `expiration_date` | string | No | Updated ISO 8601 expiration date |
+| `signed_by_local` | string | No | Updated local signatory |
+| `signed_by_local_date` | string | No | Updated ISO 8601 local signature date |
+| `signed_by_remote` | string | No | Updated remote signatory |
+| `signed_by_remote_date` | string | No | Updated ISO 8601 remote signature date |
+| `review_notes` | string | No | Review or renewal notes |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "agreementId": "...",
+    "title": "ISA — Eagle Eye ↔ JIRA Cloud",
+    "agreementType": "Isa",
+    "agreementStatus": "Signed",
+    "expirationDate": "2027-03-11T00:00:00Z"
+  }
+}
+```
+
+- **RBAC**: `SecurityLead` (ISSM)
+- **RMF Step**: Prepare (Step 1)
+
+---
+
+### `compliance_certify_no_interconnections`
+
+Certify that a system has no external interconnections, satisfying Gate 4 without requiring interconnection records.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | System GUID, name, or acronym |
+| `certify` | boolean | Yes | `true` to certify no interconnections, `false` to revoke |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "systemId": "...",
+    "hasNoExternalInterconnections": true,
+    "interconnectionGateSatisfied": true
+  }
+}
+```
+
+- **RBAC**: `SecurityLead` (ISSM)
+- **RMF Step**: Prepare (Step 1)
+
+---
+
+### `compliance_validate_agreements`
+
+Validate that all active system interconnections have signed, current agreements. Supports `HasNoExternalInterconnections` bypass.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | System GUID, name, or acronym |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "totalInterconnections": 3,
+    "compliantCount": 2,
+    "expiringWithin90DaysCount": 1,
+    "missingAgreementCount": 0,
+    "expiredAgreementCount": 0,
+    "isFullyCompliant": true,
+    "items": [
+      {
+        "interconnectionId": "...",
+        "targetSystemName": "JIRA Cloud",
+        "validationStatus": "Compliant",
+        "agreementTitle": "ISA — Eagle Eye ↔ JIRA Cloud",
+        "expirationDate": "2027-03-11T00:00:00Z",
+        "notes": null
+      }
+    ]
+  }
+}
+```
+
+- **RBAC**: `Analyst` (ISSO), `SecurityLead` (ISSM), `Assessor` (SCA)
+- **RMF Step**: Prepare (Step 1)
+
+### Troubleshooting — Privacy & Interconnection Tools
+
+**"Tool not found" error**: Privacy and interconnection tools require Feature 021 to be deployed with `IPrivacyService` and `IInterconnectionService` registered in DI. If you receive a tool-not-found response, verify the services are registered in `ServiceCollectionExtensions.cs` and the `Feature021_PrivacyInterconnection` migration has been applied.
+
+```json
+{
+  "status": "error",
+  "error": "Tool 'compliance_create_pta' not found. Feature 021 (Privacy & Interconnections) may not be deployed in this environment.",
+  "resolution": "Verify IPrivacyService and IInterconnectionService are registered and Feature021_PrivacyInterconnection migration is applied."
+}
+```
+
+---
+
+## SSP Authoring & OSCAL Export Tools (Feature 022)
+
+### `compliance_write_ssp_section`
+
+Write or update an individual NIST SP 800-18 SSP section (§1–§13). Creates a new section on first write; subsequent writes increment the version and reset status to Draft. Auto-generated sections (§1,§2,§3,§4,§7,§9,§10,§11) regenerate from entity data; authored sections (§5,§6,§8,§12,§13) store user-provided markdown content. Use `submit_for_review=true` to transition from Draft to UnderReview.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | System GUID, name, or acronym |
+| `section_number` | integer | Yes | NIST 800-18 section number (1–13) |
+| `content` | string | No | Section content in markdown (required for authored sections §5,§6,§8,§12,§13) |
+| `authored_by` | string | Yes | Identity of the user authoring this section |
+| `expected_version` | integer | No | Optimistic concurrency check — reject if stored version does not match |
+| `submit_for_review` | boolean | No | If true, transitions from Draft to UnderReview after writing (default: `false`) |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "section_number": 5,
+    "section_title": "System Environment",
+    "status": "Draft",
+    "version": 2,
+    "word_count": 450,
+    "is_auto_generated": false,
+    "has_manual_override": true
+  },
+  "metadata": { "tool": "compliance_write_ssp_section", "duration_ms": 300, "timestamp": "..." }
+}
+```
+
+- **RBAC**: `Analyst` (ISSO), `PlatformEngineer` (Eng)
+- **RMF Step**: Implement (Step 3)
+- **Concurrency**: `expected_version` provides optimistic locking to prevent lost updates
+
+---
+
+### `compliance_review_ssp_section`
+
+Review an SSP section that is in UnderReview status. Approve to mark as Approved, or request revision to return to Draft with reviewer comments.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | System GUID, name, or acronym |
+| `section_number` | integer | Yes | NIST 800-18 section number (1–13) |
+| `decision` | string | Yes | Review decision: `approve` or `request_revision` |
+| `reviewer` | string | Yes | Identity of the reviewer |
+| `comments` | string | No | Reviewer comments (required when requesting revision) |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "section_number": 5,
+    "section_title": "System Environment",
+    "status": "Approved",
+    "reviewed_by": "jane.smith@agency.gov",
+    "reviewed_at": "2026-03-11T14:00:00Z",
+    "reviewer_comments": "Section accurately describes the deployment environment.",
+    "version": 2
+  },
+  "metadata": { "tool": "compliance_review_ssp_section", "duration_ms": 200, "timestamp": "..." }
+}
+```
+
+- **RBAC**: `SecurityLead` (ISSM)
+- **RMF Step**: Implement (Step 3), Assess (Step 4)
+- **State Machine**: Only sections in `UnderReview` status can be reviewed
+
+---
+
+### `compliance_ssp_completeness`
+
+Check SSP section completeness status for a registered system. Returns per-section summary with status, word count, and version for all 13 NIST 800-18 sections. Includes overall readiness percentage and blocking issues list.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | System GUID, name, or acronym |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "system_name": "Eagle Eye",
+    "overall_readiness_percent": 85,
+    "approved_count": 11,
+    "total_sections": 13,
+    "sections": [
+      {
+        "section_number": 1,
+        "section_title": "System Identification",
+        "status": "Approved",
+        "is_auto_generated": true,
+        "has_manual_override": false,
+        "authored_by": "system",
+        "authored_at": "2026-03-10T09:00:00Z",
+        "word_count": 320,
+        "version": 1
+      }
+    ],
+    "blocking_issues": ["§12 (Personnel Security) is still in Draft", "§13 (Contingency Plan) has not been authored"]
+  },
+  "metadata": { "tool": "compliance_ssp_completeness", "duration_ms": 250, "timestamp": "..." }
+}
+```
+
+- **RBAC**: All roles
+- **RMF Step**: Implement (Step 3), Assess (Step 4)
+
+---
+
+### `compliance_export_oscal_ssp`
+
+Export an OSCAL 1.1.2 System Security Plan as JSON for a registered system.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | System ID (GUID) or name/acronym |
+| `include_back_matter` | boolean | No | Include back-matter resources (default: `true`) |
+| `pretty_print` | boolean | No | Pretty-print JSON output (default: `true`) |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "oscal_ssp_json": "{ \"system-security-plan\": { ... } }",
+    "warnings": [],
+    "statistics": {
+      "control_count": 325,
+      "component_count": 12,
+      "inventory_item_count": 8,
+      "user_count": 5,
+      "back_matter_resource_count": 3
+    }
+  },
+  "metadata": { "tool": "compliance_export_oscal_ssp", "duration_ms": 2000, "timestamp": "..." }
+}
+```
+
+- **RBAC**: `SecurityLead` (ISSM), `Assessor` (SCA), `AuthorizingOfficial` (AO)
+- **RMF Step**: Authorize (Step 5)
+- **OSCAL Version**: 1.1.2 compliant JSON output
+
+---
+
+### `compliance_validate_oscal_ssp`
+
+Generate OSCAL 1.1.2 SSP JSON for a system, then validate it for structural correctness.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | System ID (GUID) or name/acronym |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "is_valid": true,
+    "errors": [],
+    "warnings": ["Back-matter has no document references"],
+    "statistics": {
+      "control_count": 325,
+      "component_count": 12,
+      "inventory_item_count": 8,
+      "user_count": 5,
+      "back_matter_resource_count": 0
+    }
+  },
+  "metadata": { "tool": "compliance_validate_oscal_ssp", "duration_ms": 3000, "timestamp": "..." }
+}
+```
+
+- **RBAC**: `SecurityLead` (ISSM), `Assessor` (SCA)
+- **RMF Step**: Authorize (Step 5)
+
+### Troubleshooting — SSP Authoring & OSCAL Tools
+
+**"Tool not found" error**: SSP and OSCAL tools require Feature 022 to be deployed with `ISspService`, `IOscalSspExportService`, and `IOscalValidationService` registered in DI. If you receive a tool-not-found response, verify the services are registered in `ServiceCollectionExtensions.cs` and the `Feature022_SspOscal` migration has been applied.
+
+```json
+{
+  "status": "error",
+  "error": "Tool 'compliance_write_ssp_section' not found. Feature 022 (SSP Authoring & OSCAL) may not be deployed in this environment.",
+  "resolution": "Verify ISspService, IOscalSspExportService, and IOscalValidationService are registered and Feature022_SspOscal migration is applied."
+}
+```

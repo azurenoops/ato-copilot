@@ -2,7 +2,7 @@
 
 **Feature**: 020 — Persona Test Cases
 **System Under Test**: Eagle Eye
-**Total Test Cases**: 147 (131 positive + 11 RBAC denial + 8 error handling + 8 auth/PIM)
+**Total Test Cases**: 172 (156 positive + 11 RBAC denial + 8 error handling + 8 auth/PIM)
 **Personas**: ISSM → ISSO → SCA → AO → Engineer (with handoffs)
 
 > This script walks through the entire RMF lifecycle as a single flow. Tests are ordered by the phase in which they naturally occur, with persona handoffs called out at each transition.
@@ -554,6 +554,119 @@ Update Eagle Eye's SAP — change the start date to May 1
 
 ---
 
+### ISSM Privacy & Interconnection Management
+
+---
+
+### ISSM-44: Create Privacy Threshold Analysis
+
+```text
+Create a Privacy Threshold Analysis for Eagle Eye — the system
+processes PII including name, SSN, and email for personnel records
+```
+
+**Expected Tool**: `compliance_create_pta`
+**Expected**: PTA record with PII categories identified
+**Record**: pta_id = _______________
+
+---
+
+### ISSM-46: Generate Privacy Impact Assessment
+
+**Precondition**: ISSM-44
+
+```text
+Generate a Privacy Impact Assessment for Eagle Eye based on the PTA
+```
+
+**Expected Tool**: `compliance_generate_pia`
+**Expected**: PIA with risk analysis, mitigation measures, retention policies
+**Record**: pia_id = _______________
+
+---
+
+### ISSM-47: Review PIA
+
+**Precondition**: ISSM-46
+
+```text
+Review the PIA for Eagle Eye — approve with note: retention period
+set to 7 years per DoD 5400.11
+```
+
+**Expected Tool**: `compliance_review_pia`
+**Expected**: PIA status = Approved; reviewer note recorded
+
+---
+
+### ISSM-48: Add Interconnection
+
+```text
+Add an interconnection for Eagle Eye — outbound SMTP to DISA DEE
+(smtp.dee.disa.mil) for email relay, port 587 TLS
+```
+
+**Expected Tool**: `compliance_add_interconnection`
+**Expected**: Interconnection created (direction: outbound, protocol: SMTP/TLS, port: 587)
+**Record**: interconnection_id = _______________
+
+---
+
+### ISSM-49: List Interconnections
+
+**Precondition**: ISSM-48
+
+```text
+List all interconnections for Eagle Eye
+```
+
+**Expected Tool**: `compliance_list_interconnections`
+**Expected**: ≥ 1 interconnection listed with direction, protocol, status
+
+---
+
+### ISSM-52: Generate ISA
+
+**Precondition**: ISSM-48
+
+```text
+Generate an Interconnection Security Agreement for Eagle Eye
+```
+
+**Expected Tool**: `compliance_generate_isa`
+**Expected**: ISA document covering DISA DEE interconnection
+**Record**: isa_id = _______________
+
+---
+
+### ISSM-53: Register Agreement
+
+**Precondition**: ISSM-52
+
+```text
+Register a Memorandum of Agreement for the DISA DEE email relay
+interconnection — effective date today, annual review
+```
+
+**Expected Tool**: `compliance_register_agreement`
+**Expected**: Agreement registered (type: MOA, status: Active)
+**Record**: agreement_id = _______________
+
+---
+
+### ISSM-55: Validate Agreements
+
+**Precondition**: ISSM-53
+
+```text
+Validate all interconnection agreements for Eagle Eye
+```
+
+**Expected Tool**: `compliance_validate_agreements`
+**Expected**: All agreements valid; coverage report
+
+---
+
 ### → Handoff: ISSM → ISSO
 
 > **Action**: Deactivate SecurityLead role. Activate Compliance.Analyst. Switch to VS Code.
@@ -731,6 +844,97 @@ deployment
 
 ---
 
+### ISSO SSP Section Authoring & CKL Export
+
+---
+
+### ISSO-25: Export CKL
+
+**Precondition**: ISSO-09 (CKL imported)
+
+```text
+@ato Export a CKL file for Eagle Eye Windows Server 2022 STIG
+```
+
+**Expected Tool**: `compliance_export_ckl`
+**Expected**: CKL XML with per-rule status (Open/NotAFinding/Not_Applicable)
+
+---
+
+### ISSO-26: Create PTA (ISSO Contribution)
+
+```text
+@ato Create a Privacy Threshold Analysis for Eagle Eye — the system
+processes PII including name, SSN, and email for personnel records
+```
+
+**Expected Tool**: `compliance_create_pta`
+**Expected**: PTA record created (if not already created by ISSM)
+
+---
+
+### ISSO-31: Write SSP Section §5
+
+```text
+@ato Write SSP section 5 for Eagle Eye: System architecture consists
+of Azure App Service frontend, Azure SQL backend, Azure Key Vault
+for secrets, and Azure Front Door for global load balancing. All
+components deployed in Azure Government (USGov Virginia).
+```
+
+**Expected Tool**: `compliance_write_ssp_section`
+**Expected**: SSP §5 saved; status = Draft (pending ISSM review)
+
+---
+
+### ISSO-32: Write SSP Section §6
+
+```text
+@ato Write SSP section 6 for Eagle Eye: Technical controls include
+Azure AD Conditional Access for MFA enforcement, Microsoft Defender
+for Cloud for workload protection, NSG micro-segmentation, and Azure
+Policy for compliance guardrails.
+```
+
+**Expected Tool**: `compliance_write_ssp_section`
+**Expected**: SSP §6 saved; status = Draft (pending ISSM review)
+
+---
+
+### ISSO-33: Submit SSP for Review
+
+```text
+@ato Submit SSP sections 5 and 6 for Eagle Eye to the ISSM for review
+```
+
+**Expected Tool**: `compliance_write_ssp_section` (status update)
+**Expected**: Sections submitted; ISSM notified
+
+---
+
+### ISSO-34: Check SSP Completeness
+
+```text
+@ato Show SSP completeness for Eagle Eye
+```
+
+**Expected Tool**: `compliance_ssp_completeness`
+**Expected**: Overall completion %; §5 and §6 show as Draft
+
+---
+
+### ISSO-29: Add Interconnection (ISSO Contribution)
+
+```text
+@ato Add an interconnection for Eagle Eye — outbound SMTP to DISA
+DEE (smtp.dee.disa.mil) for email relay, port 587 TLS
+```
+
+**Expected Tool**: `compliance_add_interconnection`
+**Expected**: Interconnection registered (direction: outbound, port: 587)
+
+---
+
 ### ISSO-19: Collect Evidence
 
 ```text
@@ -874,6 +1078,56 @@ deployment
 **Expected Tool**: `compliance_narrative_progress`
 **Expected**: SC family stats; SC-7 completed (ENG-05)
 **Record**: SC family: Total ___ | Completed ___ | Draft ___ | Missing ___
+
+---
+
+### ENG-27: Export CKL Evidence
+
+**Precondition**: STIG data imported (ISSO-09)
+
+```text
+@ato Export a CKL file for Eagle Eye Windows Server 2022 STIG
+```
+
+**Expected Tool**: `compliance_export_ckl`
+**Expected**: CKL XML; remediated findings show as NotAFinding
+
+---
+
+### ENG-28: Register Interconnection
+
+```text
+@ato Add an interconnection for Eagle Eye — outbound HTTPS to Azure
+DevOps (dev.azure.com) for CI/CD pipeline integration, port 443
+```
+
+**Expected Tool**: `compliance_add_interconnection`
+**Expected**: Interconnection created (direction: outbound, protocol: HTTPS, port: 443)
+
+---
+
+### ENG-29: Write SSP Technical Section
+
+```text
+@ato Write SSP section 6 for Eagle Eye: Technical controls are
+implemented using Azure Policy, Microsoft Defender for Cloud, NSG
+micro-segmentation, and Azure Key Vault for secrets management.
+All configurations are enforced via Bicep IaC templates.
+```
+
+**Expected Tool**: `compliance_write_ssp_section`
+**Expected**: SSP §6 saved; status = Draft
+
+---
+
+### ENG-30: Check SSP Completion
+
+```text
+@ato Show SSP completeness for Eagle Eye
+```
+
+**Expected Tool**: `compliance_ssp_completeness`
+**Expected**: Overall %; §6 reflected
 
 ---
 
@@ -1353,6 +1607,65 @@ Dismiss alert ALT-{id}
 
 ---
 
+### SCA SSP & OSCAL Validation
+
+---
+
+### SCA-25: Check SSP Completeness
+
+```text
+Show SSP completeness for Eagle Eye
+```
+
+**Expected Tool**: `compliance_ssp_completeness`
+**Expected**: Overall completion %; per-section status
+
+---
+
+### SCA-26: Validate Interconnection Agreements
+
+```text
+Validate all interconnection agreements for Eagle Eye
+```
+
+**Expected Tool**: `compliance_validate_agreements`
+**Expected**: Agreement coverage report; all interconnections have valid agreements
+
+---
+
+### SCA-27: Export OSCAL SSP
+
+```text
+Export OSCAL SSP for Eagle Eye
+```
+
+**Expected Tool**: `compliance_export_oscal_ssp`
+**Expected**: OSCAL SSP JSON/XML with system metadata, control implementations
+
+---
+
+### SCA-28: Validate OSCAL SSP
+
+```text
+Validate the OSCAL SSP for Eagle Eye against NIST SP 800-53 Rev 5
+```
+
+**Expected Tool**: `compliance_validate_oscal_ssp`
+**Expected**: Validation results; schema compliance; content issues flagged
+
+---
+
+### SCA-29: Check Privacy Compliance
+
+```text
+Check privacy compliance status for Eagle Eye
+```
+
+**Expected Tool**: `compliance_check_privacy_compliance`
+**Expected**: Privacy compliance summary: PTA complete, PIA approved
+
+---
+
 ### → Handoff: SCA → ISSM (Package Preparation)
 
 > **Action**: Deactivate Auditor. Activate Compliance.SecurityLead. Stay on Teams.
@@ -1681,6 +1994,30 @@ Show all critical alerts across my authorized systems
 
 **Expected Tool**: `watch_show_alerts`
 **Expected**: Critical alerts from all AO-authorized systems
+
+---
+
+### AO-15: Review SSP Completeness
+
+```text
+Show SSP completeness for Eagle Eye — I need to verify all sections are
+complete before issuing my authorization decision
+```
+
+**Expected Tool**: `compliance_ssp_completeness`
+**Expected**: Overall completion %; per-section status
+
+---
+
+### AO-16: Export OSCAL SSP for Package Review
+
+```text
+Export the OSCAL SSP for Eagle Eye — I need the machine-readable
+version for the authorization package
+```
+
+**Expected Tool**: `compliance_export_oscal_ssp`
+**Expected**: OSCAL SSP artifact with system metadata, control implementations
 
 ---
 
@@ -2164,19 +2501,19 @@ Import the latest Prisma Cloud scan for Eagle Eye to verify remediation
 | Prepare (ISSM-01–06) | 6 | ___/6 | | |
 | Categorize (ISSM-07–10) | 4 | ___/4 | | |
 | Select (ISSM-11–16) | 6 | ___/6 | | |
-| Implement — ISSM oversight (ISSM-17–22, 41–43) | 9 | ___/9 | | |
-| Implement — ISSO authoring (ISSO-01–12, 19) | 13 | ___/13 | | |
-| Implement — Engineer build (ENG-01–10) | 10 | ___/10 | | |
+| Implement — ISSM oversight (ISSM-17–22, 41–55) | 18 | ___/18 | | |
+| Implement — ISSO authoring (ISSO-01–12, 19, 25–34) | 21 | ___/21 | | |
+| Implement — Engineer build (ENG-01–10, 27–30) | 14 | ___/14 | | |
 | Monitor — ISSO day-to-day (ISSO-13–18, 20–24) | 12 | ___/12 | | |
-| Assess — SCA (SCA-01–20) | 20 | ___/20 | | |
+| Assess — SCA (SCA-01–29) | 25 | ___/25 | | |
 | Assess prep — ISSM (ISSM-23a/b/c–28) | 8 | ___/8 | | |
 | Authorize — ISSM submit (ISSM-29–31) | 3 | ___/3 | | |
-| Authorize — AO decide (AO-01–11) | 11 | ___/11 | | |
+| Authorize — AO decide (AO-01–16) | 13 | ___/13 | | |
 | Monitor — ISSM ConMon (ISSM-32–40) | 9 | ___/9 | | |
 | Monitor — Engineer Kanban (ENG-11–22) | 12 | ___/12 | | |
 | RBAC Denial tests | 11 | ___/11 | | |
 | Error handling (ERR-01–08) | 8 | ___/8 | | |
-| **Total** | **150** | **___/150** | | |
+| **Total** | **172** | **___/172** | | |
 
 ### Key Artifacts Tracker
 
@@ -2191,6 +2528,13 @@ Import the latest Prisma Cloud scan for Eagle Eye to verify remediation
 | Evidence Hash | _______________ | ISSO-19 |
 | Compliance Score | _______________ | SCA-20 |
 | SAP-SAR Alignment | ___% | SCA-16 |
+| PTA ID | _______________ | ISSM-44 |
+| PIA ID | _______________ | ISSM-46 |
+| Interconnection ID | _______________ | ISSM-48 |
+| ISA ID | _______________ | ISSM-52 |
+| Agreement ID | _______________ | ISSM-53 |
+| SSP Completion | ___% | SCA-25 |
+| OSCAL SSP Controls | ___ | SCA-27 |
 
 ### Issues Found
 

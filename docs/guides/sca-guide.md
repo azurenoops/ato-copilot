@@ -325,6 +325,127 @@ The exported CKL file is compatible with DISA STIG Viewer and eMASS.
 
 ---
 
+## SAP Generation & Finalization
+
+> Feature 018: SAP Generation
+
+SCAs generate and finalize the Security Assessment Plan before beginning control assessments.
+
+### Generating a SAP
+
+```
+Tool: compliance_generate_sap
+Parameters:
+  system_id: "<system-guid>"
+```
+
+The generated SAP includes assessment scope, methodology, schedule, and team composition derived from system metadata and baseline controls.
+
+### Reviewing and Updating
+
+```
+Tool: compliance_get_sap
+Parameters:
+  sap_id: "<sap-guid>"
+```
+
+If changes are needed:
+
+```
+Tool: compliance_update_sap
+Parameters:
+  sap_id: "<sap-guid>"
+  updates: { "methodology": "updated text..." }
+```
+
+### Finalizing the SAP
+
+```
+Tool: compliance_finalize_sap
+Parameters:
+  sap_id: "<sap-guid>"
+```
+
+Finalization locks the SAP — no further edits are allowed. This is required before assessment can begin.
+
+### SCA Assessment Workflow with SAP
+
+```
+1. compliance_generate_sap        ← Create SAP from system metadata
+2. compliance_update_sap           ← Refine scope/methodology
+3. compliance_finalize_sap         ← Lock SAP for assessment
+4. compliance_assess_control       ← Begin control assessments
+5. compliance_generate_sar         ← SAR references finalized SAP
+```
+
+---
+
+## Privacy Compliance Check
+
+> Feature 021: Privacy & Interconnections
+
+SCAs can verify that privacy artifacts (PTA, PIA) are complete and consistent as part of the authorization package review.
+
+### Checking Privacy Compliance
+
+```
+Tool: compliance_check_privacy_compliance
+Parameters:
+  system_id: "<system-guid>"
+```
+
+Returns a checklist of privacy requirements with pass/fail status:
+- PTA completed
+- PIA required and submitted (if PTA indicates PII)
+- PIA reviewed and approved by ISSM
+- Privacy controls addressed in SSP
+
+---
+
+## SSP Completeness Verification
+
+> Feature 022: SSP Authoring & OSCAL Export
+
+SCAs can review SSP completeness before generating the SAR and authorization package.
+
+### Checking SSP Completeness
+
+```
+Tool: compliance_ssp_completeness
+Parameters:
+  system_id: "<system-guid>"
+```
+
+Returns a per-section breakdown of the 13-section NIST 800-18 SSP:
+- Section status: Draft, InReview, Approved, or NotStarted
+- Overall completeness percentage
+- Sections requiring attention before authorization
+
+### OSCAL Validation
+
+After ISSM exports the OSCAL SSP, SCAs can validate the output:
+
+```
+Tool: compliance_validate_oscal_ssp
+Parameters:
+  system_id: "<system-guid>"
+```
+
+Validates the OSCAL SSP document against the NIST OSCAL schema and reports any structural or content issues.
+
+### Pre-Authorization Package Checklist
+
+Before generating the SAR, verify:
+
+```
+1. compliance_ssp_completeness     ← All 13 sections Approved
+2. compliance_check_privacy_compliance ← Privacy artifacts complete
+3. compliance_validate_agreements  ← Interconnections validated (ISSM)
+4. compliance_generate_sar         ← SAR includes all evidence sources
+```
+
+---
+
 ## See Also
 
 - [SCA Getting Started](../getting-started/sca.md) — First-time setup and first 3 commands

@@ -6,7 +6,7 @@
 
 ## Purpose
 
-This document describes how to prepare a clean test environment (or reset an existing one) for executing the 147 persona test cases. All test cases use the **same cumulative "Eagle Eye" system** that progresses through the full RMF lifecycle.
+This document describes how to prepare a clean test environment (or reset an existing one) for executing the 172 persona test cases. All test cases use the **same cumulative "Eagle Eye" system** that progresses through the full RMF lifecycle.
 
 ---
 
@@ -25,6 +25,16 @@ These values are used throughout all test cases. If you change any value, update
 | `ISSO_NAME` | Jane Smith | ISSM-04 |
 | `SCA_NAME` | Bob Jones | ISSM-04 |
 | `AO_NAME` | Col. Thompson | AO-04 through AO-07 |
+| `PII_CATEGORIES` | Name, SSN, Email | ISSM-44, ISSO-26 |
+| `RETENTION_PERIOD` | 7 years per DoD 5400.11 | ISSM-47 |
+| `INTERCONNECTION_REMOTE_1` | DISA DEE (smtp.dee.disa.mil) | ISSM-48, ISSO-29 |
+| `INTERCONNECTION_REMOTE_2` | Azure DevOps (dev.azure.com) | ENG-28 |
+| `INTERCONNECTION_PORT_1` | 587 (SMTP/TLS) | ISSM-48, ISSO-29 |
+| `INTERCONNECTION_PORT_2` | 443 (HTTPS) | ENG-28 |
+| `ISA_SCOPE` | All registered interconnections | ISSM-52 |
+| `AGREEMENT_TYPE` | Memorandum of Agreement (MOA) | ISSM-53 |
+| `SSP_SECTION_5` | System Architecture | ISSO-31, ENG-29 |
+| `SSP_SECTION_6` | Technical Controls | ISSO-32, ENG-29 |
 
 ---
 
@@ -262,6 +272,8 @@ After preparing the files, record their locations here:
 | Prisma API JSON | `test-data/prisma-cloud-api-results.json` | ⬜ |
 | CKL checklist | `test-data/windows-2022-stig.ckl` | ⬜ |
 | XCCDF results | `test-data/scap-scan-results.xml` | ⬜ |
+
+> **Note**: CKL export (ISSO-25, ENG-27) generates output files — no input file is needed for export tests. PTA, PIA, ISA, and SSP section data are created through natural language queries using the constants above.
 
 ---
 

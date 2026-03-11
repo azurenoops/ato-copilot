@@ -206,3 +206,50 @@ Run by category:
 ```bash
 dotnet test --filter "Category=Unit&Feature=015"
 ```
+
+---
+
+## Persona End-to-End Tests
+
+Feature 020 introduced comprehensive persona-based end-to-end test scripts that validate tool invocations across complete RMF workflows. These tests use the "Eagle Eye" reference system and are organized by persona.
+
+### Test Scripts by Persona
+
+| Persona | Script | Scope |
+|---------|--------|-------|
+| ISSM | [issm-test-script.md](../persona-test-cases/scripts/issm-test-script.md) | System registration, categorization, baseline, privacy oversight, SSP review, authorization package |
+| ISSO | [isso-test-script.md](../persona-test-cases/scripts/isso-test-script.md) | Narrative authoring, evidence collection, scan import, privacy analysis, SSP sections, Watch monitoring |
+| SCA | [sca-test-script.md](../persona-test-cases/scripts/sca-test-script.md) | SAP generation, control assessment, STIG/Prisma evidence review, SAR/RAR generation |
+| AO | [ao-test-script.md](../persona-test-cases/scripts/ao-test-script.md) | Authorization package review, ATO/ATOwC/DATO decisions, risk acceptance, portfolio dashboard |
+| Engineer | [engineer-test-script.md](../persona-test-cases/scripts/engineer-test-script.md) | Remediation workflows, CKL import/export, Prisma remediation, IaC diagnostics, interconnection registration |
+| Cross-Persona | [cross-persona-test-script.md](../persona-test-cases/scripts/cross-persona-test-script.md) | Full RMF lifecycle handoffs between all personas |
+| Unified RMF | [unified-rmf-test-script.md](../persona-test-cases/scripts/unified-rmf-test-script.md) | Complete Prepare→Monitor lifecycle in a single test run |
+
+### Prerequisites
+
+Before running persona tests:
+
+1. Review [environment-checklist.md](../persona-test-cases/environment-checklist.md) — required services and configuration
+2. Set up test data per [test-data-setup.md](../persona-test-cases/test-data-setup.md) — creates the "Eagle Eye" reference system
+3. Use [results-template.md](../persona-test-cases/results-template.md) for recording results
+
+### Execution Order
+
+Run persona scripts in dependency order:
+
+```
+1. ISSM       ← Registers system, sets baseline, assigns roles
+2. ISSO       ← Authors narratives, imports scans, writes SSP sections
+3. Engineer   ← Remediates findings, contributes SSP §5/§6
+4. SCA        ← Generates SAP, assesses controls, produces SAR
+5. AO         ← Reviews package, issues authorization
+6. Cross-Persona ← Validates handoffs between all roles
+```
+
+### Tool Validation
+
+Use [tool-validation.md](../persona-test-cases/tool-validation.md) to verify individual tool invocations return expected response structures.
+
+### Test Report
+
+Record pass/fail results in [test-report.md](../persona-test-cases/test-report.md) using the results template format.

@@ -1,7 +1,7 @@
 # Cross-Persona, Error Handling & Auth/PIM Test Execution Script
 
 **Feature**: 020 | **Scope**: Cross-persona scenarios, error/edge cases, authentication
-**Test Cases**: ERR-01 to ERR-08, AUTH-01 to AUTH-08, 3 cross-persona scenarios (40 steps)
+**Test Cases**: ERR-01 to ERR-08, AUTH-01 to AUTH-08, 4 cross-persona scenarios (60 steps)
 
 ---
 
@@ -1042,6 +1042,348 @@ Issue ATO with Conditions — CAT I must be fixed in 30 days
 
 ---
 
+## Part 6: Cross-Persona Scenario 4 — Privacy, Interconnection & SSP/OSCAL Lifecycle
+
+> **Purpose**: Exercise the privacy analysis, interconnection management, SSP authoring, and OSCAL export workflows with cross-persona handoffs.
+> 20 steps across 5 personas (ISSO, ISSM, Engineer, SCA, AO).
+
+| Step | Persona | Role to Activate |
+|------|---------|-----------------|
+| 1 | ISSO | Compliance.Analyst |
+| 2-3 | ISSM | Compliance.SecurityLead |
+| 4 | ISSO | Compliance.Analyst |
+| 5 | Engineer | Compliance.PlatformEngineer |
+| 6-8 | ISSM | Compliance.SecurityLead |
+| 9-10 | ISSO | Compliance.Analyst |
+| 11-12 | ISSM | Compliance.SecurityLead |
+| 13 | ISSO | Compliance.Analyst |
+| 14 | ISSM | Compliance.SecurityLead |
+| 15-17 | SCA | Compliance.Auditor |
+| 18 | AO | Compliance.AuthorizingOfficial |
+| 19 | ISSM | Compliance.SecurityLead |
+| 20 | Engineer | Compliance.PlatformEngineer |
+
+### Step 1: Create PTA (ISSO)
+
+```text
+@ato Create a Privacy Threshold Analysis for Eagle Eye — the system
+processes PII including name, SSN, and email for personnel records
+```
+
+**Expected Tool**: `compliance_create_pta`
+**Expected Output**: PTA record created with PII categories identified
+**Record**: PTA ID = __________
+
+---
+
+### → Handoff: ISSO → ISSM
+
+---
+
+### Step 2: Generate PIA from PTA (ISSM)
+
+```text
+Generate a Privacy Impact Assessment for Eagle Eye based on the PTA
+```
+
+**Expected Tool**: `compliance_generate_pia`
+**Expected Output**: PIA document generated with risk analysis, mitigation measures, retention policies
+**Record**: PIA ID = __________
+
+---
+
+### Step 3: Review PIA (ISSM)
+
+```text
+Review the PIA for Eagle Eye — approve with note: retention period
+set to 7 years per DoD 5400.11
+```
+
+**Expected Tool**: `compliance_review_pia`
+**Expected Output**: PIA status updated to Approved; reviewer note recorded
+
+---
+
+### → Handoff: ISSM → ISSO
+
+---
+
+### Step 4: Register Interconnection — DISA DEE (ISSO)
+
+```text
+@ato Add an interconnection for Eagle Eye — outbound SMTP to DISA
+DEE (smtp.dee.disa.mil) for email relay, port 587 TLS
+```
+
+**Expected Tool**: `compliance_add_interconnection`
+**Expected Output**: Interconnection created (direction: outbound, protocol: SMTP/TLS, port: 587)
+**Record**: Interconnection ID (DISA DEE) = __________
+
+---
+
+### → Handoff: ISSO → Engineer
+
+---
+
+### Step 5: Register Interconnection — Azure DevOps (Engineer)
+
+```text
+@ato Add an interconnection for Eagle Eye — outbound HTTPS to Azure
+DevOps (dev.azure.com) for CI/CD pipeline integration, port 443
+```
+
+**Expected Tool**: `compliance_add_interconnection`
+**Expected Output**: Interconnection created (direction: outbound, protocol: HTTPS, port: 443)
+**Record**: Interconnection ID (Azure DevOps) = __________
+
+---
+
+### → Handoff: Engineer → ISSM
+
+---
+
+### Step 6: Generate ISA (ISSM)
+
+```text
+Generate an Interconnection Security Agreement for Eagle Eye covering
+all registered interconnections
+```
+
+**Expected Tool**: `compliance_generate_isa`
+**Expected Output**: ISA document generated covering DISA DEE and Azure DevOps interconnections
+**Record**: ISA ID = __________
+
+---
+
+### Step 7: Register MOA Agreement (ISSM)
+
+```text
+Register a Memorandum of Agreement for the DISA DEE email relay
+interconnection — effective date today, annual review
+```
+
+**Expected Tool**: `compliance_register_agreement`
+**Expected Output**: Agreement registered with type: MOA, status: Active
+**Record**: Agreement ID = __________
+
+---
+
+### Step 8: Validate Agreements (ISSM)
+
+```text
+Validate all interconnection agreements for Eagle Eye
+```
+
+**Expected Tool**: `compliance_validate_agreements`
+**Expected Output**: All agreements valid; coverage report showing each interconnection has an agreement
+
+---
+
+### → Handoff: ISSM → ISSO
+
+---
+
+### Step 9: Write SSP §5 — System Architecture (ISSO)
+
+```text
+@ato Write SSP section 5 for Eagle Eye: System architecture consists
+of Azure App Service frontend, Azure SQL backend, Azure Key Vault
+for secrets, and Azure Front Door for global load balancing. All
+components deployed in Azure Government (USGov Virginia).
+```
+
+**Expected Tool**: `compliance_write_ssp_section`
+**Expected Output**: SSP §5 saved; status: Draft (pending ISSM review)
+
+---
+
+### Step 10: Write SSP §6 — Technical Controls (ISSO)
+
+```text
+@ato Write SSP section 6 for Eagle Eye: Technical controls include
+Azure AD Conditional Access for MFA enforcement, Microsoft Defender
+for Cloud for workload protection, NSG micro-segmentation, and Azure
+Policy for compliance guardrails.
+```
+
+**Expected Tool**: `compliance_write_ssp_section`
+**Expected Output**: SSP §6 saved; status: Draft (pending ISSM review)
+
+---
+
+### → Handoff: ISSO → ISSM
+
+---
+
+### Step 11: Review SSP §5 — Approve (ISSM)
+
+```text
+Review SSP section 5 for Eagle Eye — approve as written
+```
+
+**Expected Tool**: `compliance_review_ssp_section`
+**Expected Output**: §5 status changed to Approved; reviewer identity recorded
+
+---
+
+### Step 12: Review SSP §6 — Request Revision (ISSM)
+
+```text
+Review SSP section 6 for Eagle Eye — revise: add Azure Firewall
+Premium with IDPS to the technical controls description
+```
+
+**Expected Tool**: `compliance_review_ssp_section`
+**Expected Output**: §6 status changed to Revision Requested; revision note recorded
+
+---
+
+### → Handoff: ISSM → ISSO
+
+---
+
+### Step 13: Update SSP §6 After Revision (ISSO)
+
+```text
+@ato Update SSP section 6 for Eagle Eye: Technical controls include
+Azure AD Conditional Access for MFA enforcement, Microsoft Defender
+for Cloud for workload protection, Azure Firewall Premium with IDPS,
+NSG micro-segmentation, and Azure Policy for compliance guardrails.
+```
+
+**Expected Tool**: `compliance_write_ssp_section`
+**Expected Output**: §6 updated with Azure Firewall Premium; status reset to Draft
+
+---
+
+### → Handoff: ISSO → ISSM
+
+---
+
+### Step 14: Re-Review SSP §6 — Approve (ISSM)
+
+```text
+Review SSP section 6 for Eagle Eye — approve the updated version
+```
+
+**Expected Tool**: `compliance_review_ssp_section`
+**Expected Output**: §6 status changed to Approved
+
+---
+
+### → Handoff: ISSM → SCA
+
+---
+
+### Step 15: Check SSP Completeness (SCA)
+
+```text
+Show SSP completeness for Eagle Eye
+```
+
+**Expected Tool**: `compliance_ssp_completeness`
+**Expected Output**: Overall completion percentage; §5 and §6 show as Approved
+
+---
+
+### Step 16: Export OSCAL SSP (SCA)
+
+```text
+Export OSCAL SSP for Eagle Eye
+```
+
+**Expected Tool**: `compliance_export_oscal_ssp`
+**Expected Output**: OSCAL SSP JSON/XML artifact with system metadata, control implementations
+
+---
+
+### Step 17: Validate OSCAL SSP (SCA)
+
+```text
+Validate the OSCAL SSP for Eagle Eye against NIST SP 800-53 Rev 5
+```
+
+**Expected Tool**: `compliance_validate_oscal_ssp`
+**Expected Output**: Validation results with any schema or content issues flagged
+
+---
+
+### → Handoff: SCA → AO
+
+---
+
+### Step 18: Review OSCAL SSP in Authorization Package (AO)
+
+```text
+Export the OSCAL SSP for Eagle Eye — I need the machine-readable
+version for my authorization decision
+```
+
+**Expected Tool**: `compliance_export_oscal_ssp`
+**Expected Output**: OSCAL SSP available for AO review as part of authorization package
+
+---
+
+### → Handoff: AO → ISSM
+
+---
+
+### Step 19: Check Privacy Compliance (ISSM)
+
+```text
+Check privacy compliance status for Eagle Eye
+```
+
+**Expected Tool**: `compliance_check_privacy_compliance`
+**Expected Output**: Privacy compliance summary: PTA complete, PIA approved, all PII categories covered
+
+---
+
+### → Handoff: ISSM → Engineer
+
+---
+
+### Step 20: Export CKL Evidence (Engineer)
+
+```text
+@ato Export a CKL file for Eagle Eye Windows Server 2022 STIG
+```
+
+**Expected Tool**: `compliance_export_ckl`
+**Expected Output**: CKL XML file with per-rule status reflecting current remediation state
+
+---
+
+### Scenario 4 Results
+
+| Step | Persona | Tool Resolved | Data Flows | Status |
+|------|---------|--------------|------------|--------|
+| 1 | ISSO | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 2 | ISSM | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 3 | ISSM | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 4 | ISSO | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 5 | Engineer | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 6 | ISSM | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 7 | ISSM | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 8 | ISSM | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 9 | ISSO | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 10 | ISSO | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 11 | ISSM | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 12 | ISSM | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 13 | ISSO | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 14 | ISSM | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 15 | SCA | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 16 | SCA | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 17 | SCA | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 18 | AO | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 19 | ISSM | ☐ | ☐ | ☐ Pass / ☐ Fail |
+| 20 | Engineer | ☐ | ☐ | ☐ Pass / ☐ Fail |
+
+**Persona Transitions**: 10 handoffs → All successful: ☐ Yes / ☐ No
+**Scenario 4 Status**: ☐ PASS / ☐ FAIL | ___/20 steps passed
+
+---
+
 ## Overall Cross-Persona & Edge Cases Summary
 
 | Section | Total | Passed | Failed | Blocked |
@@ -1051,7 +1393,8 @@ Issue ATO with Conditions — CAT I must be fixed in 30 days
 | Scenario 1: Full RMF | 17 steps | ___/17 | ___/17 | ___/17 |
 | Scenario 2: Prisma Flow | 13 steps | ___/13 | ___/13 | ___/13 |
 | Scenario 3: ConMon Drift | 10 steps | ___/10 | ___/10 | ___/10 |
-| **Total** | **56** | **___/56** | **___/56** | **___/56** |
+| Scenario 4: Privacy/SSP/OSCAL | 20 steps | ___/20 | ___/20 | ___/20 |
+| **Total** | **76** | **___/76** | **___/76** | **___/76** |
 
 ### Issues Found
 

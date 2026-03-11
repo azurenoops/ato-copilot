@@ -47,11 +47,57 @@
 
 - Assist with boundary definition by identifying Azure resources
 - Verify role assignments are accurate
+- Create Privacy Threshold Analysis → Tool: `compliance_create_pta`
+- Generate Privacy Impact Assessment (if PTA indicates PII) → Tool: `compliance_generate_pia`
+- Register system interconnections → Tool: `compliance_add_interconnection`
 
 ### Engineer (Support)
 
 - Provide Azure resource inventory for boundary definition
 - Confirm system type and hosting environment details
+- Register interconnections discovered during architecture review → Tool: `compliance_add_interconnection`
+
+---
+
+## Privacy & Interconnection Activities
+
+### Privacy Threshold Analysis
+
+Before leaving the Prepare phase, determine whether the system collects or processes PII:
+
+```
+Tool: compliance_create_pta
+Parameters:
+  system_id: "<system-guid>"
+  collects_pii: true
+  pii_categories: ["Name", "SSN", "Email"]
+```
+
+If the PTA indicates PII is collected, a Privacy Impact Assessment is required:
+
+```
+Tool: compliance_generate_pia
+Parameters:
+  system_id: "<system-guid>"
+```
+
+The PIA is submitted to the ISSM for review via `compliance_review_pia`.
+
+### Interconnection Documentation
+
+Register all system-to-system connections crossing the authorization boundary:
+
+```
+Tool: compliance_add_interconnection
+Parameters:
+  system_id: "<system-guid>"
+  remote_system_name: "HR Payroll System"
+  direction: "Outbound"
+  protocol: "HTTPS"
+  data_types: ["Employee Records"]
+```
+
+The ISSM generates formal ISA/MOU documents using `compliance_generate_isa` and registers agreements using `compliance_register_agreement`. If the system has no external connections, the ISSM can certify using `compliance_certify_no_interconnections`.
 
 ---
 
@@ -59,7 +105,9 @@
 
 | Document | Owner | Format | Gate Dependency |
 |----------|-------|--------|----------------|
-| — | — | — | None (informational artifacts only) |
+| Privacy Threshold Analysis (PTA) | ISSO | Record | Informational |
+| Privacy Impact Assessment (PIA) | ISSO / ISSM | Record | Informational (if PII) |
+| Interconnection Agreements (ISA/MOU) | ISSM | Record | Informational |
 
 ---
 
@@ -69,6 +117,8 @@
 |------|-----------|-----------|
 | Roles assigned | At least one RMF role assigned to the system | `compliance_advance_rmf_step` |
 | Boundary defined | At least one resource in the authorization boundary | `compliance_advance_rmf_step` |
+| Privacy readiness | PTA completed; PIA submitted if PII is collected | `compliance_check_privacy_compliance` |
+| Interconnections documented | All connections registered or no-interconnections certified | `compliance_validate_agreements` |
 
 ---
 

@@ -2,7 +2,7 @@
 
 **Feature**: 020 | **Persona**: SCA (Security Control Assessor)
 **Role**: `Compliance.Auditor` | **Interface**: Microsoft Teams
-**Test Cases**: SCA-01 through SCA-24 (24 total)
+**Test Cases**: SCA-01 through SCA-29 (29 total)
 
 ---
 
@@ -429,7 +429,105 @@ Run a NIST 800-53 assessment for Eagle Eye
 **Verification**: Compliance score returned
 **Record**: compliance_score = ___
 
-→ **Handoff**: SAR delivered. ISSM creates POA&M for findings and bundles authorization package.
+---
+
+## SSP & OSCAL Validation (SCA-25 to SCA-29)
+
+### SCA-25: Check SSP Completeness
+
+**Task**: Verify SSP readiness before including in authorization package
+**Type**: Positive test | **Precondition**: SSP sections authored by ISSO
+
+```text
+Check SSP completeness for Eagle Eye
+```
+
+**Expected Tool**: `compliance_ssp_completeness`
+**Expected Output**:
+- 13-section status breakdown
+- Completion percentage
+- Blocking issues list
+
+**Verification**: Completion percentage returned
+**Record**: sca_ssp_completion_pct = ___%
+
+---
+
+### SCA-26: Validate Interconnection Agreements
+
+**Task**: Verify all agreements are current before assessment sign-off
+**Type**: Positive test | **Precondition**: ISSM-52 (agreements registered)
+
+```text
+Validate all interconnection agreements for Eagle Eye
+```
+
+**Expected Tool**: `compliance_validate_agreements`
+**Expected Output**:
+- Agreement validation results
+- Expiration status per agreement
+- Any expired or missing agreements flagged
+
+**Verification**: All agreements valid (none expired)
+
+---
+
+### SCA-27: Export OSCAL SSP
+
+**Task**: Export OSCAL SSP for FedRAMP/eMASS submission
+**Type**: Positive test | **Precondition**: SSP substantially complete
+
+```text
+Export the OSCAL SSP for Eagle Eye
+```
+
+**Expected Tool**: `compliance_export_oscal_ssp`
+**Expected Output**:
+- OSCAL 1.1.2 JSON with 6 required sections
+- Statistics (control count, component count)
+- Warnings for incomplete data
+
+**Verification**: OSCAL document generated with version "1.1.2"
+
+---
+
+### SCA-28: Validate OSCAL SSP
+
+**Task**: Run structural validation on exported OSCAL
+**Type**: Positive test | **Precondition**: SCA-27 (OSCAL export)
+
+```text
+Validate the OSCAL SSP for Eagle Eye
+```
+
+**Expected Tool**: `compliance_validate_oscal_ssp`
+**Expected Output**:
+- 7 structural checks executed
+- Errors and warnings separated
+- Statistics summary
+
+**Verification**: Validation results returned with check details
+
+---
+
+### SCA-29: Check Privacy Compliance for Assessment
+
+**Task**: Verify privacy gates are satisfied for assessment report
+**Type**: Positive test | **Precondition**: PTA/PIA completed (ISSM-44/46)
+
+```text
+Check privacy compliance status for Eagle Eye
+```
+
+**Expected Tool**: `compliance_check_privacy_compliance`
+**Expected Output**:
+- PTA completed, PIA approved
+- Interconnection agreement health
+- Privacy gate status
+
+**Verification**: Privacy gate satisfied
+
+→ **Handoff**: SAR delivered with OSCAL validation. ISSM creates POA&M for findings and bundles authorization package.
 
 ---
 
@@ -505,8 +603,8 @@ Dismiss alert ALT-{id}
 
 | Metric | Value |
 |--------|-------|
-| Total Test Cases | 24 |
-| Positive Tests | ___/20 passed |
+| Total Test Cases | 29 |
+| Positive Tests | ___/25 passed |
 | RBAC Denied Tests | ___/4 returned 403 |
 | Failed | ___ |
 | Blocked | ___ |
@@ -536,5 +634,6 @@ Dismiss alert ALT-{id}
 | Post-Assessment Snapshot | _______________ | SCA-13 |
 | SAP-SAR Alignment | ___% | SCA-16 |
 | Compliance Score | ___ | SCA-20 |
+| SSP Completion | ___% | SCA-25 |
 
-**Checkpoint**: ⬜ SCA (24 tests) complete. Assessment artifacts generated, RBAC enforced. AO testing can begin.
+**Checkpoint**: ⬜ SCA (29 tests) complete. Assessment artifacts generated, OSCAL validated, RBAC enforced. AO testing can begin.
