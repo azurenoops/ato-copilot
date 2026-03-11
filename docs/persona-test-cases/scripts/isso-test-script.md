@@ -2,7 +2,7 @@
 
 **Feature**: 020 | **Persona**: ISSO (Information System Security Officer)
 **Role**: `Compliance.Analyst` | **Interface**: VS Code `@ato`
-**Test Cases**: ISSO-01 through ISSO-24 (24 total)
+**Test Cases**: ISSO-01 through ISSO-35 (35 total)
 
 ---
 
@@ -23,6 +23,8 @@
 - ✓ Moderate baseline selected with 325 controls (ISSM-11)
 - ✓ AC-1 through AC-4 set as inherited (ISSM-13)
 - ✓ Prisma scans imported (ISSM-19, ISSM-20)
+- ✓ PTA created and PIA approved (ISSM-44, ISSM-46)
+- ✓ Interconnections registered with ISA (ISSM-48, ISSM-52)
 
 ---
 
@@ -269,7 +271,236 @@ deployment
 
 **Verification**: Findings listed with control mappings
 
-→ **Handoff**: SSP complete. System ready for SCA independent assessment.
+---
+
+## CKL Export & Evidence (ISSO-25)
+
+### ISSO-25: Export CKL Checklist
+
+**Task**: Export findings as CKL file for DISA STIG Viewer
+**Type**: Positive test | **Precondition**: ISSO-09 (CKL imported with STIG findings)
+
+```text
+@ato Export a CKL checklist for Eagle Eye's Windows Server 2022 STIG
+```
+
+**Expected Tool**: `compliance_export_ckl`
+**Expected Output**:
+- CKL XML file generated
+- Includes STIG evaluation results from imported data
+- Compatible with DISA STIG Viewer and eMASS
+
+**Verification**: CKL file generated, benchmark reference matches import
+
+---
+
+## Privacy Analysis (ISSO-26 to ISSO-28)
+
+### ISSO-26: Create PTA for System
+
+**Task**: Conduct a Privacy Threshold Analysis
+**Type**: Positive test | **Precondition**: System registered (ISSM-01), or PTA not yet created by ISSM
+
+```text
+@ato Create a Privacy Threshold Analysis for Eagle Eye — the system
+processes Name and Email of system operators. PII is collected directly.
+No sharing with external parties. Retention period is 3 years.
+```
+
+**Expected Tool**: `compliance_create_pta`
+**Expected Output**:
+- PTA created with PII categories (Name, Email)
+- Collection method = Direct
+- PIA required determination
+
+**Verification**: PTA created with 2 PII categories
+
+---
+
+### ISSO-27: Generate PIA
+
+**Task**: Generate a Privacy Impact Assessment from PTA
+**Type**: Positive test | **Precondition**: ISSO-26 or ISSM-44
+
+```text
+@ato Generate a Privacy Impact Assessment for Eagle Eye
+```
+
+**Expected Tool**: `compliance_generate_pia`
+**Expected Output**:
+- PIA with 9 sections
+- Status = Draft
+- Content derives from PTA data
+
+**Verification**: Status = "Draft", 9 sections present
+
+---
+
+### ISSO-28: Check Privacy Compliance
+
+**Task**: View privacy compliance dashboard
+**Type**: Positive test | **Precondition**: ISSO-26
+
+```text
+@ato Check privacy compliance status for Eagle Eye
+```
+
+**Expected Tool**: `compliance_check_privacy_compliance`
+**Expected Output**:
+- PTA status, PIA status
+- Interconnection agreement health
+- Overall privacy gate status
+
+**Verification**: Privacy status returned with gate assessment
+
+---
+
+## Interconnection Registration (ISSO-29 to ISSO-30)
+
+### ISSO-29: Add Interconnection
+
+**Task**: Register system interconnection
+**Type**: Positive test | **Precondition**: System registered (ISSM-01)
+
+```text
+@ato Add an interconnection for Eagle Eye — outbound data flow to
+DISA Enterprise Email (DEE) for automated alert notifications via SMTP
+```
+
+**Expected Tool**: `compliance_add_interconnection`
+**Expected Output**:
+- Interconnection created
+- Direction = Outbound
+- Status = Proposed
+
+**Verification**: Direction = "Outbound", status = "Proposed"
+**Record**: isso_interconnection_id = _______________
+
+---
+
+### ISSO-30: List Interconnections
+
+**Task**: View all interconnections registered by any persona
+**Type**: Positive test | **Precondition**: ISSO-29 or ISSM-48
+
+```text
+@ato Show all interconnections for Eagle Eye
+```
+
+**Expected Tool**: `compliance_list_interconnections`
+**Expected Output**:
+- At least 1 interconnection (ISSO-29)
+- May include ISSM-registered interconnections
+
+**Verification**: List returned with at least 1 entry
+
+---
+
+## SSP Section Authoring (ISSO-31 to ISSO-35)
+
+### ISSO-31: Write SSP Section 5 — General Description
+
+**Task**: Author SSP section with free-form content
+**Type**: Positive test | **Precondition**: System registered
+
+```text
+@ato Write SSP Section 5 for Eagle Eye: Eagle Eye is a mission planning
+and operational intelligence platform providing joint force coordination
+capabilities. The system aggregates multi-source intelligence data and
+presents unified operational dashboards to authorized commanders and staff.
+```
+
+**Expected Tool**: `compliance_write_ssp_section`
+**Expected Output**:
+- Section 5 created with content
+- Status = Draft
+- Version = 1
+
+**Verification**: Status = "Draft", section_number = 5, version = 1
+**Record**: section_5_version = ___
+
+---
+
+### ISSO-32: Write SSP Section 6 — System Environment
+
+**Task**: Author hybrid SSP section
+**Type**: Positive test | **Precondition**: System registered
+
+```text
+@ato Write SSP Section 6 for Eagle Eye: The system operates in Azure
+Government (USGov Virginia) with a secondary disaster recovery site in
+USGov Texas. The environment includes 2 web servers, 1 application server,
+1 SQL database, and 1 Key Vault instance.
+```
+
+**Expected Tool**: `compliance_write_ssp_section`
+**Expected Output**:
+- Section 6 created (hybrid: auto-populated environment + authored narrative)
+- Status = Draft
+
+**Verification**: Status = "Draft", section_number = 6
+
+---
+
+### ISSO-33: Submit Section for Review
+
+**Task**: Submit an authored section to ISSM for review
+**Type**: Positive test | **Precondition**: ISSO-31
+
+```text
+@ato Submit SSP Section 5 for Eagle Eye for review
+```
+
+**Expected Tool**: `compliance_write_ssp_section` (with `submit_for_review=true`)
+**Expected Output**:
+- Section 5 status → UnderReview
+- ISSM notified for review
+
+**Verification**: Status = "UnderReview"
+
+---
+
+### ISSO-34: Check SSP Completeness
+
+**Task**: View overall SSP section status
+**Type**: Positive test | **Precondition**: At least 1 section authored
+
+```text
+@ato Check SSP completeness for Eagle Eye
+```
+
+**Expected Tool**: `compliance_ssp_completeness`
+**Expected Output**:
+- 13-section breakdown with status per section
+- Completion percentage
+- Blocking issues (if any)
+
+**Verification**: At least sections 5, 6 show Draft or UnderReview
+**Record**: isso_ssp_completion_pct = ___%
+
+---
+
+### ISSO-35: Update SSP Section After Revision
+
+**Task**: Update a section that was returned for revision by ISSM
+**Type**: Positive test | **Precondition**: ISSM-60 (section returned for revision)
+
+```text
+@ato Update SSP Section 12 for Eagle Eye: Personnel security is managed
+via Azure AD PIM with quarterly access reviews, annual security awareness
+training (DD Form 2875), and documented separation procedures including
+CAC revocation within 24 hours of departure.
+```
+
+**Expected Tool**: `compliance_write_ssp_section`
+**Expected Output**:
+- Section 12 updated with new content
+- Version incremented
+- Status = Draft (ready for re-review)
+
+**Verification**: Version > 1, status = "Draft"
+
+→ **Handoff**: SSP sections authored and submitted. ISSM reviews (ISSM-56+). System ready for SCA assessment.
 
 ---
 
@@ -513,7 +744,7 @@ deployment
 
 | Metric | Value |
 |--------|-------|
-| Total Test Cases | 24 |
+| Total Test Cases | 35 |
 | Passed | ___ |
 | Failed | ___ |
 | Blocked | ___ |
@@ -535,5 +766,8 @@ deployment
 | SSP Completion | ___% | ISSO-02 |
 | Evidence Hash | _______________ | ISSO-19 |
 | Import Count | ___ | ISSO-11 |
+| Interconnection ID | _______________ | ISSO-29 |
+| SSP Section 5 Version | ___ | ISSO-31 |
+| SSP Completion | ___% | ISSO-34 |
 
-**Checkpoint**: ⬜ ISSO (24 tests) complete. SSP authored, scans imported, monitoring active. SCA testing can begin.
+**Checkpoint**: ⬜ ISSO (35 tests) complete. SSP sections authored, scans imported, CKL exported, privacy analyzed, interconnections registered, monitoring active. SCA testing can begin.

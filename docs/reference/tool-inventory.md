@@ -1,6 +1,6 @@
 # Tool Inventory
 
-> Complete reference of all 114 MCP tools available in ATO Copilot, grouped by category.
+> Complete reference of all 140 MCP tools available in ATO Copilot, grouped by category.
 
 ---
 
@@ -220,6 +220,55 @@ Cloud security posture management scan import, policy catalog, and trend analysi
 
 ---
 
+## Category 10: SAP Generation Tools (5 tools)
+
+Security Assessment Plan generation, update, and finalization for RMF Step 4.
+
+| # | Tool | Description | Phase(s) | Roles |
+|---|------|-------------|----------|-------|
+| 119 | `compliance_generate_sap` | Generate SAP from baseline, objectives, and STIGs | Assess | SCA, ISSM |
+| 120 | `compliance_update_sap` | Update Draft SAP schedule, scope, team, methods | Assess | SCA, ISSM |
+| 121 | `compliance_finalize_sap` | Lock SAP with SHA-256 content hash | Assess | SCA |
+| 122 | `compliance_get_sap` | Retrieve SAP by ID or latest for system | Assess | All |
+| 123 | `compliance_list_saps` | List SAP history for system | Assess | All |
+
+---
+
+## Category 11: Privacy & Interconnection Tools (12 tools)
+
+Privacy threshold/impact analysis, interconnection registration, ISA/MOU lifecycle, and compliance gates.
+
+| # | Tool | Description | Phase(s) | Roles |
+|---|------|-------------|----------|-------|
+| 124 | `compliance_create_pta` | Conduct Privacy Threshold Analysis | Prepare | ISSO, ISSM |
+| 125 | `compliance_generate_pia` | Generate Privacy Impact Assessment (8 sections) | Prepare | ISSO, ISSM |
+| 126 | `compliance_review_pia` | Approve or request revision on PIA | Prepare | ISSM |
+| 127 | `compliance_check_privacy_compliance` | Privacy and interconnection compliance dashboard | Prepare | All |
+| 128 | `compliance_add_interconnection` | Register system-to-system interconnection | Prepare | Eng, ISSO, ISSM |
+| 129 | `compliance_list_interconnections` | List interconnections with agreement status | Prepare | All |
+| 130 | `compliance_update_interconnection` | Update interconnection details or status | Prepare | ISSO, ISSM |
+| 131 | `compliance_generate_isa` | Generate ISA from interconnection data (NIST 800-47) | Prepare | ISSM |
+| 132 | `compliance_register_agreement` | Register pre-existing ISA/MOU/SLA | Prepare | ISSM |
+| 133 | `compliance_update_agreement` | Update agreement status, dates, signatories | Prepare | ISSM |
+| 134 | `compliance_certify_no_interconnections` | Certify no external interconnections | Prepare | ISSM |
+| 135 | `compliance_validate_agreements` | Validate all interconnection agreements are current | Prepare | ISSO, ISSM, SCA |
+
+---
+
+## Category 12: SSP Authoring & OSCAL Export Tools (5 tools)
+
+NIST 800-18 SSP section authoring, review workflow, and OSCAL 1.1.2 SSP export.
+
+| # | Tool | Description | Phase(s) | Roles |
+|---|------|-------------|----------|-------|
+| 136 | `compliance_write_ssp_section` | Write/update SSP section (§1–§13) | Implement | ISSO, Eng |
+| 137 | `compliance_review_ssp_section` | Review and approve SSP section | Implement, Assess | ISSM |
+| 138 | `compliance_ssp_completeness` | SSP section completeness dashboard | Implement, Assess | All |
+| 139 | `compliance_export_oscal_ssp` | Export OSCAL 1.1.2 SSP JSON | Authorize | ISSM, SCA, AO |
+| 140 | `compliance_validate_oscal_ssp` | Validate OSCAL SSP structural correctness | Authorize | ISSM, SCA |
+
+---
+
 ## Tool Count Summary
 
 | Category | Tools | Description |
@@ -233,7 +282,10 @@ Cloud security posture management scan import, policy catalog, and trend analysi
 | Kanban Remediation | 18 | Task lifecycle management |
 | PIM & Authentication | 13 | JIT access and CAC sessions |
 | Prisma Cloud Import | 4 | CSPM scan import and analysis |
-| **Total** | **118** | |
+| SAP Generation | 5 | Security Assessment Plan lifecycle |
+| Privacy & Interconnection | 12 | Privacy analysis, ISA/MOU management |
+| SSP Authoring & OSCAL | 5 | SSP sections and OSCAL export |
+| **Total** | **140** | |
 
 ---
 

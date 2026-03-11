@@ -25,6 +25,7 @@
 | **CAC** | Common Access Card — DoD smart card used for PKI-based authentication |
 | **CAT** | Category (STIG severity) — CAT I (Critical), CAT II (Significant), CAT III (Low) |
 | **CCI** | Control Correlation Identifier — Maps NIST 800-53 controls to STIG rules |
+| **CKL** | Checklist (DISA STIG Viewer format) — XML file containing STIG assessment results for a specific benchmark |
 | **CISO** | Chief Information Security Officer |
 | **CM** | Continuous Monitoring — Ongoing awareness of security posture (NIST SP 800-137) |
 | **CMRS** | Cybersecurity Mitigation and Remediation System |
@@ -56,6 +57,7 @@
 | **FIPS** | Federal Information Processing Standards |
 | **FIPS 140-2** | Security standard for cryptographic modules |
 | **FIPS 199** | Standards for Security Categorization of Federal Information and Information Systems |
+| **FIPS 200** | Minimum Security Requirements for Federal Information and Information Systems — defines baseline control requirements |
 | **FOUO** | For Official Use Only (legacy marking, replaced by CUI) |
 
 ## G–H
@@ -69,6 +71,8 @@
 | Term | Definition |
 |------|-----------|
 | **IaC** | Infrastructure as Code — Machine-readable configuration files (Terraform, Bicep, ARM templates) |
+| **ISA** | Interconnection Security Agreement — Document governing the security of a connection between two systems |
+| **ISCP** | Information System Contingency Plan — Plan for restoring system operations after disruption |
 | **IATT** | Interim Authority to Test — Temporary authorization for testing purposes |
 | **IL** | Impact Level — DoD classification tier (IL2–IL6) determining security requirements |
 | **ISSM** | Information System Security Manager — Responsible for day-to-day security operations of a system |
@@ -91,6 +95,8 @@
 | Term | Definition |
 |------|-----------|
 | **MCP** | Model Context Protocol — Protocol used by ATO Copilot to expose tools and prompts to AI assistants |
+| **MOA** | Memorandum of Agreement — Formal agreement between organizations defining roles and responsibilities |
+| **MOU** | Memorandum of Understanding — Agreement between organizations to share information or resources |
 
 ## N
 
@@ -116,7 +122,9 @@
 |------|-----------|
 | **PIM** | Privileged Identity Management — Azure AD feature for JIT role elevation |
 | **PIV** | Personal Identity Verification — Federal smart card standard (FIPS 201) |
+| **PIA** | Privacy Impact Assessment — Analysis of how PII is collected, stored, shared, and protected |
 | **POA&M** | Plan of Action and Milestones — Document identifying tasks to correct security weaknesses |
+| **PTA** | Privacy Threshold Analysis — Determination of whether a system requires a PIA based on PII handling |
 
 ## Q–R
 
@@ -130,12 +138,14 @@
 
 | Term | Definition |
 |------|-----------|
+| **SAP** | Security Assessment Plan — Document defining the scope, methodology, and schedule for security assessment |
 | **SAR** | Security Assessment Report — Documents assessment results and findings |
 | **SCA** | Security Control Assessor — Person who assesses the effectiveness of security controls |
 | **SCAP** | Security Content Automation Protocol — Standard for automated vulnerability management |
 | **SCIF** | Sensitive Compartmented Information Facility |
 | **SRG** | Security Requirements Guide — DISA document specifying security requirements for a technology area |
 | **SSP** | System Security Plan — Formal document describing how security controls are implemented |
+| **SSP Section** | One of 13 NIST 800-18 sections composing a System Security Plan (System Identification through Contingency Planning) |
 | **STIG** | Security Technical Implementation Guide — DISA configuration standard for IT products |
 
 ## T

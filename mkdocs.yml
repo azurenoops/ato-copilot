@@ -110,4 +110,15 @@ nav:
   - API:
     - MCP Server: api/mcp-server.md
     - VS Code Extension: api/vscode-extension.md
+  - Release Notes:
+    - v1.21.0: release-notes/v1.21.0.md
+    - v1.20.0: release-notes/v1.20.0.md
+    - v1.19.0: release-notes/v1.19.0.md
+    - v1.18.0: release-notes/v1.18.0.md
+  - Persona Test Cases:
+    - Environment Checklist: persona-test-cases/environment-checklist.md
+    - Test Data Setup: persona-test-cases/test-data-setup.md
+    - Tool Validation: persona-test-cases/tool-validation.md
+    - Test Report: persona-test-cases/test-report.md
+    - Results Template: persona-test-cases/results-template.md
   - Deployment: deployment.md

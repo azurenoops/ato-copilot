@@ -134,6 +134,13 @@
 │ REGISTER:  "Show risk register for system {id}"         │
 │ DASHBOARD: "Show all my authorized systems"             │
 │ EXPIRATION:"What ATOs expire in the next 90 days?"      │
+│                                                         │
+│ PRE-AUTHORIZATION CHECKLIST:                            │
+│ □ SAP finalized         "Is the SAP finalized?"         │
+│ □ SSP complete          "SSP completeness for {id}"     │
+│ □ Privacy ready         "Check privacy compliance"      │
+│ □ OSCAL exported        "Export OSCAL SSP for {id}"     │
+│ □ Interconnections OK   "Validate agreements for {id}"  │
 ├─────────────────────────────────────────────────────────┤
 │ Phases: R in Authorize only | I in Monitor              │
 │ Lead: Authorization decisions and risk acceptance        │
@@ -149,6 +156,9 @@
 | `compliance_show_risk_register` | View risk register |
 | `compliance_multi_system_dashboard` | Portfolio overview |
 | `compliance_track_ato_expiration` | Expiration monitoring |
+| `compliance_ssp_completeness` | SSP readiness percentage |
+| `compliance_check_privacy_compliance` | Privacy readiness gate |
+| `compliance_validate_oscal_ssp` | OSCAL document validation |
 
 ---
 
@@ -229,6 +239,6 @@
 
 ## See Also
 
-- [Tool Inventory](tool-inventory.md) — Complete 114-tool reference
+- [Tool Inventory](tool-inventory.md) — Complete 140-tool reference
 - [NL Query Reference](../guides/nl-query-reference.md) — Full query catalog
 - [Persona Overview](../personas/index.md) — Role definitions and RACI

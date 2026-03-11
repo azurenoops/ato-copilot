@@ -29,10 +29,22 @@
 | Track narrative progress | ✅ | `compliance_narrative_progress` |
 | Collect evidence | ✅ | `compliance_collect_evidence` |
 | Run compliance assessment | ✅ | `compliance_assess` |
+| Import CKL/XCCDF scan results | ✅ | `compliance_import_ckl`, `compliance_import_xccdf` |
+| Export CKL checklists | ✅ | `compliance_export_ckl` |
+| Import Prisma Cloud scans | ✅ | `compliance_import_prisma_csv`, `compliance_import_prisma_api` |
+| Create Privacy Threshold Analysis | ✅ | `compliance_create_pta` |
+| Generate Privacy Impact Assessment | ✅ | `compliance_generate_pia` |
+| Add/update interconnections | ✅ | `compliance_add_interconnection`, `compliance_update_interconnection` |
+| Write SSP sections | ✅ | `compliance_write_ssp_section` |
+| Check SSP completeness | ✅ | `compliance_ssp_completeness` |
 | Enable/manage Watch monitoring | ✅ | `watch_enable_monitoring`, `watch_configure_monitoring` |
 | View/acknowledge/fix alerts | ✅ | `watch_show_alerts`, `watch_acknowledge_alert`, `watch_fix_alert` |
 | Create remediation boards | ✅ | `kanban_create_board` |
 | Assign Kanban tasks | ✅ | `kanban_assign_task` |
+| Review PIA (ISSM only) | ❌ | `compliance_review_pia` — officer (ISSM) only |
+| Register/certify interconnections | ❌ | `compliance_register_agreement`, `compliance_certify_no_interconnections` — officer (ISSM) only |
+| Review SSP sections | ❌ | `compliance_review_ssp_section` — officer (ISSM) only |
+| Export OSCAL SSP | ❌ | `compliance_export_oscal_ssp` — officer (ISSM/SCA/AO) only |
 | Dismiss alerts | ❌ | `watch_dismiss_alert` — officer (ISSM) only |
 | Assess controls (SCA) | ❌ | `compliance_assess_control` — SCA only |
 | Issue authorization | ❌ | `compliance_issue_authorization` — AO only |
@@ -192,6 +204,131 @@ Dismissed  Escalated (SLA violation)
 
 ---
 
+### STIG & SCAP Scan Import
+
+**Objective**: Upload CKL and XCCDF scan results to update compliance findings and link them to NIST 800-53 controls.
+
+**Step-by-Step**:
+
+1. Import CKL file from DISA STIG Viewer → Tool: `compliance_import_ckl`
+2. Import XCCDF results from SCAP scanner → Tool: `compliance_import_xccdf`
+3. Review import summary → Tool: `compliance_get_import_summary`
+4. Export updated CKL for external review → Tool: `compliance_export_ckl`
+
+**Natural Language Queries**:
+
+> **"Upload the latest CKL for system {id}"** → `compliance_import_ckl` — parses DISA STIG Viewer checklist
+
+> **"Import the SCAP scan results from last week"** → `compliance_import_xccdf` — parses XCCDF automated scan output
+
+> **"Show the import summary for system {id}"** → `compliance_get_import_summary` — finding counts by status
+
+> **"Export a CKL checklist for the Windows Server 2022 STIG"** → `compliance_export_ckl` — generates CKL file for external reviewers
+
+---
+
+### Prisma Cloud Scan Import
+
+**Objective**: Import Prisma Cloud security posture data via CSV or API to enrich compliance findings.
+
+**Step-by-Step**:
+
+1. Import CSV export → Tool: `compliance_import_prisma_csv`
+2. Or connect via API → Tool: `compliance_import_prisma_api`
+3. Review mapped policies → Tool: `compliance_list_prisma_policies`
+4. Track posture trends → Tool: `compliance_prisma_trend`
+
+**Natural Language Queries**:
+
+> **"Import the Prisma Cloud CSV export for system {id}"** → `compliance_import_prisma_csv` — parses CSV and maps policies to controls
+
+> **"Connect Prisma Cloud API and pull the latest scan data"** → `compliance_import_prisma_api` — real-time API import
+
+> **"List all Prisma policies mapped to our controls"** → `compliance_list_prisma_policies` — shows policy-to-control mapping
+
+> **"Show the Prisma compliance trend for the last 30 days"** → `compliance_prisma_trend` — pass/fail trend data
+
+---
+
+### Privacy Analysis (PTA & PIA)
+
+**Objective**: Conduct Privacy Threshold Analysis to determine if a PIA is required, then generate and submit the PIA for ISSM review.
+
+**Step-by-Step**:
+
+1. Create a Privacy Threshold Analysis → Tool: `compliance_create_pta`
+2. If PTA indicates PIA required, generate PIA → Tool: `compliance_generate_pia`
+3. Submit PIA for ISSM review (ISSM uses `compliance_review_pia`)
+
+**Natural Language Queries**:
+
+> **"Create a privacy threshold analysis for system {id}"** → `compliance_create_pta` — determines whether PII is collected/processed
+
+> **"Generate a privacy impact assessment based on the PTA"** → `compliance_generate_pia` — drafts the PIA document
+
+> **"Check overall privacy compliance for system {id}"** → `compliance_check_privacy_compliance` — validates all privacy artifacts
+
+---
+
+### Interconnection Registration
+
+**Objective**: Document system-to-system connections that cross the authorization boundary and generate ISA documents for ISSM review.
+
+**Step-by-Step**:
+
+1. Add a new interconnection → Tool: `compliance_add_interconnection`
+2. List existing interconnections → Tool: `compliance_list_interconnections`
+3. Update interconnection details → Tool: `compliance_update_interconnection`
+4. ISSM generates ISA from interconnection record → Tool: `compliance_generate_isa`
+
+**Natural Language Queries**:
+
+> **"Add an interconnection to the HR payroll system for system {id}"** → `compliance_add_interconnection` — registers the connection with direction, protocol, and data types
+
+> **"List all interconnections for system {id}"** → `compliance_list_interconnections` — shows active/pending connections
+
+> **"Update the bandwidth for interconnection ICN-001"** → `compliance_update_interconnection` — modifies connection metadata
+
+---
+
+### SSP Section Authoring
+
+**Objective**: Write and submit NIST 800-18 SSP sections, track completeness, and support the authorization package.
+
+**Step-by-Step**:
+
+1. Write an SSP section → Tool: `compliance_write_ssp_section`
+2. Check overall SSP completeness → Tool: `compliance_ssp_completeness`
+3. Submit sections for ISSM review (ISSM uses `compliance_review_ssp_section`)
+
+**Natural Language Queries**:
+
+> **"Write SSP section 1 (System Identification) for system {id}"** → `compliance_write_ssp_section` — creates/updates using 13-section NIST 800-18 structure
+
+> **"What's the SSP completeness for system {id}?"** → `compliance_ssp_completeness` — percentage by section with status breakdown
+
+> **"Write the system environment section of the SSP"** → `compliance_write_ssp_section` — section 5: System Environment
+
+**SSP Section Reference**:
+
+| Section | Title |
+|---------|-------|
+| 1 | System Identification |
+| 2 | System Categorization |
+| 3 | System Owner & Contacts |
+| 4 | Authorization Boundary |
+| 5 | System Environment |
+| 6 | System Interconnections |
+| 7 | Applicable Laws & Regulations |
+| 8 | Minimum Security Controls |
+| 9 | Control Implementation |
+| 10 | Continuous Monitoring |
+| 11 | System Maintenance |
+| 12 | Personnel Security |
+| 13 | Contingency Planning |
+
+---
+
 ## Cross-Persona Handoffs
 
 | From | To | Trigger | Data |
@@ -202,6 +339,9 @@ Dismissed  Escalated (SLA violation)
 | ISSO → SCA | SSP ready for assessment | System ID, assessment scope, evidence package |
 | ISSO → ISSM | Significant change detected | Change record, reauthorization flag |
 | ISSO → ISSM | SLA escalation | Unacknowledged critical/high alert details |
+| ISSO → ISSM | PIA submitted for review | PIA document generated from PTA |
+| ISSO → ISSM | Interconnection registered | Interconnection record for ISA generation |
+| ISSO → ISSM | SSP section submitted | Section content awaiting ISSM review |
 | Watch → ISSO | Drift/violation detected | Alert with severity, control ID, resource ID |
 
 ---

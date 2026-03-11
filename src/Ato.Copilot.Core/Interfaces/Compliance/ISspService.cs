@@ -13,12 +13,15 @@ public interface ISspService
     /// <summary>
     /// Write or update the implementation narrative for a control in a system's SSP.
     /// If a narrative already exists for this (systemId, controlId), it is updated.
+    /// Creates an immutable NarrativeVersion record on every write.
     /// </summary>
     /// <param name="systemId">RegisteredSystem ID.</param>
     /// <param name="controlId">NIST 800-53 control ID (e.g., "AC-1").</param>
     /// <param name="narrative">Implementation narrative text.</param>
     /// <param name="status">Implementation status (Implemented, PartiallyImplemented, Planned, NotApplicable).</param>
     /// <param name="authoredBy">Identity of the user.</param>
+    /// <param name="expectedVersion">Optimistic concurrency check (null skips check).</param>
+    /// <param name="changeReason">Reason for the edit (stored on NarrativeVersion).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The created or updated ControlImplementation.</returns>
     /// <exception cref="InvalidOperationException">System not found or control not in baseline.</exception>
@@ -28,6 +31,8 @@ public interface ISspService
         string narrative,
         string? status = null,
         string authoredBy = "mcp-user",
+        int? expectedVersion = null,
+        string? changeReason = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

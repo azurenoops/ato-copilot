@@ -1689,6 +1689,15 @@ namespace Ato.Copilot.Core.Migrations
                     b.Property<bool>("AiSuggested")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ApprovalStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApprovedVersionId")
+                        .HasMaxLength(36)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("AuthoredAt")
                         .HasColumnType("TEXT");
 
@@ -1701,6 +1710,9 @@ namespace Ato.Copilot.Core.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("CurrentVersion")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ImplementationStatus")
                         .IsRequired()
@@ -1730,6 +1742,11 @@ namespace Ato.Copilot.Core.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ApprovalStatus")
+                        .HasDatabaseName("IX_ControlImplementation_ApprovalStatus");
+
+                    b.HasIndex("ApprovedVersionId");
 
                     b.HasIndex("ImplementationStatus")
                         .HasDatabaseName("IX_ControlImplementation_Status");
@@ -2093,6 +2110,97 @@ namespace Ato.Copilot.Core.Migrations
                         .HasDatabaseName("IX_MonitoringConfig_Sub_RG");
 
                     b.ToTable("MonitoringConfigurations");
+                });
+
+            modelBuilder.Entity("Ato.Copilot.Core.Models.Compliance.NarrativeReview", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(36)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NarrativeVersionId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ReviewedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReviewedBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReviewerComments")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NarrativeVersionId")
+                        .HasDatabaseName("IX_NarrativeReview_VersionId");
+
+                    b.ToTable("NarrativeReviews");
+                });
+
+            modelBuilder.Entity("Ato.Copilot.Core.Models.Compliance.NarrativeVersion", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(36)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("AuthoredAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AuthoredBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ChangeReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ControlImplementationId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("SubmittedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SubmittedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_NarrativeVersion_Status");
+
+                    b.HasIndex("ControlImplementationId", "VersionNumber")
+                        .IsUnique()
+                        .HasDatabaseName("IX_NarrativeVersion_Impl_Version");
+
+                    b.ToTable("NarrativeVersions");
                 });
 
             modelBuilder.Entity("Ato.Copilot.Core.Models.Compliance.NistControl", b =>
@@ -4110,11 +4218,18 @@ namespace Ato.Copilot.Core.Migrations
 
             modelBuilder.Entity("Ato.Copilot.Core.Models.Compliance.ControlImplementation", b =>
                 {
+                    b.HasOne("Ato.Copilot.Core.Models.Compliance.NarrativeVersion", "ApprovedVersion")
+                        .WithMany()
+                        .HasForeignKey("ApprovedVersionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Ato.Copilot.Core.Models.Compliance.RegisteredSystem", "RegisteredSystem")
                         .WithMany()
                         .HasForeignKey("RegisteredSystemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("ApprovedVersion");
 
                     b.Navigation("RegisteredSystem");
                 });
@@ -4159,6 +4274,28 @@ namespace Ato.Copilot.Core.Migrations
                         .HasForeignKey("SystemInterconnectionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Ato.Copilot.Core.Models.Compliance.NarrativeReview", b =>
+                {
+                    b.HasOne("Ato.Copilot.Core.Models.Compliance.NarrativeVersion", "NarrativeVersion")
+                        .WithMany("Reviews")
+                        .HasForeignKey("NarrativeVersionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("NarrativeVersion");
+                });
+
+            modelBuilder.Entity("Ato.Copilot.Core.Models.Compliance.NarrativeVersion", b =>
+                {
+                    b.HasOne("Ato.Copilot.Core.Models.Compliance.ControlImplementation", "ControlImplementation")
+                        .WithMany("Versions")
+                        .HasForeignKey("ControlImplementationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ControlImplementation");
                 });
 
             modelBuilder.Entity("Ato.Copilot.Core.Models.Compliance.NistControl", b =>
@@ -4568,6 +4705,16 @@ namespace Ato.Copilot.Core.Migrations
                     b.Navigation("Inheritances");
 
                     b.Navigation("Tailorings");
+                });
+
+            modelBuilder.Entity("Ato.Copilot.Core.Models.Compliance.ControlImplementation", b =>
+                {
+                    b.Navigation("Versions");
+                });
+
+            modelBuilder.Entity("Ato.Copilot.Core.Models.Compliance.NarrativeVersion", b =>
+                {
+                    b.Navigation("Reviews");
                 });
 
             modelBuilder.Entity("Ato.Copilot.Core.Models.Compliance.NistControl", b =>

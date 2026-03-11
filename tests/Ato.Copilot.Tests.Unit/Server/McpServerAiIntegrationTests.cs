@@ -423,7 +423,7 @@ public class McpServerAiIntegrationTests
             new WriteNarrativeTool(Mock.Of<ISspService>(), Mock.Of<ILogger<WriteNarrativeTool>>()),
             new SuggestNarrativeTool(Mock.Of<ISspService>(), Mock.Of<ILogger<SuggestNarrativeTool>>()),
             new BatchPopulateNarrativesTool(Mock.Of<ISspService>(), Mock.Of<ILogger<BatchPopulateNarrativesTool>>()),
-            new NarrativeProgressTool(Mock.Of<ISspService>(), Mock.Of<ILogger<NarrativeProgressTool>>()),
+            new NarrativeProgressTool(Mock.Of<ISspService>(), Mock.Of<INarrativeGovernanceService>(), Mock.Of<ILogger<NarrativeProgressTool>>()),
             new GenerateSspTool(Mock.Of<ISspService>(), Mock.Of<ILogger<GenerateSspTool>>()),
             new AssessControlTool(Mock.Of<IAssessmentArtifactService>(), Mock.Of<ILogger<AssessControlTool>>()),
             new TakeSnapshotTool(Mock.Of<IAssessmentArtifactService>(), Mock.Of<ILogger<TakeSnapshotTool>>()),

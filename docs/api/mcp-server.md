@@ -619,6 +619,314 @@ Export as OSCAL JSON.
 
 ---
 
+## STIG & SCAP Import (Feature 017)
+
+**Service**: `IScanImportService`
+
+### `compliance_import_ckl`
+
+Import DISA STIG Viewer CKL checklist file.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+| `ckl_content` | string | ✓ | CKL XML file content |
+| `conflict_resolution` | string | | `Skip` (default), `Overwrite` |
+
+### `compliance_import_xccdf`
+
+Import SCAP Compliance Checker XCCDF results.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+| `xccdf_content` | string | ✓ | XCCDF XML file content |
+| `conflict_resolution` | string | | `Skip` (default), `Overwrite` |
+
+### `compliance_export_ckl`
+
+Export CKL checklist for DISA STIG Viewer or eMASS.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+| `benchmark_id` | string | ✓ | STIG benchmark identifier |
+
+### `compliance_list_imports`
+
+List import history for a system.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+| `import_type` | string | | Filter by type: `CKL`, `XCCDF`, `PrismaCloudCsv`, `PrismaCloudApi` |
+
+### `compliance_get_import_summary`
+
+Get detailed per-finding import breakdown.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `import_id` | string | ✓ | Import record GUID |
+
+---
+
+## SAP Generation (Feature 018)
+
+**Service**: `ISapService`
+
+### `compliance_generate_sap`
+
+Generate Security Assessment Plan from system metadata.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+
+### `compliance_update_sap`
+
+Update SAP scope, methodology, or schedule.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `sap_id` | string | ✓ | SAP GUID |
+| `updates` | object | ✓ | Fields to update (methodology, scope, schedule) |
+
+### `compliance_finalize_sap`
+
+Lock SAP — generates SHA-256 hash, no further edits allowed.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `sap_id` | string | ✓ | SAP GUID |
+
+### `compliance_get_sap`
+
+Get SAP details by ID.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `sap_id` | string | ✓ | SAP GUID |
+
+### `compliance_list_saps`
+
+List all SAPs for a system.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+
+---
+
+## Prisma Cloud Import (Feature 019)
+
+**Parsers**: `PrismaCsvParser`, `PrismaApiJsonParser`
+
+### `compliance_import_prisma_csv`
+
+Import Prisma Cloud CSV compliance export.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+| `csv_content` | string | ✓ | CSV file content |
+| `conflict_resolution` | string | | `Skip` (default), `Overwrite`, `Merge` |
+
+### `compliance_import_prisma_api`
+
+Import Prisma Cloud API JSON response.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+| `api_json` | string | ✓ | Prisma RQL API JSON response |
+| `conflict_resolution` | string | | `Skip` (default), `Overwrite`, `Merge` |
+
+### `compliance_list_prisma_policies`
+
+List Prisma policies with NIST control mappings.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+
+### `compliance_prisma_trend`
+
+Compare scan imports for remediation progress.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+| `group_by` | string | | `nist_control`, `resource_type`, `severity` |
+
+---
+
+## Privacy & Interconnections (Feature 021)
+
+**Services**: `IPrivacyService`, `IInterconnectionService`
+
+### `compliance_create_pta`
+
+Create Privacy Threshold Analysis.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+| `collects_pii` | boolean | ✓ | Whether system collects PII |
+| `pii_categories` | string | | Comma-separated PII categories |
+
+### `compliance_generate_pia`
+
+Generate Privacy Impact Assessment from PTA.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+
+### `compliance_review_pia`
+
+ISSM review of PIA — approve or reject.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `pia_id` | string | ✓ | PIA GUID |
+| `decision` | string | ✓ | `Approved` or `NeedsRevision` |
+| `notes` | string | | Review notes |
+
+### `compliance_check_privacy_compliance`
+
+Verify all privacy artifacts are complete.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+
+### `compliance_add_interconnection`
+
+Register a system-to-system interconnection.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+| `remote_system_name` | string | ✓ | Connected system name |
+| `direction` | string | ✓ | `Inbound`, `Outbound`, `Bidirectional` |
+| `protocol` | string | | Network protocol |
+| `data_types` | string | | Comma-separated data types |
+
+### `compliance_list_interconnections`
+
+List all interconnections for a system.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+
+### `compliance_update_interconnection`
+
+Update interconnection metadata.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `interconnection_id` | string | ✓ | Interconnection GUID |
+| `updates` | object | ✓ | Fields to update |
+
+### `compliance_generate_isa`
+
+Generate ISA document from interconnection record.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `interconnection_id` | string | ✓ | Interconnection GUID |
+
+### `compliance_register_agreement`
+
+Register ISA/MOU agreement for an interconnection.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `interconnection_id` | string | ✓ | Interconnection GUID |
+| `agreement_type` | string | ✓ | `ISA`, `MOU`, `MOA`, `SLA` |
+| `effective_date` | string | | Agreement effective date |
+| `expiration_date` | string | | Agreement expiration date |
+
+### `compliance_update_agreement`
+
+Update agreement details.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `agreement_id` | string | ✓ | Agreement GUID |
+| `updates` | object | ✓ | Fields to update |
+
+### `compliance_certify_no_interconnections`
+
+Certify system has no external interconnections.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+| `justification` | string | ✓ | Rationale for certification |
+
+### `compliance_validate_agreements`
+
+Validate all ISA/MOU agreements for a system.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+
+---
+
+## SSP Authoring & OSCAL (Feature 022)
+
+**Services**: `ISspService`, `IOscalSspExportService`, `IOscalValidationService`
+
+### `compliance_write_ssp_section`
+
+Write or update an SSP section (NIST 800-18 structure).
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+| `section_number` | integer | ✓ | Section 1–13 |
+| `content` | string | ✓ | Section narrative |
+
+### `compliance_review_ssp_section`
+
+ISSM review of SSP section — approve or request revision.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `section_id` | string | ✓ | SSP section GUID |
+| `decision` | string | ✓ | `Approved` or `NeedsRevision` |
+| `notes` | string | | Review notes |
+
+### `compliance_ssp_completeness`
+
+Check SSP completeness percentage by section.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+
+### `compliance_export_oscal_ssp`
+
+Export OSCAL SSP document for authorization package.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+
+### `compliance_validate_oscal_ssp`
+
+Validate OSCAL SSP against NIST schema.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+
+---
+
 ## Document Templates
 
 ### `compliance_upload_template`

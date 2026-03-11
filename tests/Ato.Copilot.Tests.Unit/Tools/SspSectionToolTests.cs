@@ -313,7 +313,7 @@ public class SspSectionToolTests
         new(_sspMock.Object, Mock.Of<ILogger<ReviewSspSectionTool>>());
 
     private SspCompletenessTool CreateSspCompletenessTool() =>
-        new(_sspMock.Object, Mock.Of<ILogger<SspCompletenessTool>>());
+        new(_sspMock.Object, Mock.Of<INarrativeGovernanceService>(), Mock.Of<ILogger<SspCompletenessTool>>());
 
     // ────────────────────────────────────────────────────────────────────────
     // Helpers

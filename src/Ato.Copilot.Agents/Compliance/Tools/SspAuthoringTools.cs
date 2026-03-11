@@ -41,7 +41,9 @@ public class WriteNarrativeTool : BaseTool
         ["system_id"] = new() { Name = "system_id", Description = "System GUID, name, or acronym", Type = "string", Required = true },
         ["control_id"] = new() { Name = "control_id", Description = "NIST 800-53 control ID (e.g., 'AC-1')", Type = "string", Required = true },
         ["narrative"] = new() { Name = "narrative", Description = "Implementation narrative text", Type = "string", Required = true },
-        ["status"] = new() { Name = "status", Description = "Implementation status: Implemented, PartiallyImplemented, Planned, NotApplicable (default: Implemented)", Type = "string", Required = false }
+        ["status"] = new() { Name = "status", Description = "Implementation status: Implemented, PartiallyImplemented, Planned, NotApplicable (default: Implemented)", Type = "string", Required = false },
+        ["expected_version"] = new() { Name = "expected_version", Description = "Optimistic concurrency check — rejected if current version differs (null skips check)", Type = "integer", Required = false },
+        ["change_reason"] = new() { Name = "change_reason", Description = "Reason for the edit (stored on the version record)", Type = "string", Required = false }
     };
 
     public override async Task<string> ExecuteCoreAsync(
@@ -53,6 +55,12 @@ public class WriteNarrativeTool : BaseTool
         var controlId = GetArg<string>(arguments, "control_id");
         var narrative = GetArg<string>(arguments, "narrative");
         var status = GetArg<string>(arguments, "status");
+        var expectedVersionStr = GetArg<string>(arguments, "expected_version");
+        var changeReason = GetArg<string>(arguments, "change_reason");
+
+        int? expectedVersion = null;
+        if (!string.IsNullOrWhiteSpace(expectedVersionStr) && int.TryParse(expectedVersionStr, out var ev))
+            expectedVersion = ev;
 
         if (string.IsNullOrWhiteSpace(systemId))
             return Error("INVALID_INPUT", "The 'system_id' parameter is required.");
@@ -64,7 +72,8 @@ public class WriteNarrativeTool : BaseTool
         try
         {
             var result = await _sspService.WriteNarrativeAsync(
-                systemId, controlId, narrative, status, "mcp-user", cancellationToken);
+                systemId, controlId, narrative, status, "mcp-user",
+                expectedVersion, changeReason, cancellationToken);
 
             sw.Stop();
             return JsonSerializer.Serialize(new
@@ -73,6 +82,14 @@ public class WriteNarrativeTool : BaseTool
                 data = FormatImplementation(result),
                 metadata = Meta(sw)
             }, JsonOpts);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.StartsWith("CONCURRENCY_CONFLICT:"))
+        {
+            return Error("CONCURRENCY_CONFLICT", ex.Message);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.StartsWith("UNDER_REVIEW:"))
+        {
+            return Error("UNDER_REVIEW", ex.Message);
         }
         catch (InvalidOperationException ex)
         {
@@ -96,7 +113,10 @@ public class WriteNarrativeTool : BaseTool
         ai_suggested = ci.AiSuggested,
         authored_by = ci.AuthoredBy,
         authored_at = ci.AuthoredAt.ToString("O"),
-        modified_at = ci.ModifiedAt?.ToString("O")
+        modified_at = ci.ModifiedAt?.ToString("O"),
+        version_number = ci.CurrentVersion,
+        approval_status = ci.ApprovalStatus.ToString(),
+        previous_version = ci.CurrentVersion > 1 ? ci.CurrentVersion - 1 : (int?)null
     };
 
     private static string Error(string code, string message) =>
@@ -290,13 +310,16 @@ public class BatchPopulateNarrativesTool : BaseTool
 public class NarrativeProgressTool : BaseTool
 {
     private readonly ISspService _sspService;
+    private readonly INarrativeGovernanceService _govService;
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
     public NarrativeProgressTool(
         ISspService sspService,
+        INarrativeGovernanceService govService,
         ILogger<NarrativeProgressTool> logger) : base(logger)
     {
         _sspService = sspService;
+        _govService = govService;
     }
 
     public override string Name => "compliance_narrative_progress";
@@ -328,6 +351,15 @@ public class NarrativeProgressTool : BaseTool
             var progress = await _sspService.GetNarrativeProgressAsync(
                 systemId, familyFilter, cancellationToken);
 
+            // Augment with approval status breakdown (Feature 024)
+            GovernanceProgressReport? approvalProgress = null;
+            try
+            {
+                approvalProgress = await _govService.GetNarrativeApprovalProgressAsync(
+                    systemId, familyFilter, cancellationToken);
+            }
+            catch { /* Non-critical — system may not have governance data yet */ }
+
             sw.Stop();
             return JsonSerializer.Serialize(new
             {
@@ -340,6 +372,13 @@ public class NarrativeProgressTool : BaseTool
                     draft_narratives = progress.DraftNarratives,
                     missing_narratives = progress.MissingNarratives,
                     overall_percentage = progress.OverallPercentage,
+                    approval_status = approvalProgress != null ? new
+                    {
+                        approved = approvalProgress.TotalApproved,
+                        under_review = approvalProgress.TotalUnderReview,
+                        needs_revision = approvalProgress.TotalNeedsRevision,
+                        approval_percentage = approvalProgress.OverallApprovalPercent
+                    } : null,
                     family_breakdowns = progress.FamilyBreakdowns.Select(f => new
                     {
                         family = f.Family,
@@ -721,13 +760,16 @@ public class ReviewSspSectionTool : BaseTool
 public class SspCompletenessTool : BaseTool
 {
     private readonly ISspService _sspService;
+    private readonly INarrativeGovernanceService _govService;
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
     public SspCompletenessTool(
         ISspService sspService,
+        INarrativeGovernanceService govService,
         ILogger<SspCompletenessTool> logger) : base(logger)
     {
         _sspService = sspService;
+        _govService = govService;
     }
 
     public override string Name => "compliance_ssp_completeness";
@@ -757,6 +799,21 @@ public class SspCompletenessTool : BaseTool
         {
             var report = await _sspService.GetSspCompletenessAsync(systemId, cancellationToken);
 
+            // Fetch staleness warnings for unapproved narratives (Feature 024)
+            List<object>? stalenessWarnings = null;
+            try
+            {
+                var govProgress = await _govService.GetNarrativeApprovalProgressAsync(
+                    systemId, null, cancellationToken);
+                if (govProgress.StalenessWarnings.Count > 0)
+                {
+                    stalenessWarnings = govProgress.StalenessWarnings
+                        .Select(w => (object)new { control_id = w.ControlId, message = w.Message })
+                        .ToList();
+                }
+            }
+            catch { /* Non-critical — system may not have governance data yet */ }
+
             sw.Stop();
             return JsonSerializer.Serialize(new
             {
@@ -779,7 +836,8 @@ public class SspCompletenessTool : BaseTool
                         word_count = s.WordCount,
                         version = s.Version
                     }),
-                    blocking_issues = report.BlockingIssues
+                    blocking_issues = report.BlockingIssues,
+                    staleness_warnings = stalenessWarnings
                 },
                 metadata = Meta(sw)
             }, JsonOpts);

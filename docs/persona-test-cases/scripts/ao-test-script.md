@@ -2,7 +2,7 @@
 
 **Feature**: 020 | **Persona**: AO (Authorizing Official)
 **Role**: `Compliance.AuthorizingOfficial` | **Interface**: Microsoft Teams (Adaptive Cards)
-**Test Cases**: AO-01 through AO-14 (14 total)
+**Test Cases**: AO-01 through AO-16 (16 total)
 
 ---
 
@@ -22,6 +22,8 @@
 - ✓ Assessment complete with effectiveness determinations
 - ✓ Authorization package bundled by ISSM (ISSM-29)
 - ✓ System in Authorize phase (ISSM-30)
+- ✓ OSCAL SSP exported (SCA-27 or ISSM-58)
+- ✓ SSP sections authored by ISSO (ISSO-31 to ISSO-35)
 
 ---
 
@@ -239,6 +241,48 @@ Show all critical alerts across my authorized systems
 
 ---
 
+## SSP & OSCAL Review (AO-15 to AO-16)
+
+### AO-15: Review SSP Completeness
+
+**Task**: Check SSP completeness before authorization decision
+**Type**: Positive test | **Precondition**: ISSO authored SSP sections (ISSO-31, ISSO-32)
+
+```text
+Show SSP completeness for Eagle Eye — I need to verify all sections are
+complete before issuing my authorization decision
+```
+
+**Expected Tool**: `compliance_ssp_completeness`
+**Expected Output**:
+- Overall completion percentage
+- Per-section status (complete / incomplete / draft)
+- Missing or draft sections highlighted
+
+**Verification**: Completion percentage returned; sections §5 and §6 show as authored
+
+---
+
+### AO-16: Export OSCAL SSP for Package Review
+
+**Task**: Export OSCAL SSP as part of authorization package review
+**Type**: Positive test | **Precondition**: SSP authored, OSCAL validated (SCA-28)
+
+```text
+Export the OSCAL SSP for Eagle Eye — I need the machine-readable
+version for the authorization package
+```
+
+**Expected Tool**: `compliance_export_oscal_ssp`
+**Expected Output**:
+- OSCAL SSP JSON/XML artifact generated
+- Includes system metadata, control implementations, responsible parties
+- File download link or inline preview
+
+**Verification**: OSCAL SSP artifact contains expected control count; format valid
+
+---
+
 ## AO Separation-of-Duties Verification (AO-12 to AO-14)
 
 **Purpose**: Verify that the AO (AuthorizingOfficial) role is correctly denied SSP modification, remediation, and assessment operations. All 3 tests must return **403 Forbidden**.
@@ -295,8 +339,8 @@ Assess AC-2 as Satisfied
 
 | Metric | Value |
 |--------|-------|
-| Total Test Cases | 14 |
-| Positive Tests | ___/11 passed |
+| Total Test Cases | 16 |
+| Positive Tests | ___/13 passed |
 | RBAC Denied Tests | ___/3 returned 403 |
 | Failed | ___ |
 | Blocked | ___ |
@@ -325,4 +369,11 @@ Assess AC-2 as Satisfied
 | AO-06 | IATT | +90 days | — | Dev only |
 | AO-07 | DATO | — | — | 3 CAT I |
 
-**Checkpoint**: ⬜ AO (14 tests) complete. Authorization decision issued, RBAC enforced. Engineer testing can begin.
+### SSP & OSCAL Review Artifacts
+
+| Artifact | Value | TC-ID |
+|----------|-------|-------|
+| SSP Completion | ___% | AO-15 |
+| OSCAL SSP Format | ___ | AO-16 |
+
+**Checkpoint**: ⬜ AO (16 tests) complete. Authorization decision issued, SSP/OSCAL reviewed, RBAC enforced. Engineer testing can begin.

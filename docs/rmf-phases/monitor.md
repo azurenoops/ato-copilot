@@ -102,6 +102,63 @@
 
 ---
 
+## ISA/MOU Expiration Monitoring
+
+Interconnection agreements have expiration dates that must be tracked as part of continuous monitoring.
+
+### Monitoring Agreement Status
+
+```
+Tool: compliance_validate_agreements
+Parameters:
+  system_id: "<system-guid>"
+```
+
+Returns the status of all ISA/MOU agreements including:
+- Active agreements with expiration dates
+- Agreements expiring within 90 days (flagged)
+- Expired agreements requiring renewal
+
+### Agreement Expiration Cadence
+
+| Time Remaining | Action |
+|----------------|--------|
+| ≤ 90 days | Begin renewal planning with remote system POC |
+| ≤ 30 days | Escalate to ISSM for agreement renewal |
+| Expired | ISSM must renew or terminate the interconnection |
+
+---
+
+## PIA Annual Review
+
+Privacy Impact Assessments require annual review to confirm continued accuracy.
+
+### Tracking PIA Review Cycles
+
+```
+Tool: compliance_check_privacy_compliance
+Parameters:
+  system_id: "<system-guid>"
+```
+
+Flags PIAs approaching their annual review date. The ISSM uses `compliance_review_pia` to re-approve or request updates.
+
+---
+
+## SSP Section Status Monitoring
+
+Track SSP section status as part of ongoing system maintenance.
+
+```
+Tool: compliance_ssp_completeness
+Parameters:
+  system_id: "<system-guid>"
+```
+
+Monitor for sections that revert from Approved to Draft after significant changes. Any section status regression should trigger ISSM review.
+
+---
+
 ## Prisma Cloud Periodic Re-Import
 
 Prisma Cloud scan data should be re-imported periodically as a ConMon data source to track cloud posture drift.

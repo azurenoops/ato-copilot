@@ -51,6 +51,18 @@
 
 ---
 
+## Privacy Considerations from Prepare Phase
+
+PII categories identified during the Privacy Threshold Analysis (`compliance_create_pta`) in the Prepare phase may affect system categorization:
+
+- Systems processing PII typically require elevated Confidentiality impact levels
+- PII processing may trigger additional information types (e.g., Privacy Act data)
+- The PTA determination carries forward and is referenced during categorization
+
+Use `compliance_check_privacy_compliance` to verify PTA status before finalizing categorization.
+
+---
+
 ## Key Outputs
 
 | Output | Description |

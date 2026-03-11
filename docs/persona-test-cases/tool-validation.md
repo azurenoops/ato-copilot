@@ -1,4 +1,4 @@
-# Tool Validation Report: 88 Spec-Referenced MCP Tools
+# Tool Validation Report: 106 Spec-Referenced MCP Tools
 
 **Feature**: 020 | **Date**: _______________ | **Validated By**: _______________
 
@@ -6,7 +6,7 @@
 
 ## Purpose
 
-This document provides the cross-reference validation of all 88 MCP tools referenced in `spec.md` against the actual MCP server `/tools/list` endpoint. Complete this validation before beginning any persona test case execution.
+This document provides the cross-reference validation of all 106 MCP tools referenced in `spec.md` against the actual MCP server `/tools/list` endpoint. Complete this validation before beginning any persona test case execution.
 
 ---
 
@@ -150,39 +150,90 @@ This document provides the cross-reference validation of all 88 MCP tools refere
 | 68 | `compliance_list_prisma_policies` | ISSM-21, SCA-10 | ⬜ | |
 | 69 | `compliance_prisma_trend` | ISSM-22, SCA-11, ENG-22 | ⬜ | |
 
+### Privacy Analysis (4 tools) — F021
+
+| # | Tool Name | Spec TC-IDs | Present | Notes |
+|---|-----------|-------------|---------|-------|
+| 70 | `compliance_create_pta` | ISSM-44, ISSO-26 | ⬜ | |
+| 71 | `compliance_generate_pia` | ISSM-46 | ⬜ | |
+| 72 | `compliance_review_pia` | ISSM-47 | ⬜ | |
+| 73 | `compliance_check_privacy_compliance` | ISSM-61, ISSO-28, SCA-29 | ⬜ | |
+
+### Interconnection Management (8 tools) — F021
+
+| # | Tool Name | Spec TC-IDs | Present | Notes |
+|---|-----------|-------------|---------|-------|
+| 74 | `compliance_add_interconnection` | ISSM-48, ISSO-29, ENG-28 | ⬜ | |
+| 75 | `compliance_list_interconnections` | ISSM-49, ISSO-30 | ⬜ | |
+| 76 | `compliance_update_interconnection` | ISSM-50 | ⬜ | |
+| 77 | `compliance_generate_isa` | ISSM-52 | ⬜ | |
+| 78 | `compliance_register_agreement` | ISSM-53 | ⬜ | |
+| 79 | `compliance_update_agreement` | ISSM-54 | ⬜ | |
+| 80 | `compliance_validate_agreements` | ISSM-55, SCA-26 | ⬜ | |
+| 81 | `compliance_certify_no_interconnections` | ISSM-56(neg) | ⬜ | |
+
+### SSP Authoring & OSCAL (5 tools) — F022
+
+| # | Tool Name | Spec TC-IDs | Present | Notes |
+|---|-----------|-------------|---------|-------|
+| 82 | `compliance_write_ssp_section` | ISSO-31,32,33,35, ENG-29 | ⬜ | |
+| 83 | `compliance_review_ssp_section` | ISSM-56,60 | ⬜ | |
+| 84 | `compliance_ssp_completeness` | ISSM-57, ISSO-34, SCA-25, AO-15, ENG-30 | ⬜ | |
+| 85 | `compliance_export_oscal_ssp` | ISSM-58, SCA-27, AO-16 | ⬜ | |
+| 86 | `compliance_validate_oscal_ssp` | ISSM-59, SCA-28 | ⬜ | |
+
+### Narrative Governance (8 tools) — F024
+
+| # | Tool Name | Spec TC-IDs | Present | Notes |
+|---|-----------|-------------|---------|-------|
+| 107 | `compliance_narrative_history` | ISSO-36, ENG-31 | ⬜ | |
+| 108 | `compliance_narrative_diff` | ISSO-37, ENG-32 | ⬜ | |
+| 109 | `compliance_rollback_narrative` | ISSO-38, ENG-33 | ⬜ | |
+| 110 | `compliance_submit_narrative` | ISSO-39, ENG-34 | ⬜ | |
+| 111 | `compliance_review_narrative` | ISSM-62 | ⬜ | |
+| 112 | `compliance_batch_review_narratives` | ISSM-63 | ⬜ | |
+| 113 | `compliance_narrative_approval_progress` | ISSM-64, ISSO-40, SCA-29, AO-17 | ⬜ | |
+| 114 | `compliance_batch_submit_narratives` | ISSO-41, ENG-35 | ⬜ | |
+
+### CKL Export (1 tool) — F017
+
+| # | Tool Name | Spec TC-IDs | Present | Notes |
+|---|-----------|-------------|---------|-------|
+| 87 | `compliance_export_ckl` | ISSM-61, ISSO-25, ENG-27 | ⬜ | |
+
 ### Kanban (9 tools)
 
 | # | Tool Name | Spec TC-IDs | Present | Notes |
 |---|-----------|-------------|---------|-------|
-| 70 | `kanban_create_board` | ISSM-26 | ⬜ | |
-| 71 | `kanban_bulk_update` | ISSM-27 | ⬜ | |
-| 72 | `kanban_export` | ISSM-28 | ⬜ | |
-| 73 | `kanban_task_list` | ENG-11 | ⬜ | |
-| 74 | `kanban_get_task` | ENG-12 | ⬜ | |
-| 75 | `kanban_move_task` | ENG-13, ENG-19 | ⬜ | |
-| 76 | `kanban_assign_task` | ISSO-22 | ⬜ | |
-| 77 | `kanban_remediate_task` | ENG-14, ENG-15 | ⬜ | |
-| 78 | `kanban_task_validate` | ENG-16 | ⬜ | |
+| 88 | `kanban_create_board` | ISSM-26 | ⬜ | |
+| 89 | `kanban_bulk_update` | ISSM-27 | ⬜ | |
+| 90 | `kanban_export` | ISSM-28 | ⬜ | |
+| 91 | `kanban_task_list` | ENG-11 | ⬜ | |
+| 92 | `kanban_get_task` | ENG-12 | ⬜ | |
+| 93 | `kanban_move_task` | ENG-13, ENG-19 | ⬜ | |
+| 94 | `kanban_assign_task` | ISSO-22 | ⬜ | |
+| 95 | `kanban_remediate_task` | ENG-14, ENG-15 | ⬜ | |
+| 96 | `kanban_task_validate` | ENG-16 | ⬜ | |
 
 ### Kanban Evidence & Comments (2 tools)
 
 | # | Tool Name | Spec TC-IDs | Present | Notes |
 |---|-----------|-------------|---------|-------|
-| 79 | `kanban_collect_evidence` | ENG-17 | ⬜ | |
-| 80 | `kanban_add_comment` | ENG-18 | ⬜ | |
+| 97 | `kanban_collect_evidence` | ENG-17 | ⬜ | |
+| 98 | `kanban_add_comment` | ENG-18 | ⬜ | |
 
 ### PIM / Auth (8 tools)
 
 | # | Tool Name | Spec TC-IDs | Present | Notes |
 |---|-----------|-------------|---------|-------|
-| 81 | `cac_status` | AUTH-01 | ⬜ | |
-| 82 | `pim_list_eligible` | AUTH-02 | ⬜ | |
-| 83 | `pim_activate_role` | AUTH-03 | ⬜ | |
-| 84 | `pim_list_active` | AUTH-04 | ⬜ | |
-| 85 | `pim_deactivate_role` | AUTH-08 | ⬜ | |
-| 86 | `pim_approve_request` | AUTH-06 | ⬜ | |
-| 87 | `pim_deny_request` | AUTH-07 | ⬜ | |
-| 88 | `jit_request_access` | AUTH-05 | ⬜ | |
+| 99 | `cac_status` | AUTH-01 | ⬜ | |
+| 100 | `pim_list_eligible` | AUTH-02 | ⬜ | |
+| 101 | `pim_activate_role` | AUTH-03 | ⬜ | |
+| 102 | `pim_list_active` | AUTH-04 | ⬜ | |
+| 103 | `pim_deactivate_role` | AUTH-08 | ⬜ | |
+| 104 | `pim_approve_request` | AUTH-06 | ⬜ | |
+| 105 | `pim_deny_request` | AUTH-07 | ⬜ | |
+| 106 | `jit_request_access` | AUTH-05 | ⬜ | |
 
 ---
 
@@ -202,9 +253,14 @@ This document provides the cross-reference validation of all 88 MCP tools refere
 | Watch Alerts | 6 | ___ | ___ |
 | Import | 6 | ___ | ___ |
 | Prisma | 2 | ___ | ___ |
+| Privacy Analysis | 4 | ___ | ___ |
+| Interconnection Management | 8 | ___ | ___ |
+| SSP Authoring & OSCAL | 5 | ___ | ___ |
+| Narrative Governance | 8 | ___ | ___ |
+| CKL Export | 1 | ___ | ___ |
 | Kanban | 11 | ___ | ___ |
 | PIM / Auth | 8 | ___ | ___ |
-| **Total** | **88** | **___** | **___** |
+| **Total** | **106** | **___** | **___** |
 
 ---
 
@@ -220,7 +276,7 @@ If any tools are missing, document them here for T007 blocked items:
 
 ## Validation Result
 
-- ⬜ **PASS** — All 88 tools present. Proceed to persona testing.
+- ⬜ **PASS** — All 106 tools present. Proceed to persona testing.
 - ⬜ **FAIL** — Missing tools detected. Resolve before proceeding.
 
 **Validated By**: _______________ | **Date**: _______________

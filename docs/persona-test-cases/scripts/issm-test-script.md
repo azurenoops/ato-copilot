@@ -2,7 +2,7 @@
 
 **Feature**: 020 | **Persona**: ISSM (Information System Security Manager)
 **Role**: `Compliance.SecurityLead` | **Interface**: Microsoft Teams
-**Test Cases**: ISSM-01 through ISSM-43 (43 total)
+**Test Cases**: ISSM-01 through ISSM-61 (61 total)
 
 ---
 
@@ -533,6 +533,371 @@ Finalize the Security Assessment Plan for Eagle Eye
 
 ---
 
+## Privacy & Interconnection Management (ISSM-44 to ISSM-55)
+
+### ISSM-44: Create Privacy Threshold Analysis
+
+**Task**: Conduct PTA to determine if PIA is required
+**Type**: Positive test | **Precondition**: System registered (ISSM-01)
+
+```text
+Create a Privacy Threshold Analysis for Eagle Eye — the system collects
+Name, Email, and Social Security Number for personnel vetting. PII is
+collected directly from users and shared with HR systems. Retention
+period is 5 years. Legal authority is 5 USC § 301.
+```
+
+**Expected Tool**: `compliance_create_pta`
+**Expected Output**:
+- PTA created with PII categories (Name, Email, SSN)
+- Collection method = Direct
+- Sharing details recorded
+- PIA required = true (due to SSN)
+
+**Verification**: PIA required = true, 3 PII categories listed
+**Record**: pta_id = _______________
+
+---
+
+### ISSM-45: Generate Privacy Impact Assessment
+
+**Task**: Generate PIA from PTA data
+**Type**: Positive test | **Precondition**: ISSM-44
+
+```text
+Generate a Privacy Impact Assessment for Eagle Eye based on the PTA
+```
+
+**Expected Tool**: `compliance_generate_pia`
+**Expected Output**:
+- PIA with 9 sections generated from PTA data
+- Status = Draft
+- Sections cover: authority, purpose, data elements, sharing, notice, access, safeguards, retention, accountability
+
+**Verification**: Status = "Draft", 9 sections present
+**Record**: pia_id = _______________
+
+---
+
+### ISSM-46: Review and Approve PIA
+
+**Task**: Review PIA and approve it
+**Type**: Positive test | **Precondition**: ISSM-45
+
+```text
+Approve the Privacy Impact Assessment for Eagle Eye — all 9 sections
+reviewed, privacy controls are adequate for the PII collected
+```
+
+**Expected Tool**: `compliance_review_pia`
+**Expected Output**:
+- PIA status → Approved
+- Reviewer comments saved
+- Approval timestamp recorded
+
+**Verification**: Status = "Approved", reviewer identity recorded
+
+---
+
+### ISSM-47: Check Privacy Compliance Dashboard
+
+**Task**: View aggregated privacy gate status
+**Type**: Positive test | **Precondition**: ISSM-44, ISSM-46
+
+```text
+Check privacy compliance status for Eagle Eye
+```
+
+**Expected Tool**: `compliance_check_privacy_compliance`
+**Expected Output**:
+- PTA completed = true
+- PIA approved = true
+- Active interconnections count
+- Interconnections with agreements count
+- Overall privacy gate = satisfied
+
+**Verification**: Privacy gate satisfied, PTA + PIA both complete
+
+---
+
+### ISSM-48: Add System Interconnection
+
+**Task**: Register an interconnection crossing the authorization boundary
+**Type**: Positive test | **Precondition**: System registered (ISSM-01)
+
+```text
+Add an interconnection for Eagle Eye — bidirectional data exchange with
+DISA SIPR Gateway for classified mission planning data, using IPSec VPN
+over DISN
+```
+
+**Expected Tool**: `compliance_add_interconnection`
+**Expected Output**:
+- Interconnection created
+- Direction = Bidirectional
+- Status = Proposed
+- Data flow description saved
+
+**Verification**: Status = "Proposed", direction = "Bidirectional"
+**Record**: interconnection_id = _______________
+
+---
+
+### ISSM-49: List Interconnections
+
+**Task**: View all registered interconnections
+**Type**: Positive test | **Precondition**: ISSM-48
+
+```text
+List all interconnections for Eagle Eye
+```
+
+**Expected Tool**: `compliance_list_interconnections`
+**Expected Output**:
+- List with at least 1 interconnection
+- Per entry: remote system, direction, status, agreement status
+
+**Verification**: At least 1 interconnection returned
+
+---
+
+### ISSM-50: Update Interconnection Status
+
+**Task**: Activate a proposed interconnection
+**Type**: Positive test | **Precondition**: ISSM-48
+
+```text
+Update the DISA SIPR Gateway interconnection for Eagle Eye to Active
+status — circuit established and tested
+```
+
+**Expected Tool**: `compliance_update_interconnection`
+**Expected Output**:
+- Status changed: Proposed → Active
+
+**Verification**: Status = "Active"
+
+---
+
+### ISSM-51: Generate ISA
+
+**Task**: Generate Interconnection Security Agreement document
+**Type**: Positive test | **Precondition**: ISSM-48
+
+```text
+Generate an Interconnection Security Agreement for Eagle Eye's DISA
+SIPR Gateway connection
+```
+
+**Expected Tool**: `compliance_generate_isa`
+**Expected Output**:
+- ISA document generated with connection details
+- Security requirements enumerated
+- Data flow diagram reference
+- Roles and responsibilities
+
+**Verification**: ISA document contains interconnection details
+
+---
+
+### ISSM-52: Register ISA Agreement
+
+**Task**: Register the signed ISA with expiration tracking
+**Type**: Positive test | **Precondition**: ISSM-51
+
+```text
+Register the signed ISA for Eagle Eye's DISA SIPR interconnection —
+type ISA, signed March 1, 2026, expires March 1, 2029
+```
+
+**Expected Tool**: `compliance_register_agreement`
+**Expected Output**:
+- Agreement registered with type = ISA
+- Expiration = 2029-03-01
+- Status = Active
+
+**Verification**: Agreement type = "ISA", expiration date recorded
+**Record**: agreement_id = _______________
+
+---
+
+### ISSM-53: Update Agreement
+
+**Task**: Update agreement renewal information
+**Type**: Positive test | **Precondition**: ISSM-52
+
+```text
+Update Eagle Eye's DISA SIPR ISA — add renewal note: annual review
+scheduled for March 2027
+```
+
+**Expected Tool**: `compliance_update_agreement`
+**Expected Output**:
+- Agreement updated with renewal information
+
+**Verification**: Update confirmed
+
+---
+
+### ISSM-54: Validate All Agreements
+
+**Task**: Check all agreements are current and not expired
+**Type**: Positive test | **Precondition**: ISSM-52
+
+```text
+Validate all interconnection agreements for Eagle Eye
+```
+
+**Expected Tool**: `compliance_validate_agreements`
+**Expected Output**:
+- All agreements validated
+- Expiration status per agreement
+- Warnings for any nearing expiration
+
+**Verification**: All agreements valid (none expired)
+
+---
+
+### ISSM-55: Certify No Additional Interconnections
+
+**Task**: Test the no-interconnections certification (negative scenario — should fail since interconnections exist)
+**Type**: Negative test | **Precondition**: ISSM-48 (interconnection exists)
+
+```text
+Certify that Eagle Eye has no external interconnections
+```
+
+**Expected Tool**: `compliance_certify_no_interconnections`
+**Expected Output**:
+- Error: Cannot certify — active interconnections exist
+- Lists existing interconnections
+
+**Verification**: Certification rejected with existing interconnection list
+
+---
+
+## SSP Section Review & OSCAL Export (ISSM-56 to ISSM-61)
+
+### ISSM-56: Review SSP Section
+
+**Task**: Review and approve an SSP section submitted by ISSO
+**Type**: Positive test | **Precondition**: ISSO has written SSP sections (cross-persona: ISSO-25+)
+
+```text
+Approve SSP Section 5 for Eagle Eye — general description is accurate
+and complete
+```
+
+**Expected Tool**: `compliance_review_ssp_section`
+**Expected Output**:
+- Section 5 status → Approved
+- Reviewer comments saved
+- Review timestamp recorded
+
+**Verification**: Section status = "Approved"
+
+---
+
+### ISSM-57: Check SSP Completeness
+
+**Task**: Check overall SSP readiness
+**Type**: Positive test | **Precondition**: Multiple SSP sections authored
+
+```text
+Check SSP completeness for Eagle Eye
+```
+
+**Expected Tool**: `compliance_ssp_completeness`
+**Expected Output**:
+- Per-section status (13 sections)
+- Overall completion percentage
+- Blocking issues list
+- Sections not started / draft / approved
+
+**Verification**: Completion percentage returned, per-section breakdown shows statuses
+**Record**: ssp_completion_pct = ___%
+
+---
+
+### ISSM-58: Export OSCAL SSP
+
+**Task**: Export OSCAL 1.1.2 SSP JSON
+**Type**: Positive test | **Precondition**: SSP substantially complete
+
+```text
+Export the OSCAL SSP for Eagle Eye
+```
+
+**Expected Tool**: `compliance_export_oscal_ssp`
+**Expected Output**:
+- OSCAL 1.1.2 JSON document with 6 sections:
+  - metadata, import-profile, system-characteristics
+  - system-implementation, control-implementation, back-matter
+- Statistics (control count, component count, etc.)
+- Warnings for any missing data
+
+**Verification**: OSCAL version = "1.1.2", all 6 top-level sections present
+**Record**: oscal_control_count = ___
+
+---
+
+### ISSM-59: Validate OSCAL SSP
+
+**Task**: Run structural validation on OSCAL SSP
+**Type**: Positive test | **Precondition**: ISSM-58
+
+```text
+Validate the OSCAL SSP for Eagle Eye
+```
+
+**Expected Tool**: `compliance_validate_oscal_ssp`
+**Expected Output**:
+- 7 structural checks executed
+- Errors vs. warnings separation
+- statistics: control count, component count, etc.
+
+**Verification**: Validation result returned with errors/warnings breakdown
+
+---
+
+### ISSM-60: Review SSP Section — Request Revision
+
+**Task**: Reject an SSP section and request changes
+**Type**: Positive test | **Precondition**: ISSO has written SSP section
+
+```text
+Request revision on SSP Section 12 for Eagle Eye — personnel security
+section needs to include separation procedures and training frequency
+```
+
+**Expected Tool**: `compliance_review_ssp_section`
+**Expected Output**:
+- Section 12 status → Draft (returned for revision)
+- Reviewer comments with requested changes
+
+**Verification**: Section status reverted, comments include revision request
+
+---
+
+### ISSM-61: Export CKL After Assessment
+
+**Task**: Export CKL file for STIG Viewer submission
+**Type**: Positive test | **Precondition**: STIG findings exist from ISSO-09
+
+```text
+Export a CKL checklist for Eagle Eye's Windows Server 2022 STIG
+```
+
+**Expected Tool**: `compliance_export_ckl`
+**Expected Output**:
+- CKL XML file generated
+- STIG evaluation results included
+- Compatible with DISA STIG Viewer and eMASS
+
+**Verification**: CKL file generated successfully
+
+---
+
 ## Phase 4 — Assess Prep (ISSM-23 to ISSM-28)
 
 ### ISSM-23a: Create POA&M (from Assessment)
@@ -928,7 +1293,7 @@ Import the latest Prisma Cloud scan for Eagle Eye to verify remediation
 
 | Metric | Value |
 |--------|-------|
-| Total Test Cases | 43 |
+| Total Test Cases | 61 |
 | Passed | ___ |
 | Failed | ___ |
 | Blocked | ___ |
@@ -949,7 +1314,13 @@ Import the latest Prisma Cloud scan for Eagle Eye to verify remediation
 | System ID | _______________ | ISSM-01 |
 | SAP ID | _______________ | ISSM-41 |
 | SAP Hash | _______________ | ISSM-43 |
+| PTA ID | _______________ | ISSM-44 |
+| PIA ID | _______________ | ISSM-45 |
+| Interconnection ID | _______________ | ISSM-48 |
+| Agreement ID | _______________ | ISSM-52 |
+| SSP Completion | ___% | ISSM-57 |
+| OSCAL Controls | _______________ | ISSM-58 |
 | Board ID | _______________ | ISSM-26 |
 | Compliance Score | _______________ | ISSM-33 |
 
-**Checkpoint**: ⬜ ISSM (43 tests) complete. Eagle Eye fully provisioned through Monitor phase. ISSO testing can begin.
+**Checkpoint**: ⬜ ISSM (61 tests) complete. Eagle Eye fully provisioned through Monitor phase with privacy, interconnections, and SSP review. ISSO testing can begin.
