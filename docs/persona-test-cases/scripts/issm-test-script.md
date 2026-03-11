@@ -1324,3 +1324,95 @@ Import the latest Prisma Cloud scan for Eagle Eye to verify remediation
 | Compliance Score | _______________ | ISSM-33 |
 
 **Checkpoint**: ⬜ ISSM (61 tests) complete. Eagle Eye fully provisioned through Monitor phase with privacy, interconnections, and SSP review. ISSO testing can begin.
+
+---
+
+## HW/SW Inventory Review (ISSM-INV-01 to ISSM-INV-02)
+
+### ISSM-INV-01: Review Portfolio Inventory Status
+
+**Task**: Check inventory completeness across systems in portfolio
+
+```text
+@ato Check inventory completeness for Eagle Eye
+```
+
+**Expected Tool**: `inventory_completeness`
+**Expected Output**: Completeness report with score and issue breakdown
+
+### ISSM-INV-02: Review Inventory Export
+
+**Task**: Review eMASS-ready inventory export before submission
+
+```text
+@ato Export the HW/SW inventory for Eagle Eye including decommissioned items
+```
+
+**Expected Tool**: `inventory_export` with `include_decommissioned` = true
+**Expected Output**: Excel workbook with all items including decommissioned
+
+---
+
+## Narrative Governance — Approval Workflow (ISSM-NGV-01 to ISSM-NGV-05)
+
+> Feature 024: ISSM reviews, approves, and requests revisions on submitted narratives. Batch operations and progress dashboard supported.
+
+### ISSM-NGV-01: View Narrative Approval Progress
+
+**Task**: Check overall narrative approval progress across all control families
+
+```text
+@ato Show the narrative approval progress for Eagle Eye
+```
+
+**Expected Tool**: `compliance_narrative_approval_progress`
+**Expected Output**: Overall counts (`total_controls`, `approved`, `draft`, `in_review`, `needs_revision`, `missing`), `approval_percentage`, per-family breakdown, `review_queue`, `staleness_warnings`
+**Record**: approval_percentage = ___
+
+### ISSM-NGV-02: Review & Approve Narrative
+
+**Task**: Approve a submitted narrative for AC-1
+
+```text
+@ato Approve the AC-1 narrative for Eagle Eye
+```
+
+**Expected Tool**: `compliance_review_narrative` with `decision` = "approve"
+**Expected Output**: `previous_status: InReview`, `new_status: Approved`, `reviewed_by`, `reviewed_at`
+**Record**: new_status = ___
+
+### ISSM-NGV-03: Review & Request Revision
+
+**Task**: Request revision of a submitted narrative with comments
+
+```text
+@ato Request revision of the AC-2 narrative for Eagle Eye — comments: "Please add specific Azure AD configuration details for account management"
+```
+
+**Expected Tool**: `compliance_review_narrative` with `decision` = "request_revision"
+**Expected Output**: `new_status: NeedsRevision`, `comments` recorded
+**Record**: new_status = ___
+
+### ISSM-NGV-04: Batch Approve AC Family Narratives
+
+**Task**: Batch approve all InReview narratives in the AC family
+
+```text
+@ato Batch approve all AC family narratives for Eagle Eye
+```
+
+**Expected Tool**: `compliance_batch_review_narratives` with `decision` = "approve", `family_filter` = "AC"
+**Expected Output**: `reviewed_count`, `skipped_count`, `reviewed_controls`, `skipped_controls`
+**Record**: reviewed_count = ___ | skipped_count = ___
+
+### ISSM-NGV-05: View Narrative Version History (Audit Trail)
+
+**Task**: Review the version history for AC-1 to verify audit trail
+
+```text
+@ato Show the full version history for the AC-1 narrative of Eagle Eye
+```
+
+**Expected Tool**: `compliance_narrative_history`
+**Expected Output**: Complete version list with `authored_by`, `authored_at`, `change_reason`, `status` for each version
+**Record**: total_versions = ___

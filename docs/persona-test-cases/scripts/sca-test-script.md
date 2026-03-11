@@ -637,3 +637,83 @@ Dismiss alert ALT-{id}
 | SSP Completion | ___% | SCA-25 |
 
 **Checkpoint**: ⬜ SCA (29 tests) complete. Assessment artifacts generated, OSCAL validated, RBAC enforced. AO testing can begin.
+
+---
+
+## HW/SW Inventory Verification (SCA-INV-01 to SCA-INV-03)
+
+### SCA-INV-01: Check Inventory Completeness
+
+**Task**: Verify inventory completeness before assessment
+
+```text
+@ato Check inventory completeness for Eagle Eye
+```
+
+**Expected Tool**: `inventory_completeness`
+**Expected Output**: `completeness_score`, `is_complete`, `unmatched_boundary_resources`, `hardware_without_software`
+**Verification**: Review any incomplete items and flag to ISSO
+
+### SCA-INV-02: List Hardware Inventory
+
+**Task**: Review hardware inventory against boundary
+
+```text
+@ato List all hardware inventory items for Eagle Eye
+```
+
+**Expected Tool**: `inventory_list` with `type` = "hardware"
+**Expected Output**: List of hardware items matching boundary resources
+
+### SCA-INV-03: Export Inventory Snapshot
+
+**Task**: Archive inventory snapshot for assessment records
+
+```text
+@ato Export the inventory for Eagle Eye to Excel
+```
+
+**Expected Tool**: `inventory_export`
+**Expected Output**: Base64-encoded Excel workbook for archival
+
+---
+
+## Narrative Governance Verification (SCA-NGV-01 to SCA-NGV-03)
+
+> Feature 024: SCAs verify narrative approval status before assessment and cannot perform review actions.
+
+### SCA-NGV-01: View Narrative Approval Progress
+
+**Task**: Check overall narrative approval status before conducting assessment
+
+```text
+@ato Show the narrative approval progress for Eagle Eye
+```
+
+**Expected Tool**: `compliance_narrative_approval_progress`
+**Expected Output**: Overall approval percentage, per-family breakdown, review queue, staleness warnings
+**Record**: approval_percentage = ___
+
+### SCA-NGV-02: View Narrative Version History
+
+**Task**: Review the version history for a control under assessment
+
+```text
+@ato Show the version history for the AC-1 narrative of Eagle Eye
+```
+
+**Expected Tool**: `compliance_narrative_history`
+**Expected Output**: List of versions showing authorship and approval status
+**Record**: total_versions = ___
+
+### SCA-NGV-03: Review Narrative (DENIED — RBAC)
+
+**Task**: Attempt to review a narrative (should be denied — SCA cannot review)
+
+```text
+@ato Approve the AC-1 narrative for Eagle Eye
+```
+
+**Expected Tool**: `compliance_review_narrative`
+**Expected Output**: 403 Forbidden — SCA role does not have review permissions
+**Record**: HTTP status = ___

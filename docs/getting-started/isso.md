@@ -73,6 +73,8 @@ Beyond narrative authoring and Watch monitoring, ISSOs can also:
 - **Register interconnections** — Document system-to-system connections crossing the authorization boundary (`compliance_add_interconnection`)
 - **Author SSP sections** — Write NIST 800-18 SSP sections and submit them for ISSM review (`compliance_write_ssp_section`)
 - **Track SSP completeness** — Monitor overall SSP readiness percentage (`compliance_ssp_completeness`)
+- **Manage narrative governance** — View version history, diff changes, roll back edits, and submit narratives for ISSM approval (`compliance_narrative_history`, `compliance_narrative_diff`, `compliance_rollback_narrative`, `compliance_submit_narrative`, `compliance_batch_submit_narratives`)
+- **Manage HW/SW inventory** — Register hardware and software, auto-seed from boundary, check completeness, and export to eMASS Excel (`inventory_add_item`, `inventory_auto_seed`, `inventory_completeness`, `inventory_export`)
 
 ---
 

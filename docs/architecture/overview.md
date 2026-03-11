@@ -82,6 +82,7 @@ ATO Copilot is a compliance-focused MCP (Model Context Protocol) agent server bu
 │  │  RmfLifecycle │ Categorization │ Baseline │ Ssp      │          │
 │  │  Assessment │ Authorization │ ConMon │ eMASS        │          │
 │  │  AtoCompliance │ Remediation │ KanbanService        │          │
+│  │  NarrativeGovernance │ InventoryService               │          │
 │  └───────────────────────────────────────────────────────┘          │
 │                                                                     │
 │  ┌───────────────────────────────────────────────────────┐          │
@@ -97,7 +98,7 @@ ATO Copilot is a compliance-focused MCP (Model Context Protocol) agent server bu
 │ Ato.Copilot  │  │ Ato.Copilot  │  │ Azure SDKs   │
 │ .Core        │  │ .State       │  │              │
 │ ├─ DbContext │  │ ├─ Agent     │  │ ├─ ARM       │
-│ │  (45+ sets)│  │ │  State     │  │ ├─ Resource  │
+│ │  (46+ sets)│  │ │  State     │  │ ├─ Resource  │
 │ ├─ Models    │  │ ├─ Conver-   │  │ │  Graph     │
 │ ├─ Config    │  │ │  sation    │  │ ├─ Policy    │
 │ ├─ Constants │  │ └─ State     │  │ ├─ Defender  │

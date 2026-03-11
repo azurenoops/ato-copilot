@@ -180,6 +180,18 @@
 
 **Checkpoint**: ⬜ ISSM complete — Eagle Eye fully provisioned through Monitor phase
 
+### ISSM Narrative Governance (ISSM-NGV-01 to ISSM-NGV-05)
+
+| TC-ID | Task | Status | Duration | Actual Output | Notes |
+|-------|------|--------|----------|---------------|-------|
+| ISSM-NGV-01 | View narrative approval progress | ⬜ | | | approval_percentage: |
+| ISSM-NGV-02 | Review & approve AC-1 narrative | ⬜ | | | new_status: Approved |
+| ISSM-NGV-03 | Review & request revision (with comments) | ⬜ | | | new_status: NeedsRevision |
+| ISSM-NGV-04 | Batch approve AC family narratives | ⬜ | | | reviewed_count: skipped_count: |
+| ISSM-NGV-05 | View narrative version history (audit trail) | ⬜ | | | total_versions: |
+
+**Subtotal**: ___/5 passed | Avg duration: ___s
+
 ---
 
 ## Phase 4: ISSO Persona (US2) — 24 Test Cases
@@ -237,6 +249,34 @@
 | Issues Found | |
 
 **Checkpoint**: ⬜ ISSO complete — SSP authored, scans imported, monitoring active
+
+### ISSO Inventory Management (ISSO-INV-01 to ISSO-INV-07)
+
+| TC-ID | Task | Status | Duration | Actual Output | Notes |
+|-------|------|--------|----------|---------------|-------|
+| ISSO-INV-01 | Auto-seed inventory from boundary | ⬜ | | | created_count: |
+| ISSO-INV-02 | Add hardware item (web-server-01) | ⬜ | | | item_id: |
+| ISSO-INV-03 | Add software item on hardware | ⬜ | | | item_id: |
+| ISSO-INV-04 | Update hardware location | ⬜ | | | |
+| ISSO-INV-05 | Check inventory completeness | ⬜ | | | is_complete: score: |
+| ISSO-INV-06 | Export inventory to eMASS Excel | ⬜ | | | file received: |
+| ISSO-INV-07 | Decommission hardware (cascade) | ⬜ | | | cascaded_count: |
+
+**Subtotal**: ___/7 passed | Avg duration: ___s
+
+### ISSO Narrative Governance (ISSO-NGV-01 to ISSO-NGV-07)
+
+| TC-ID | Task | Status | Duration | Actual Output | Notes |
+|-------|------|--------|----------|---------------|-------|
+| ISSO-NGV-01 | Write narrative for AC-1 (creates version 1) | ⬜ | | | version_number: |
+| ISSO-NGV-02 | Update narrative (creates version 2 with change_reason) | ⬜ | | | version_number: |
+| ISSO-NGV-03 | View narrative version history | ⬜ | | | total_versions: |
+| ISSO-NGV-04 | Diff versions 1 and 2 | ⬜ | | | lines_added: lines_removed: |
+| ISSO-NGV-05 | Roll back to version 1 (creates version 3) | ⬜ | | | new_version_number: |
+| ISSO-NGV-06 | Submit narrative for ISSM review | ⬜ | | | new_status: InReview |
+| ISSO-NGV-07 | Batch submit AC family narratives | ⬜ | | | submitted_count: skipped_count: |
+
+**Subtotal**: ___/7 passed | Avg duration: ___s
 
 ---
 
@@ -296,6 +336,16 @@
 | Issues Found | |
 
 **Checkpoint**: ⬜ SCA complete — assessment artifacts generated, RBAC enforced
+
+### SCA Narrative Governance (SCA-NGV-01 to SCA-NGV-03)
+
+| TC-ID | Task | Status | Duration | Actual Output | Notes |
+|-------|------|--------|----------|---------------|-------|
+| SCA-NGV-01 | View narrative approval progress | ⬜ | | | approval_percentage: |
+| SCA-NGV-02 | View narrative version history for assessed control | ⬜ | | | total_versions: |
+| SCA-NGV-03 | Review narrative (DENIED — SCA cannot review) | ⬜ | | | 403 expected |
+
+**Subtotal**: ___/3 passed | Avg duration: ___s
 
 ---
 
@@ -420,6 +470,16 @@
 | Issues Found | |
 
 **Checkpoint**: ⬜ Engineer complete — all 5 persona sections finished (131 test cases)
+
+### Engineer Narrative Governance (ENG-NGV-01 to ENG-NGV-03)
+
+| TC-ID | Task | Status | Duration | Actual Output | Notes |
+|-------|------|--------|----------|---------------|-------|
+| ENG-NGV-01 | View narrative history after writing | ⬜ | | | total_versions: |
+| ENG-NGV-02 | Diff narrative versions | ⬜ | | | lines_added: lines_removed: |
+| ENG-NGV-03 | Submit narrative for ISSM review | ⬜ | | | new_status: InReview |
+
+**Subtotal**: ___/3 passed | Avg duration: ___s
 
 ---
 

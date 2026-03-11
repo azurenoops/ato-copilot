@@ -11,6 +11,7 @@
 | **AO** | Authorizing Official — Senior official with authority to formally assume responsibility for operating a system at an acceptable level of risk |
 | **ATO** | Authority to Operate — Formal authorization granted by the AO for a system to operate |
 | **ATOwC** | ATO with Conditions — Authorization that includes specific constraints or compensating controls |
+| **Approval Workflow** | Narrative governance process where ISSOs submit Draft narratives for ISSM review, transitioning through Draft → InReview → Approved or NeedsRevision status lifecycle |
 
 ## B
 
@@ -65,12 +66,14 @@
 | Term | Definition |
 |------|-----------|
 | **GRC** | Governance, Risk, and Compliance |
+| **Hardware Inventory** | Catalog of physical and virtual computing resources (servers, workstations, network devices, storage) within a system's authorization boundary |
 
 ## I
 
 | Term | Definition |
 |------|-----------|
 | **IaC** | Infrastructure as Code — Machine-readable configuration files (Terraform, Bicep, ARM templates) |
+| **Inventory Completeness Check** | Automated assessment verifying all inventory items have required fields, all boundary resources have inventory entries, and all hardware has registered software |
 | **ISA** | Interconnection Security Agreement — Document governing the security of a connection between two systems |
 | **ISCP** | Information System Contingency Plan — Plan for restoring system operations after disruption |
 | **IATT** | Interim Authority to Test — Temporary authorization for testing purposes |
@@ -107,6 +110,8 @@
 | **NIST 800-53** | Security and Privacy Controls for Information Systems and Organizations (Rev. 5) |
 | **NIST 800-60** | Guide for Mapping Types of Information and Information Systems to Security Categories |
 | **NIST 800-137** | Information Security Continuous Monitoring for Federal Information Systems |
+| **Narrative Governance** | Version control and approval workflow system for SSP control narratives — provides version history, line-level diffing, rollback, and ISSM approval workflows (Feature 024) |
+| **Narrative Version** | An immutable, append-only record capturing the full text of a control narrative at a point in time, with authorship, status, and optional change reason |
 | **NSS** | National Security System |
 
 ## O
@@ -132,6 +137,7 @@
 |------|-----------|
 | **RAR** | Risk Assessment Report — Documents risks identified during security assessment |
 | **RBAC** | Role-Based Access Control — Authorization model based on assigned roles |
+| **Review Decision** | ISSM verdict on a submitted narrative — either Approve (transitions to Approved status) or Request Revision (transitions to NeedsRevision with mandatory reviewer comments) |
 | **RMF** | Risk Management Framework — NIST framework for managing security risk (SP 800-37) |
 
 ## S
@@ -197,4 +203,7 @@
 | **Registered System** | An information system registered in ATO Copilot for RMF lifecycle management |
 | **Risk Acceptance** | Formal AO decision to accept residual risk for a specific control finding |
 | **RMF Step** | One of seven lifecycle phases: Prepare, Categorize, Select, Implement, Assess, Authorize, Monitor |
+| **Auto-Seed** | ATO Copilot feature that automatically creates hardware inventory items from authorization boundary resources, mapping Azure resource types to hardware functions |
+| **eMASS HW/SW Export** | Excel workbook export with Hardware and Software worksheets formatted for import into the Enterprise Mission Assurance Support Service (eMASS) |
 | **Significant Change** | An event that may require system reauthorization per NIST SP 800-37 |
+| **Software Inventory** | Catalog of software applications, operating systems, middleware, and security tools installed on hardware within a system's authorization boundary |

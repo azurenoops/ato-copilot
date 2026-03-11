@@ -1405,3 +1405,43 @@ Check privacy compliance status for Eagle Eye
 | 3 | | | | | |
 
 **Cross-Persona & Edge Cases Status**: ☐ PASS / ☐ FAIL | **Tester**: __________ | **Date**: __________
+
+---
+
+## Scenario 5: HW/SW Inventory Cross-Persona Flow
+
+**Goal**: Verify inventory lifecycle across personas — Engineer registers → ISSO completeness check → SCA verifies → ISSO exports.
+
+| Step | Persona | Action | Tool | Expected |
+|------|---------|--------|------|----------|
+| 1 | ISSO | Auto-seed inventory from boundary | `inventory_auto_seed` | created_count > 0 |
+| 2 | Engineer | Register software component | `inventory_add_item` (software) | Item created |
+| 3 | Engineer | Update software version | `inventory_update_item` | Version updated |
+| 4 | ISSO | Check inventory completeness | `inventory_completeness` | Report generated |
+| 5 | SCA | List hardware items | `inventory_list` (type=hardware) | Items match boundary |
+| 6 | SCA | List software items | `inventory_list` (type=software) | Includes Engineer's item |
+| 7 | ISSO | Export to eMASS Excel | `inventory_export` | Excel workbook generated |
+| 8 | ISSO | Import from Excel (dry run) | `inventory_import` (dry_run=true) | Preview without persistence |
+| 9 | ISSO | Decommission end-of-life HW | `inventory_decommission_item` | Cascades to child SW |
+| 10 | SCA | Verify completeness post-decommission | `inventory_completeness` | Score reflects change |
+
+---
+
+## Scenario 6: Narrative Governance Cross-Persona Flow
+
+**Goal**: Verify the narrative governance lifecycle across personas — Engineer writes → ISSO submits → ISSM reviews → SCA verifies approval progress.
+
+| Step | Persona | Action | Tool | Expected |
+|------|---------|--------|------|----------|
+| 1 | Engineer | Write narrative for SC-7 | `compliance_write_narrative` | version_number: 1, status: Draft |
+| 2 | Engineer | Update narrative with change_reason | `compliance_write_narrative` | version_number: 2, status: Draft |
+| 3 | ISSO | View narrative version history | `compliance_narrative_history` | total_versions: 2 |
+| 4 | ISSO | Diff versions 1 and 2 | `compliance_narrative_diff` | Unified diff with lines_added/removed |
+| 5 | ISSO | Submit narrative for ISSM review | `compliance_submit_narrative` | new_status: InReview |
+| 6 | ISSM | View approval progress | `compliance_narrative_approval_progress` | Shows SC-7 in review_queue |
+| 7 | ISSM | Request revision with comments | `compliance_review_narrative` (request_revision) | new_status: NeedsRevision |
+| 8 | Engineer | Update narrative per ISSM feedback | `compliance_write_narrative` | new version created, status: Draft |
+| 9 | ISSO | Re-submit narrative | `compliance_submit_narrative` | new_status: InReview |
+| 10 | ISSM | Approve narrative | `compliance_review_narrative` (approve) | new_status: Approved |
+| 11 | SCA | Verify approval progress | `compliance_narrative_approval_progress` | SC-7 now in approved count |
+| 12 | SCA | View narrative history (audit trail) | `compliance_narrative_history` | Full version history visible |

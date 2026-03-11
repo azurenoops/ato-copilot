@@ -536,6 +536,53 @@ Tool: `compliance_narrative_approval_progress` — shows per-family approval %, 
 
 ---
 
+## HW/SW Inventory — Component Registration
+
+> **Feature 025** — Engineers register the software components they deploy and keep version information current.
+
+### Registering a Software Component
+
+After deploying a new application or service, register it in the inventory:
+
+```
+Tool: inventory_add_item
+Parameters: {
+  "system_id": "{system-id}",
+  "item_name": "my-api-service",
+  "type": "software",
+  "function": "Application",
+  "vendor": "Internal",
+  "version": "1.2.0",
+  "parent_hardware_id": "{server-id}"
+}
+```
+
+### Updating Version After Deployment
+
+When you push a new version, update the inventory to keep it current:
+
+```
+Tool: inventory_update_item
+Parameters: {
+  "item_id": "{item-id}",
+  "version": "1.3.0",
+  "patch_level": "2024-01-15"
+}
+```
+
+### Checking Inventory Coverage
+
+```
+Tool: inventory_list
+Parameters: {
+  "system_id": "{system-id}",
+  "type": "software",
+  "search": "api"
+}
+```
+
+---
+
 ## See Also
 
 - [Engineer Getting Started](../getting-started/engineer.md) — First-time setup and first 3 commands

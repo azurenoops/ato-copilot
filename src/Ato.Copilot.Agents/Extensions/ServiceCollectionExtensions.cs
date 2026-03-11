@@ -271,6 +271,9 @@ public static class ServiceCollectionExtensions
         // Narrative Governance service (Feature 024)
         services.AddSingleton<INarrativeGovernanceService, NarrativeGovernanceService>();
 
+        // ─── HW/SW Inventory service (Feature 025) ──────────────────────────
+        services.AddSingleton<IInventoryService, InventoryService>();
+
         // Narrative Governance tools (Feature 024)
         services.AddSingleton<NarrativeHistoryTool>();
         services.AddSingleton<NarrativeDiffTool>();
@@ -280,6 +283,17 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<BatchReviewNarrativesTool>();
         services.AddSingleton<NarrativeApprovalProgressTool>();
         services.AddSingleton<BatchSubmitNarrativesTool>();
+
+        // HW/SW Inventory tools (Feature 025)
+        services.AddSingleton<InventoryAddItemTool>();
+        services.AddSingleton<InventoryUpdateItemTool>();
+        services.AddSingleton<InventoryDecommissionItemTool>();
+        services.AddSingleton<InventoryListTool>();
+        services.AddSingleton<InventoryGetTool>();
+        services.AddSingleton<InventoryExportTool>();
+        services.AddSingleton<InventoryImportTool>();
+        services.AddSingleton<InventoryCompletenessTool>();
+        services.AddSingleton<InventoryAutoSeedTool>();
 
         // SSP Section Authoring tools (Feature 022)
         services.AddSingleton<WriteSspSectionTool>();
@@ -478,6 +492,17 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<BatchReviewNarrativesTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<NarrativeApprovalProgressTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<BatchSubmitNarrativesTool>());
+
+        // HW/SW Inventory tools as BaseTool (Feature 025)
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<InventoryAddItemTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<InventoryUpdateItemTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<InventoryDecommissionItemTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<InventoryListTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<InventoryGetTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<InventoryExportTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<InventoryImportTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<InventoryCompletenessTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<InventoryAutoSeedTool>());
 
         // Assessment Artifact tools as BaseTool (Feature 015 - US7)
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<AssessControlTool>());

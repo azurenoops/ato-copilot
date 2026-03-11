@@ -680,6 +680,168 @@ Validate all interconnection agreements for Eagle Eye
 
 ---
 
+### ISSO HW/SW Inventory (Feature 025)
+
+**Active Persona**: ISSO | **Role**: `Compliance.Analyst` | **Interface**: VS Code `@ato`
+
+---
+
+### ISSO-INV-01: Auto-Seed Inventory from Boundary
+
+**Precondition**: Authorization boundary defined
+
+```text
+@ato Auto-seed the hardware inventory for Eagle Eye from the authorization boundary
+```
+
+**Expected Tool**: `inventory_auto_seed`
+**Expected**: `created_count` > 0; items mapped from boundary resources
+
+---
+
+### ISSO-INV-02: Add Additional Hardware
+
+**Precondition**: ISSO-INV-01
+
+```text
+@ato Add hardware item "web-server-01" to Eagle Eye — Dell Server at 10.0.0.1
+```
+
+**Expected Tool**: `inventory_add_item`
+**Expected**: Item created with status Active
+
+---
+
+### ISSO-INV-03: Check Completeness Before Export
+
+**Precondition**: ISSO-INV-02
+
+```text
+@ato Check inventory completeness for Eagle Eye
+```
+
+**Expected Tool**: `inventory_completeness`
+**Expected**: `completeness_score`, `is_complete`, issue breakdown
+
+---
+
+### ISSO-INV-04: Export to eMASS Excel
+
+**Precondition**: ISSO-INV-03
+
+```text
+@ato Export the HW/SW inventory for Eagle Eye
+```
+
+**Expected Tool**: `inventory_export`
+**Expected**: Base64-encoded Excel workbook with Hardware and Software worksheets
+
+---
+
+### ISSO Narrative Governance (Feature 024)
+
+**Active Persona**: ISSO | **Role**: `Compliance.Analyst` | **Interface**: VS Code `@ato`
+
+---
+
+### ISSO-NGV-01: View Narrative Version History
+
+**Precondition**: ISSO-04 (narrative written for a control)
+
+```text
+@ato Show the version history for the AC-2 narrative of Eagle Eye
+```
+
+**Expected Tool**: `compliance_narrative_history`
+**Expected**: List of versions (newest first) with `total_versions`, `version_number`, `authored_by`, `authored_at`
+
+### ISSO-NGV-02: Diff Narrative Versions
+
+**Precondition**: At least 2 versions exist for a control
+
+```text
+@ato Show the diff between version 1 and version 2 of the AC-2 narrative for Eagle Eye
+```
+
+**Expected Tool**: `compliance_narrative_diff`
+**Expected**: Unified diff text with `lines_added` and `lines_removed`
+
+### ISSO-NGV-03: Submit Narrative for ISSM Review
+
+**Precondition**: ISSO-NGV-01
+
+```text
+@ato Submit the AC-2 narrative for Eagle Eye for ISSM review
+```
+
+**Expected Tool**: `compliance_submit_narrative`
+**Expected**: `previous_status: Draft`, `new_status: InReview`
+
+### ISSO-NGV-04: Batch Submit AC Family Narratives
+
+**Precondition**: Multiple Draft narratives exist in AC family
+
+```text
+@ato Submit all AC family narratives for Eagle Eye for ISSM review
+```
+
+**Expected Tool**: `compliance_batch_submit_narratives` with `family_filter` = "AC"
+**Expected**: `submitted_count`, `skipped_count`, `submitted_controls`
+
+---
+
+### ISSM Narrative Review (Feature 024)
+
+**Active Persona**: ISSM | **Role**: `Compliance.SecurityLead` | **Interface**: Microsoft Teams
+
+---
+
+### ISSM-NGV-01: View Narrative Approval Progress
+
+**Precondition**: ISSO-NGV-03 (narratives submitted for review)
+
+```text
+@ato Show the narrative approval progress for Eagle Eye
+```
+
+**Expected Tool**: `compliance_narrative_approval_progress`
+**Expected**: Overall counts, `approval_percentage`, per-family breakdown, `review_queue` containing submitted controls
+
+### ISSM-NGV-02: Approve Narrative
+
+**Precondition**: ISSO-NGV-03
+
+```text
+@ato Approve the AC-2 narrative for Eagle Eye
+```
+
+**Expected Tool**: `compliance_review_narrative` with `decision` = "approve"
+**Expected**: `new_status: Approved`, `reviewed_by`, `reviewed_at`
+
+### ISSM-NGV-03: Request Revision with Comments
+
+**Precondition**: Another narrative in InReview status
+
+```text
+@ato Request revision of the AC-3 narrative for Eagle Eye — comments: "Please add Azure AD configuration details"
+```
+
+**Expected Tool**: `compliance_review_narrative` with `decision` = "request_revision"
+**Expected**: `new_status: NeedsRevision`, comments stored
+
+### ISSM-NGV-04: Batch Approve Narratives
+
+**Precondition**: Multiple InReview narratives in a family
+
+```text
+@ato Batch approve all AC family narratives for Eagle Eye
+```
+
+**Expected Tool**: `compliance_batch_review_narratives` with `decision` = "approve"
+**Expected**: `reviewed_count`, `skipped_count`
+
+---
+
 ### ISSO SSP Authoring
 
 **Active Persona**: ISSO | **Role**: `Compliance.Analyst` | **Interface**: VS Code `@ato`
