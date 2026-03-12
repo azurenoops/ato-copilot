@@ -761,6 +761,37 @@ Compare scan imports for remediation progress.
 
 ---
 
+## ACAS/Nessus Scan Import (Feature 026)
+
+**Services**: `IScanImportService`, `INessusParser`, `INessusControlMapper`
+
+### `compliance_import_nessus`
+
+Import Tenable Nessus/ACAS vulnerability scan (.nessus XML).
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+| `file_content` | string | ✓ | Base64-encoded .nessus file (max 10 MB) |
+| `file_name` | string | ✓ | Original file name |
+| `conflict_resolution` | string | | `Skip` (default), `Overwrite`, `Merge` |
+| `dry_run` | boolean | | Preview without persisting (default: false) |
+| `user_role` | string | ✓ | Caller's compliance role |
+
+### `compliance_list_nessus_imports`
+
+List Nessus/ACAS import history with date filtering.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | ✓ | System GUID |
+| `from_date` | string | | ISO 8601 start date filter |
+| `to_date` | string | | ISO 8601 end date filter |
+| `page_size` | integer | | Items per page (default: 20, max: 50) |
+| `user_role` | string | ✓ | Caller's compliance role |
+
+---
+
 ## Privacy & Interconnections (Feature 021)
 
 **Services**: `IPrivacyService`, `IInterconnectionService`

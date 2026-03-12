@@ -32,6 +32,7 @@
 | Import CKL/XCCDF scan results | ✅ | `compliance_import_ckl`, `compliance_import_xccdf` |
 | Export CKL checklists | ✅ | `compliance_export_ckl` |
 | Import Prisma Cloud scans | ✅ | `compliance_import_prisma_csv`, `compliance_import_prisma_api` |
+| Import ACAS/Nessus vulnerability scans | ✅ | `compliance_import_nessus`, `compliance_list_nessus_imports` |
 | Create Privacy Threshold Analysis | ✅ | `compliance_create_pta` |
 | Generate Privacy Impact Assessment | ✅ | `compliance_generate_pia` |
 | Add/update interconnections | ✅ | `compliance_add_interconnection`, `compliance_update_interconnection` |
@@ -206,20 +207,26 @@ Dismissed  Escalated (SLA violation)
 
 ### STIG & SCAP Scan Import
 
-**Objective**: Upload CKL and XCCDF scan results to update compliance findings and link them to NIST 800-53 controls.
+**Objective**: Upload CKL, XCCDF, and Nessus scan results to update compliance findings and link them to NIST 800-53 controls.
 
 **Step-by-Step**:
 
 1. Import CKL file from DISA STIG Viewer → Tool: `compliance_import_ckl`
 2. Import XCCDF results from SCAP scanner → Tool: `compliance_import_xccdf`
-3. Review import summary → Tool: `compliance_get_import_summary`
-4. Export updated CKL for external review → Tool: `compliance_export_ckl`
+3. Import ACAS/Nessus vulnerability scans → Tool: `compliance_import_nessus`
+4. Review import summary → Tool: `compliance_get_import_summary`
+5. List Nessus import history → Tool: `compliance_list_nessus_imports`
+6. Export updated CKL for external review → Tool: `compliance_export_ckl`
 
 **Natural Language Queries**:
 
 > **"Upload the latest CKL for system {id}"** → `compliance_import_ckl` — parses DISA STIG Viewer checklist
 
 > **"Import the SCAP scan results from last week"** → `compliance_import_xccdf` — parses XCCDF automated scan output
+
+> **"Import the ACAS scan for system {id}"** → `compliance_import_nessus` — parses Nessus .nessus XML, maps plugins to NIST controls, generates POA&M entries
+
+> **"Show Nessus import history for Q1"** → `compliance_list_nessus_imports` — lists past Nessus imports with date filtering
 
 > **"Show the import summary for system {id}"** → `compliance_get_import_summary` — finding counts by status
 

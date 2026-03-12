@@ -6,7 +6,7 @@
 
 ## Purpose
 
-This document provides the cross-reference validation of all 106 MCP tools referenced in `spec.md` against the actual MCP server `/tools/list` endpoint. Complete this validation before beginning any persona test case execution.
+This document provides the cross-reference validation of all MCP tools referenced in specs against the actual MCP server `/tools/list` endpoint. Complete this validation before beginning any persona test case execution.
 
 ---
 
@@ -132,7 +132,7 @@ This document provides the cross-reference validation of all 106 MCP tools refer
 | 60 | `watch_alert_history` | ISSO-23 | ⬜ | |
 | 61 | `watch_compliance_trend` | ISSO-24, AO-10 | ⬜ | |
 
-### Import (6 tools)
+### Import (8 tools)
 
 | # | Tool Name | Spec TC-IDs | Present | Notes |
 |---|-----------|-------------|---------|-------|
@@ -142,6 +142,8 @@ This document provides the cross-reference validation of all 106 MCP tools refer
 | 65 | `compliance_get_import_summary` | ISSO-12, SCA-19 | ⬜ | |
 | 66 | `compliance_import_prisma_csv` | ISSM-19,40, ERR-02 | ⬜ | |
 | 67 | `compliance_import_prisma_api` | ISSM-20 | ⬜ | |
+| 116 | `compliance_import_nessus` | F026 | ⬜ | ACAS/Nessus scan import |
+| 117 | `compliance_list_nessus_imports` | F026 | ⬜ | Nessus import history |
 
 ### Prisma (2 tools)
 
@@ -265,7 +267,7 @@ This document provides the cross-reference validation of all 106 MCP tools refer
 | STIG | 1 | ___ | ___ |
 | Monitoring & ConMon | 11 | ___ | ___ |
 | Watch Alerts | 6 | ___ | ___ |
-| Import | 6 | ___ | ___ |
+| Import | 8 | ___ | ___ |
 | Prisma | 2 | ___ | ___ |
 | Privacy Analysis | 4 | ___ | ___ |
 | Interconnection Management | 8 | ___ | ___ |
@@ -275,7 +277,7 @@ This document provides the cross-reference validation of all 106 MCP tools refer
 | Kanban | 11 | ___ | ___ |
 | PIM / Auth | 8 | ___ | ___ |
 | HW/SW Inventory | 9 | ___ | ___ |
-| **Total** | **115** | **___** | **___** |
+| **Total** | **117** | **___** | **___** |
 
 ---
 
@@ -291,7 +293,7 @@ If any tools are missing, document them here for T007 blocked items:
 
 ## Validation Result
 
-- ⬜ **PASS** — All 115 tools present. Proceed to persona testing.
+- ⬜ **PASS** — All 117 tools present. Proceed to persona testing.
 - ⬜ **FAIL** — Missing tools detected. Resolve before proceeding.
 
 **Validated By**: _______________ | **Date**: _______________

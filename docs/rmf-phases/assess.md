@@ -102,7 +102,8 @@ The Assess phase uses **two distinct assessment tools** that serve different pur
 3. Run automated compliance assessment → Tool: `compliance_assess`
 4. Collect evidence → Tool: `compliance_collect_evidence`
 5. Import Prisma Cloud scans → Tool: `compliance_import_prisma_csv`, `compliance_import_prisma_api`
-6. Write SSP sections → Tool: `compliance_write_ssp_section`
+6. Import ACAS/Nessus vulnerability scans → Tool: `compliance_import_nessus`, `compliance_list_nessus_imports`
+7. Write SSP sections → Tool: `compliance_write_ssp_section`
 7. Check SSP completeness → Tool: `compliance_ssp_completeness`
 8. Export CKL for external review → Tool: `compliance_export_ckl`
 9. Create remediation board → Tool: `kanban_create_board`

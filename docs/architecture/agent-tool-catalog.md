@@ -2157,6 +2157,105 @@ Compare Prisma Cloud findings across scan imports to show remediation progress, 
 
 ---
 
+## ACAS/Nessus Scan Import Tools (Feature 026)
+
+### `compliance_import_nessus`
+
+Import a Tenable Nessus/ACAS vulnerability scan file (.nessus XML format) for a
+registered system. Parses plugin results per host, maps plugin families to NIST
+800-53 controls via curated mapping table with heuristic fallback, creates
+compliance findings, updates control effectiveness, and generates POA&M weakness
+entries for Critical/High/Medium severity findings.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | Registered system ID |
+| `file_content` | string | Yes | Base64-encoded .nessus XML file content (max 10 MB) |
+| `file_name` | string | Yes | Original file name (e.g., `acas_scan_2025Q1.nessus`) |
+| `conflict_resolution` | string | No | How to handle duplicates: `Skip` (default), `Overwrite`, `Merge` |
+| `dry_run` | boolean | No | Preview results without persisting (default: `false`) |
+| `assessment_id` | string | No | Optional assessment ID; auto-resolves or creates one if omitted |
+| `user_role` | string | Yes | Caller's compliance role for RBAC enforcement |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "import_record_id": "...",
+    "import_status": "Completed",
+    "dry_run": false,
+    "total_hosts": 5,
+    "total_plugins": 287,
+    "summary": {
+      "critical": 3,
+      "high": 12,
+      "medium": 45,
+      "low": 120,
+      "informational": 107
+    },
+    "changes": {
+      "findings_created": 60,
+      "findings_updated": 0,
+      "findings_skipped": 0,
+      "effectiveness_created": 15,
+      "effectiveness_updated": 0,
+      "nist_controls_affected": 15,
+      "poam_weaknesses_created": 12
+    },
+    "warnings": ["12 plugin(s) mapped via heuristic fallback (family → control)"],
+    "error_message": null
+  }
+}
+```
+
+- **RBAC**: Analyst, SecurityLead, Administrator, PlatformEngineer
+- **RMF Step**: Assess (Step 4)
+- **Duplicate Detection**: SHA-256 file hash prevents re-importing identical files
+- **Conflict Resolution**: `Skip` ignores existing findings, `Overwrite` replaces, `Merge` keeps higher severity
+- **Control Mapping**: Curated plugin-family → NIST 800-53 mapping table with heuristic fallback
+- **POA&M Integration**: Auto-creates POA&M weakness entries for Cat I/II/III findings
+
+---
+
+### `compliance_list_nessus_imports`
+
+List Nessus/ACAS import history for a registered system. Filters to NessusXml
+import type only. Supports date range filtering and pagination.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `system_id` | string | Yes | Registered system ID |
+| `from_date` | string | No | Start date filter (ISO 8601) |
+| `to_date` | string | No | End date filter (ISO 8601) |
+| `page_size` | integer | No | Items per page (default: 20, max: 50) |
+| `user_role` | string | Yes | Caller's compliance role for RBAC enforcement |
+
+```json
+{
+  "status": "success",
+  "data": {
+    "total_count": 3,
+    "imports": [
+      {
+        "id": "...",
+        "file_name": "acas_scan_2025Q1.nessus",
+        "import_type": "NessusXml",
+        "status": "Completed",
+        "imported_by": "mcp-user",
+        "imported_at": "2025-03-15T10:30:00Z",
+        "total_findings": 287,
+        "findings_created": 60
+      }
+    ]
+  }
+}
+```
+
+- **RBAC**: Analyst, SecurityLead, Administrator, PlatformEngineer, Auditor, AuthorizingOfficial, Viewer
+- **RMF Step**: Assess (Step 4), Monitor (Step 6)
+
+---
+
 ## SAP Generation Tools (Feature 018)
 
 ### `compliance_generate_sap`

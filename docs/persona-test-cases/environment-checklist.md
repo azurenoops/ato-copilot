@@ -118,13 +118,15 @@ Verify each tool is in the `/tools/list` response:
 - [ ] `watch_alert_history`
 - [ ] `watch_compliance_trend`
 
-**Import (6)**
+**Import (8)**
 - [ ] `compliance_import_ckl`
 - [ ] `compliance_import_xccdf`
 - [ ] `compliance_list_imports`
 - [ ] `compliance_get_import_summary`
 - [ ] `compliance_import_prisma_csv`
 - [ ] `compliance_import_prisma_api`
+- [ ] `compliance_import_nessus`
+- [ ] `compliance_list_nessus_imports`
 
 **Prisma (2)**
 - [ ] `compliance_list_prisma_policies`
@@ -253,6 +255,7 @@ Verify each tool is in the `/tools/list` response:
 | 6.3 | Prisma API JSON available | Locate in test data directory | JSON with alertRules, resourceConfig, remediationCli | ⬜ | Path: ___ |
 | 6.4 | CKL checklist file available | Locate in test data directory | `.ckl` with STIG evaluation results | ⬜ | Path: ___ |
 | 6.5 | XCCDF results file available | Locate in test data directory | `.xml` SCAP scan results with benchmark scores | ⬜ | Path: ___ |
+| 6.6 | Nessus scan file available | Locate in test data directory | `.nessus` XML with ≥ 2 hosts and ≥ 20 plugins | ⬜ | Path: ___ |
 
 ---
 
@@ -277,9 +280,9 @@ Verify each tool is in the `/tools/list` response:
 | Microsoft Teams | 3 | ___ | ⬜ |
 | Azure Government | 3 | ___ | ⬜ |
 | PIM Roles | 5 | ___ | ⬜ |
-| Test Data | 5 | ___ | ⬜ |
+| Test Data | 6 | ___ | ⬜ |
 | Logistics | 5 | ___ | ⬜ |
-| **Total** | **29** | **___** | ⬜ |
+| **Total** | **30** | **___** | ⬜ |
 
 ### Gate Decision
 

@@ -33,6 +33,8 @@ public class ScanImportService : IScanImportService
     private readonly ISystemSubscriptionResolver _subscriptionResolver;
     private readonly PrismaCsvParser _prismaCsvParser;
     private readonly PrismaApiJsonParser _prismaApiJsonParser;
+    private readonly INessusParser _nessusParser;
+    private readonly INessusControlMapper _nessusControlMapper;
     private readonly ILogger<ScanImportService> _logger;
 
     public ScanImportService(
@@ -47,6 +49,8 @@ public class ScanImportService : IScanImportService
         ISystemSubscriptionResolver subscriptionResolver,
         PrismaCsvParser prismaCsvParser,
         PrismaApiJsonParser prismaApiJsonParser,
+        INessusParser nessusParser,
+        INessusControlMapper nessusControlMapper,
         ILogger<ScanImportService> logger)
     {
         _scopeFactory = scopeFactory;
@@ -60,6 +64,8 @@ public class ScanImportService : IScanImportService
         _subscriptionResolver = subscriptionResolver;
         _prismaCsvParser = prismaCsvParser;
         _prismaApiJsonParser = prismaApiJsonParser;
+        _nessusParser = nessusParser;
+        _nessusControlMapper = nessusControlMapper;
         _logger = logger;
     }
 
@@ -2457,5 +2463,589 @@ public class ScanImportService : IScanImportService
             RemediationRate: remediationRate,
             ResourceTypeBreakdown: resourceTypeBreakdown,
             NistControlBreakdown: nistControlBreakdown);
+    }
+
+    // ─── Feature 026: ImportNessusAsync (T011) ─────────────────────────
+
+    /// <inheritdoc />
+    public async Task<NessusImportResult> ImportNessusAsync(
+        string systemId,
+        string? assessmentId,
+        byte[] fileContent,
+        string fileName,
+        ImportConflictResolution resolution,
+        bool dryRun,
+        string importedBy,
+        CancellationToken ct = default)
+    {
+        var sw = Stopwatch.StartNew();
+        var warnings = new List<string>();
+        var fileHash = ComputeSha256(fileContent);
+
+        _logger.LogInformation(
+            "Nessus import started: file={FileName}, hash={FileHash}, system={SystemId}, resolution={Resolution}, dryRun={DryRun}",
+            fileName, fileHash, systemId, resolution, dryRun);
+
+        // ── Step 1: Parse .nessus file ───────────────────────────────────
+        ParsedNessusFile parsed;
+        try
+        {
+            parsed = _nessusParser.Parse(fileContent);
+        }
+        catch (NessusParseException ex)
+        {
+            _logger.LogWarning(ex, "Nessus parse failed for file {FileName}", fileName);
+            return CreateFailedNessusResult($"Nessus parse error: {ex.Message}", dryRun);
+        }
+
+        // ── Step 2: Validate system ──────────────────────────────────────
+        var system = await _rmfService.GetSystemAsync(systemId, ct);
+        if (system is null)
+            return CreateFailedNessusResult($"System '{systemId}' not found.", dryRun);
+
+        // ── Step 3: Check RMF step ───────────────────────────────────────
+        if (system.CurrentRmfStep < RmfPhase.Assess)
+        {
+            warnings.Add(
+                $"System is in RMF step '{system.CurrentRmfStep}' (expected Assess or later). " +
+                "Import will proceed, but findings may not be visible in assessment workflows.");
+        }
+
+        // ── Step 4: Get control baseline ─────────────────────────────────
+        var baseline = await _baselineService.GetBaselineAsync(systemId, cancellationToken: ct);
+        var baselineControlIds = baseline?.ControlIds ?? new List<string>();
+        var baselineSet = new HashSet<string>(baselineControlIds, StringComparer.OrdinalIgnoreCase);
+
+        if (baseline is null)
+        {
+            warnings.Add("No control baseline found for system. " +
+                          "All NIST controls will be treated as out-of-baseline (no ControlEffectiveness records).");
+        }
+
+        // ── Step 5: Resolve/create assessment context ────────────────────
+        using var scope = _scopeFactory.CreateScope();
+        var ctx = scope.ServiceProvider.GetRequiredService<AtoCopilotContext>();
+
+        string resolvedAssessmentId;
+        if (!string.IsNullOrEmpty(assessmentId))
+        {
+            var existing = await ctx.Assessments.FindAsync(new object[] { assessmentId }, ct);
+            if (existing is null)
+                return CreateFailedNessusResult($"Assessment '{assessmentId}' not found.", dryRun);
+            resolvedAssessmentId = assessmentId;
+        }
+        else if (dryRun)
+        {
+            // Dry-run: resolve existing assessment without creating one (T023)
+            var existingAssessment = await ctx.Assessments
+                .Where(a => a.RegisteredSystemId == systemId &&
+                            a.Status != AssessmentStatus.Completed &&
+                            a.Status != AssessmentStatus.Cancelled &&
+                            a.Status != AssessmentStatus.Failed)
+                .OrderByDescending(a => a.AssessedAt)
+                .FirstOrDefaultAsync(ct);
+            resolvedAssessmentId = existingAssessment?.Id ?? $"dry-run-{Guid.NewGuid():N}";
+        }
+        else
+        {
+            resolvedAssessmentId = await GetOrCreateAssessmentAsync(ctx, systemId, importedBy, ct);
+        }
+
+        _logger.LogDebug(
+            "Nessus step 5 complete: assessment={AssessmentId}, dryRun={DryRun}",
+            resolvedAssessmentId, dryRun);
+
+        // ── Step 6: Duplicate detection ──────────────────────────────────
+        var duplicateImport = await ctx.ScanImportRecords
+            .Where(r => r.FileHash == fileHash && r.RegisteredSystemId == systemId && !r.IsDryRun)
+            .OrderByDescending(r => r.ImportedAt)
+            .FirstOrDefaultAsync(ct);
+
+        if (duplicateImport is not null)
+        {
+            warnings.Add(
+                $"File previously imported on {duplicateImport.ImportedAt:yyyy-MM-dd HH:mm} UTC " +
+                $"(import ID: {duplicateImport.Id}).");
+        }
+
+        // ── Step 7: Create ScanImportRecord ──────────────────────────────
+        var credentialedScan = parsed.Hosts.Any(h => h.CredentialedScan);
+        var earliestScan = parsed.Hosts
+            .Where(h => h.ScanStart.HasValue)
+            .Select(h => h.ScanStart!.Value)
+            .DefaultIfEmpty()
+            .Min();
+
+        var importRecord = new ScanImportRecord
+        {
+            RegisteredSystemId = systemId,
+            AssessmentId = resolvedAssessmentId,
+            ImportType = ScanImportType.NessusXml,
+            FileName = fileName,
+            FileHash = fileHash,
+            FileSizeBytes = fileContent.Length,
+            BenchmarkId = "ACAS",
+            BenchmarkTitle = parsed.ReportName,
+            TargetHostName = parsed.Hosts.FirstOrDefault()?.Hostname,
+            TargetIpAddress = parsed.Hosts.FirstOrDefault()?.HostIp,
+            ScanTimestamp = earliestScan == default ? null : earliestScan,
+            ConflictResolution = resolution,
+            IsDryRun = dryRun,
+            ImportedBy = importedBy,
+            NessusCredentialedScan = credentialedScan,
+            NessusHostCount = parsed.Hosts.Count
+        };
+
+        // ── Step 8: Process findings per host × plugin ───────────────────
+        int criticalCount = 0, highCount = 0, mediumCount = 0, lowCount = 0;
+        int findingsCreated = 0, findingsUpdated = 0, skippedCount = 0;
+        var importFindings = new List<ScanImportFinding>();
+        var newFindings = new List<ComplianceFinding>();
+        var updatedFindings = new List<ComplianceFinding>();
+        var affectedNistControls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var heuristicFamilies = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase); // T024
+
+        // Preload existing findings for conflict detection
+        var existingFindings = await ctx.Findings
+            .Where(f => f.AssessmentId == resolvedAssessmentId)
+            .ToListAsync(ct);
+
+        // Build dedup key → existing finding lookup
+        // Dedup key: NessusPluginId + NessusHostname + NessusPort
+        var existingByDedup = existingFindings
+            .Where(f => f.Source == "Nessus Import" && f.StigId is not null)
+            .GroupBy(f => f.StigId!)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var host in parsed.Hosts)
+        {
+            foreach (var plugin in host.PluginResults)
+            {
+                // Count by severity
+                switch (plugin.Severity)
+                {
+                    case 4: criticalCount++; break;
+                    case 3: highCount++; break;
+                    case 2: mediumCount++; break;
+                    case 1: lowCount++; break;
+                }
+
+                // Map Nessus severity → FindingSeverity + CatSeverity
+                var (findingSeverity, catSeverity) = MapNessusSeverity(plugin.Severity);
+
+                // Build dedup key
+                var dedupKey = $"nessus:{plugin.PluginId}:{host.Hostname ?? host.Name}:{plugin.Port}";
+
+                // ── Control mapping (T020) ───────────────────────────────
+                var mapping = await _nessusControlMapper.MapAsync(plugin, ct);
+                var primaryControl = mapping.NistControlIds.FirstOrDefault() ?? "RA-5";
+                var controlFamily = ExtractControlFamily(primaryControl);
+
+                // Track heuristic fallbacks for summary warning (T024)
+                if (mapping.MappingSource == NessusControlMappingSource.PluginFamilyHeuristic)
+                {
+                    heuristicFamilies.TryGetValue(plugin.PluginFamily, out var count);
+                    heuristicFamilies[plugin.PluginFamily] = count + 1;
+                }
+
+                var importFinding = new ScanImportFinding
+                {
+                    ScanImportRecordId = importRecord.Id,
+                    VulnId = $"NESSUS-{plugin.PluginId}",
+                    RuleId = plugin.PluginId.ToString(),
+                    RawStatus = "Open",
+                    RawSeverity = plugin.RiskFactor,
+                    MappedSeverity = catSeverity,
+                    FindingDetails = plugin.Synopsis,
+                    Comments = plugin.PluginOutput,
+                    NessusPluginId = plugin.PluginId.ToString(),
+                    NessusPluginName = plugin.PluginName,
+                    NessusPluginFamily = plugin.PluginFamily,
+                    NessusHostname = host.Hostname ?? host.Name,
+                    NessusHostIp = host.HostIp,
+                    NessusPort = plugin.Port,
+                    NessusProtocol = plugin.Protocol,
+                    NessusServiceName = plugin.ServiceName,
+                    NessusCvssV3BaseScore = plugin.CvssV3BaseScore,
+                    NessusCvssV3Vector = plugin.CvssV3Vector,
+                    NessusCvssV2BaseScore = plugin.CvssV2BaseScore,
+                    NessusVprScore = plugin.VprScore,
+                    NessusCves = plugin.Cves,
+                    NessusExploitAvailable = plugin.ExploitAvailable,
+                    NessusControlMappingSource = mapping.MappingSource.ToString(),
+                    ResolvedNistControlIds = mapping.NistControlIds,
+                    ResolvedCciRefs = mapping.CciRefs
+                };
+
+                // ── Conflict resolution ──────────────────────────────────
+                existingByDedup.TryGetValue(dedupKey, out var existingFinding);
+
+                if (existingFinding is not null)
+                {
+                    switch (resolution)
+                    {
+                        case ImportConflictResolution.Skip:
+                            importFinding.ImportAction = ImportFindingAction.Skipped;
+                            importFinding.ComplianceFindingId = existingFinding.Id;
+                            skippedCount++;
+                            importFindings.Add(importFinding);
+                            continue;
+
+                        case ImportConflictResolution.Overwrite:
+                            existingFinding.Description = plugin.Description ?? plugin.Synopsis ?? plugin.PluginName;
+                            existingFinding.Severity = findingSeverity;
+                            existingFinding.CatSeverity = catSeverity;
+                            existingFinding.RemediationGuidance = plugin.Solution ?? string.Empty;
+                            importFinding.ImportAction = ImportFindingAction.Updated;
+                            importFinding.ComplianceFindingId = existingFinding.Id;
+                            findingsUpdated++;
+                            if (!updatedFindings.Contains(existingFinding))
+                                updatedFindings.Add(existingFinding);
+                            importFindings.Add(importFinding);
+                            continue;
+
+                        case ImportConflictResolution.Merge:
+                            // Keep existing status, append new details
+                            if (!string.IsNullOrEmpty(plugin.PluginOutput))
+                                existingFinding.Description += $"\n[Re-scan] {plugin.PluginOutput}";
+                            importFinding.ImportAction = ImportFindingAction.Updated;
+                            importFinding.ComplianceFindingId = existingFinding.Id;
+                            findingsUpdated++;
+                            if (!updatedFindings.Contains(existingFinding))
+                                updatedFindings.Add(existingFinding);
+                            importFindings.Add(importFinding);
+                            continue;
+                    }
+                }
+
+                // ── Create new ComplianceFinding ─────────────────────────
+                var newFinding = new ComplianceFinding
+                {
+                    ControlId = primaryControl,
+                    ControlFamily = controlFamily,
+                    Title = plugin.PluginName,
+                    Description = plugin.Description ?? plugin.Synopsis ?? plugin.PluginName,
+                    Severity = findingSeverity,
+                    Status = FindingStatus.Open,
+                    ResourceId = host.Hostname ?? host.Name,
+                    ResourceType = "Host",
+                    RemediationGuidance = plugin.Solution ?? string.Empty,
+                    Source = "Nessus Import",
+                    ScanSource = ScanSourceType.Combined,
+                    StigFinding = false,
+                    StigId = dedupKey,
+                    CatSeverity = catSeverity,
+                    AssessmentId = resolvedAssessmentId,
+                    ImportRecordId = importRecord.Id
+                };
+
+                importFinding.ImportAction = ImportFindingAction.Created;
+                importFinding.ComplianceFindingId = newFinding.Id;
+                newFindings.Add(newFinding);
+                findingsCreated++;
+
+                // Track affected NIST controls (in-baseline only) for effectiveness
+                foreach (var nist in mapping.NistControlIds.Where(c => baselineSet.Contains(c)))
+                    affectedNistControls.Add(nist);
+
+                importFindings.Add(importFinding);
+            }
+        }
+
+        // ── Step 8b: Warn about heuristic-mapped plugin families (T024) ──
+        if (heuristicFamilies.Count > 0)
+        {
+            var familySummary = string.Join(", ",
+                heuristicFamilies.OrderByDescending(kv => kv.Value)
+                    .Select(kv => $"{kv.Key} ({kv.Value})"));
+            warnings.Add(
+                $"{heuristicFamilies.Values.Sum()} plugins mapped via heuristic (no STIG-ID xref): {familySummary}");
+        }
+
+        _logger.LogDebug(
+            "Nessus step 8 complete: created={Created}, updated={Updated}, skipped={Skipped}, " +
+            "critical={Critical}, high={High}, medium={Medium}, low={Low}, heuristicFamilies={HeuristicCount}",
+            findingsCreated, findingsUpdated, skippedCount,
+            criticalCount, highCount, mediumCount, lowCount, heuristicFamilies.Count);
+
+        // ── Step 9: Create evidence ──────────────────────────────────────
+        var evidenceContent = JsonSerializer.Serialize(new
+        {
+            ImportType = "Nessus",
+            FileName = fileName,
+            ReportName = parsed.ReportName,
+            HostCount = parsed.Hosts.Count,
+            TotalPlugins = parsed.TotalPluginResults,
+            CriticalCount = criticalCount,
+            HighCount = highCount,
+            MediumCount = mediumCount,
+            LowCount = lowCount,
+            InformationalCount = parsed.InformationalCount
+        });
+
+        var evidence = new ComplianceEvidence
+        {
+            ControlId = "RA-5",
+            SubscriptionId = string.Empty,
+            EvidenceType = "VulnerabilityScan",
+            Description = $"Nessus Import: {fileName} ({parsed.ReportName})",
+            Content = evidenceContent,
+            CollectedAt = DateTime.UtcNow,
+            CollectedBy = importedBy,
+            AssessmentId = resolvedAssessmentId,
+            EvidenceCategory = EvidenceCategory.Configuration,
+            ContentHash = fileHash,
+            CollectionMethod = "Automated"
+        };
+
+        // ── Step 9b: Upsert ControlEffectiveness (T020) ──────────────────
+        int effectivenessCreated = 0, effectivenessUpdated = 0;
+        if (!dryRun && affectedNistControls.Count > 0)
+        {
+            // Build control → findings lookup for aggregate effectiveness
+            var allNessusFindings = await ctx.Findings
+                .Where(f => f.AssessmentId == resolvedAssessmentId && f.Source == "Nessus Import")
+                .ToListAsync(ct);
+
+            var allFindings = allNessusFindings.Concat(newFindings).ToList();
+
+            var controlFindingMap = allFindings
+                .Where(f => !string.IsNullOrEmpty(f.ControlId))
+                .GroupBy(f => f.ControlId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var controlId in affectedNistControls)
+            {
+                controlFindingMap.TryGetValue(controlId, out var controlFindings);
+                var findingsForControl = controlFindings ?? new List<ComplianceFinding>();
+
+                var anyOpen = findingsForControl.Any(f =>
+                    f.Status == FindingStatus.Open || f.Status == FindingStatus.InProgress);
+                var determination = anyOpen
+                    ? EffectivenessDetermination.OtherThanSatisfied
+                    : EffectivenessDetermination.Satisfied;
+
+                CatSeverity? controlCatSeverity = null;
+                if (anyOpen)
+                {
+                    var openSeverities = findingsForControl
+                        .Where(f => f.Status == FindingStatus.Open || f.Status == FindingStatus.InProgress)
+                        .Where(f => f.CatSeverity.HasValue)
+                        .Select(f => f.CatSeverity!.Value)
+                        .ToList();
+                    if (openSeverities.Count > 0)
+                        controlCatSeverity = openSeverities.Min();
+                }
+
+                var existingEffectiveness = await ctx.ControlEffectivenessRecords
+                    .Where(e => e.AssessmentId == resolvedAssessmentId &&
+                                e.RegisteredSystemId == systemId &&
+                                e.ControlId == controlId)
+                    .FirstOrDefaultAsync(ct);
+
+                if (existingEffectiveness is not null)
+                {
+                    existingEffectiveness.Determination = determination;
+                    existingEffectiveness.AssessmentMethod = "Test";
+                    existingEffectiveness.AssessorId = importedBy;
+                    existingEffectiveness.AssessedAt = DateTime.UtcNow;
+                    existingEffectiveness.CatSeverity = controlCatSeverity;
+                    if (!existingEffectiveness.EvidenceIds.Contains(evidence.Id))
+                        existingEffectiveness.EvidenceIds.Add(evidence.Id);
+                    existingEffectiveness.Notes = $"Re-evaluated via Nessus import '{fileName}'";
+                    effectivenessUpdated++;
+                }
+                else
+                {
+                    var effectiveness = new ControlEffectiveness
+                    {
+                        AssessmentId = resolvedAssessmentId,
+                        RegisteredSystemId = systemId,
+                        ControlId = controlId,
+                        Determination = determination,
+                        AssessmentMethod = "Test",
+                        EvidenceIds = new List<string> { evidence.Id },
+                        AssessorId = importedBy,
+                        CatSeverity = controlCatSeverity,
+                        Notes = $"Auto-determined via Nessus import '{fileName}'"
+                    };
+                    ctx.ControlEffectivenessRecords.Add(effectiveness);
+                    effectivenessCreated++;
+                }
+            }
+        }
+
+        // ── Step 9c: POA&M weakness generation (T032) ────────────────────
+        int poamCreated = 0;
+        if (!dryRun)
+        {
+            // Load existing ACAS POA&M items for dedup
+            var existingPoams = await ctx.PoamItems
+                .Where(p => p.RegisteredSystemId == systemId && p.WeaknessSource == "ACAS")
+                .ToListAsync(ct);
+            var existingPoamByFindingId = existingPoams
+                .Where(p => p.FindingId is not null)
+                .ToDictionary(p => p.FindingId!, StringComparer.OrdinalIgnoreCase);
+
+            // Scheduled completion: 30 days for CatI, 90 days for CatII, 180 days for CatIII
+            static DateTime ComputeScheduledCompletion(CatSeverity? cat) => cat switch
+            {
+                CatSeverity.CatI => DateTime.UtcNow.AddDays(30),
+                CatSeverity.CatII => DateTime.UtcNow.AddDays(90),
+                _ => DateTime.UtcNow.AddDays(180)
+            };
+
+            foreach (var finding in newFindings.Where(f =>
+                f.Severity <= FindingSeverity.Medium && f.CatSeverity.HasValue))
+            {
+                if (existingPoamByFindingId.ContainsKey(finding.Id))
+                    continue;
+
+                var poam = new PoamItem
+                {
+                    RegisteredSystemId = systemId,
+                    FindingId = finding.Id,
+                    Weakness = finding.Title ?? finding.Description,
+                    WeaknessSource = "ACAS",
+                    SecurityControlNumber = finding.ControlId ?? "RA-5",
+                    CatSeverity = finding.CatSeverity!.Value,
+                    PointOfContact = importedBy,
+                    ScheduledCompletionDate = ComputeScheduledCompletion(finding.CatSeverity),
+                    Status = PoamStatus.Ongoing,
+                    Comments = $"Auto-created via Nessus import '{fileName}'"
+                };
+
+                ctx.PoamItems.Add(poam);
+                poamCreated++;
+            }
+
+            // T033: Flag existing POA&M entries for closure when finding resolves
+            var openPoams = existingPoams
+                .Where(p => p.Status == PoamStatus.Ongoing && p.FindingId is not null)
+                .ToList();
+
+            // All current open Nessus finding dedup keys
+            var currentDedupKeys = newFindings
+                .Concat(updatedFindings)
+                .Where(f => f.Source == "Nessus Import" && f.StigId is not null)
+                .Select(f => f.StigId!)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var openPoam in openPoams)
+            {
+                // Find the linked finding to check if it's still present
+                var linkedFinding = existingFindings.FirstOrDefault(f => f.Id == openPoam.FindingId);
+                if (linkedFinding is not null &&
+                    linkedFinding.StigId is not null &&
+                    !currentDedupKeys.Contains(linkedFinding.StigId))
+                {
+                    openPoam.Comments = (openPoam.Comments ?? string.Empty) +
+                        $"\n[{DateTime.UtcNow:yyyy-MM-dd}] Finding no longer present in scan '{fileName}' — review for closure.";
+                    openPoam.ModifiedAt = DateTime.UtcNow;
+                }
+            }
+        }
+        else
+        {
+            // Dry-run: count how many POA&M entries would be created
+            poamCreated = newFindings.Count(f =>
+                f.Severity <= FindingSeverity.Medium && f.CatSeverity.HasValue);
+        }
+
+        // ── Step 10: Update import record counts ─────────────────────────
+        importRecord.TotalEntries = parsed.TotalPluginResults;
+        importRecord.NessusCriticalCount = criticalCount;
+        importRecord.NessusHighCount = highCount;
+        importRecord.NessusMediumCount = mediumCount;
+        importRecord.NessusLowCount = lowCount;
+        importRecord.NessusInformationalCount = parsed.InformationalCount;
+        importRecord.FindingsCreated = findingsCreated;
+        importRecord.FindingsUpdated = findingsUpdated;
+        importRecord.SkippedCount = skippedCount;
+        importRecord.OpenCount = criticalCount + highCount + mediumCount + lowCount;
+        importRecord.Warnings = warnings;
+        importRecord.ImportStatus = warnings.Count > 0
+            ? ScanImportStatus.CompletedWithWarnings
+            : ScanImportStatus.Completed;
+
+        // ── Step 11: Persist (unless dry-run) ────────────────────────────
+        if (!dryRun)
+        {
+            ctx.ScanImportRecords.Add(importRecord);
+            ctx.ScanImportFindings.AddRange(importFindings);
+            ctx.Findings.AddRange(newFindings);
+            ctx.Evidence.Add(evidence);
+            await ctx.SaveChangesAsync(ct);
+        }
+
+        sw.Stop();
+        _logger.LogInformation(
+            "Nessus import completed: file={FileName}, duration={DurationMs}ms, hosts={HostCount}, " +
+            "findings={FindingsCreated}/{FindingsUpdated}, critical={Critical}, high={High}, medium={Medium}, low={Low}",
+            fileName, sw.ElapsedMilliseconds, parsed.Hosts.Count,
+            findingsCreated, findingsUpdated, criticalCount, highCount, mediumCount, lowCount);
+
+        return new NessusImportResult(
+            ImportRecordId: dryRun ? string.Empty : importRecord.Id,
+            Status: importRecord.ImportStatus,
+            ReportName: parsed.ReportName,
+            TotalPluginResults: parsed.TotalPluginResults,
+            InformationalCount: parsed.InformationalCount,
+            CriticalCount: criticalCount,
+            HighCount: highCount,
+            MediumCount: mediumCount,
+            LowCount: lowCount,
+            HostCount: parsed.Hosts.Count,
+            FindingsCreated: findingsCreated,
+            FindingsUpdated: findingsUpdated,
+            SkippedCount: skippedCount,
+            PoamWeaknessesCreated: poamCreated,
+            EffectivenessRecordsCreated: effectivenessCreated,
+            EffectivenessRecordsUpdated: effectivenessUpdated,
+            NistControlsAffected: affectedNistControls.Count,
+            CredentialedScan: credentialedScan,
+            IsDryRun: dryRun,
+            Warnings: warnings,
+            ErrorMessage: null);
+    }
+
+    /// <summary>Map Nessus integer severity → FindingSeverity + CatSeverity.</summary>
+    internal static (FindingSeverity Severity, CatSeverity? Cat) MapNessusSeverity(int severity)
+    {
+        return severity switch
+        {
+            4 => (FindingSeverity.Critical, CatSeverity.CatI),
+            3 => (FindingSeverity.High, CatSeverity.CatI),
+            2 => (FindingSeverity.Medium, CatSeverity.CatII),
+            1 => (FindingSeverity.Low, CatSeverity.CatIII),
+            _ => (FindingSeverity.Informational, null)
+        };
+    }
+
+    /// <summary>Create a failed NessusImportResult with error message.</summary>
+    private static NessusImportResult CreateFailedNessusResult(string error, bool isDryRun)
+    {
+        return new NessusImportResult(
+            ImportRecordId: string.Empty,
+            Status: ScanImportStatus.Failed,
+            ReportName: string.Empty,
+            TotalPluginResults: 0,
+            InformationalCount: 0,
+            CriticalCount: 0,
+            HighCount: 0,
+            MediumCount: 0,
+            LowCount: 0,
+            HostCount: 0,
+            FindingsCreated: 0,
+            FindingsUpdated: 0,
+            SkippedCount: 0,
+            PoamWeaknessesCreated: 0,
+            EffectivenessRecordsCreated: 0,
+            EffectivenessRecordsUpdated: 0,
+            NistControlsAffected: 0,
+            CredentialedScan: false,
+            IsDryRun: isDryRun,
+            Warnings: new List<string>(),
+            ErrorMessage: error);
     }
 }

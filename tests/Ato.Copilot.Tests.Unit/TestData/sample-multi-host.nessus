@@ -1,0 +1,96 @@
+<?xml version="1.0" ?>
+<NessusClientData_v2>
+  <Policy><policyName>Multi Host Policy</policyName></Policy>
+  <Report name="Multi Host Network Scan">
+    <!-- Host 1: Windows Server -->
+    <ReportHost name="win-server.domain.mil">
+      <HostProperties>
+        <tag name="HOST_START">Wed Mar 12 09:00:00 2025</tag>
+        <tag name="HOST_END">Wed Mar 12 09:30:00 2025</tag>
+        <tag name="host-ip">10.0.1.10</tag>
+        <tag name="hostname">win-server.domain.mil</tag>
+        <tag name="operating-system">Microsoft Windows Server 2022</tag>
+        <tag name="mac-address">00:0C:29:AA:BB:01</tag>
+        <tag name="Credentialed_Scan">true</tag>
+      </HostProperties>
+      <ReportItem pluginID="97833" pluginName="MS17-010: EternalBlue" pluginFamily="Windows : Microsoft Bulletins" severity="4" port="445" protocol="tcp" svc_name="cifs">
+        <synopsis>Remote code execution vulnerability.</synopsis>
+        <description>SMBv1 vulnerability.</description>
+        <solution>Apply Microsoft patch.</solution>
+        <risk_factor>Critical</risk_factor>
+        <cve>CVE-2017-0143</cve>
+        <cvss3_base_score>8.1</cvss3_base_score>
+        <exploit_available>true</exploit_available>
+        <xref>STIG-ID:WN22-00-000010</xref>
+      </ReportItem>
+      <ReportItem pluginID="10287" pluginName="Traceroute Information" pluginFamily="General" severity="1" port="0" protocol="tcp" svc_name="general">
+        <synopsis>Traceroute information.</synopsis>
+        <description>Traceroute to host.</description>
+        <solution>n/a</solution>
+        <risk_factor>Low</risk_factor>
+        <exploit_available>false</exploit_available>
+      </ReportItem>
+    </ReportHost>
+    <!-- Host 2: Linux Server -->
+    <ReportHost name="linux-web.domain.mil">
+      <HostProperties>
+        <tag name="HOST_START">Wed Mar 12 09:00:00 2025</tag>
+        <tag name="HOST_END">Wed Mar 12 09:25:00 2025</tag>
+        <tag name="host-ip">10.0.1.20</tag>
+        <tag name="hostname">linux-web.domain.mil</tag>
+        <tag name="operating-system">Red Hat Enterprise Linux 8</tag>
+        <tag name="mac-address">00:0C:29:AA:BB:02</tag>
+        <tag name="Credentialed_Scan">true</tag>
+      </HostProperties>
+      <ReportItem pluginID="153510" pluginName="RHSA-2024:1234 Security Update" pluginFamily="Red Hat Local Security Checks" severity="3" port="0" protocol="tcp" svc_name="general">
+        <synopsis>Missing Red Hat security update.</synopsis>
+        <description>The remote host is missing a security update.</description>
+        <solution>Update the affected packages.</solution>
+        <risk_factor>High</risk_factor>
+        <cve>CVE-2024-1234</cve>
+        <cvss3_base_score>7.5</cvss3_base_score>
+        <exploit_available>false</exploit_available>
+      </ReportItem>
+      <ReportItem pluginID="57582" pluginName="SSL Self-Signed Certificate" pluginFamily="General" severity="2" port="8443" protocol="tcp" svc_name="https">
+        <synopsis>Self-signed certificate detected.</synopsis>
+        <description>The certificate is self-signed.</description>
+        <solution>Use a proper CA-signed certificate.</solution>
+        <risk_factor>Medium</risk_factor>
+        <cvss3_base_score>6.5</cvss3_base_score>
+        <exploit_available>false</exploit_available>
+      </ReportItem>
+      <ReportItem pluginID="19506" pluginName="Nessus Scan Information" pluginFamily="Settings" severity="0" port="0" protocol="tcp" svc_name="general">
+        <synopsis>Scan information.</synopsis>
+        <description>Nessus scan details.</description>
+        <solution>n/a</solution>
+        <risk_factor>None</risk_factor>
+        <exploit_available>false</exploit_available>
+      </ReportItem>
+    </ReportHost>
+    <!-- Host 3: Network Device -->
+    <ReportHost name="10.0.1.1">
+      <HostProperties>
+        <tag name="HOST_START">Wed Mar 12 09:00:00 2025</tag>
+        <tag name="HOST_END">Wed Mar 12 09:10:00 2025</tag>
+        <tag name="host-ip">10.0.1.1</tag>
+        <tag name="operating-system">Cisco IOS 15.1</tag>
+        <tag name="Credentialed_Scan">false</tag>
+      </HostProperties>
+      <ReportItem pluginID="41028" pluginName="SNMP Agent Default Community Name (public)" pluginFamily="SNMP" severity="3" port="161" protocol="udp" svc_name="snmp">
+        <synopsis>The default community name of the SNMP server can be guessed.</synopsis>
+        <description>SNMP default community string detected.</description>
+        <solution>Disable the SNMP service or filter packets.</solution>
+        <risk_factor>High</risk_factor>
+        <cvss3_base_score>7.5</cvss3_base_score>
+        <exploit_available>true</exploit_available>
+      </ReportItem>
+      <ReportItem pluginID="10263" pluginName="SMTP Server Detection" pluginFamily="Service Detection" severity="0" port="25" protocol="tcp" svc_name="smtp">
+        <synopsis>An SMTP server is listening on this port.</synopsis>
+        <description>SMTP service detected.</description>
+        <solution>n/a</solution>
+        <risk_factor>None</risk_factor>
+        <exploit_available>false</exploit_available>
+      </ReportItem>
+    </ReportHost>
+  </Report>
+</NessusClientData_v2>

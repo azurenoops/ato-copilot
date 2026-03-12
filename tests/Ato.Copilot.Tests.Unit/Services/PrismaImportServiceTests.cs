@@ -124,6 +124,8 @@ public class PrismaImportServiceTests : IDisposable
             _subscriptionResolverMock.Object,
             _csvParser,
             new PrismaApiJsonParser(NullLogger<PrismaApiJsonParser>.Instance),
+            Mock.Of<INessusParser>(),
+            Mock.Of<INessusControlMapper>(),
             NullLogger<ScanImportService>.Instance);
     }
 

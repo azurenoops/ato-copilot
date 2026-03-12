@@ -171,4 +171,30 @@ public interface IScanImportService
         List<string>? importIds,
         string? groupBy,
         CancellationToken ct = default);
+
+    // ─── Feature 026: ACAS/Nessus Import ──────────────────────────────────
+
+    /// <summary>
+    /// Import an ACAS/Nessus .nessus vulnerability scan file. Parses NessusClientData_v2 XML,
+    /// maps vulnerabilities to NIST 800-53 controls via STIG-ID xref and plugin-family heuristics,
+    /// creates compliance findings and control effectiveness records, and generates POA&amp;M weaknesses.
+    /// </summary>
+    /// <param name="systemId">Registered system ID.</param>
+    /// <param name="assessmentId">Assessment context (optional — auto-resolved if null).</param>
+    /// <param name="fileContent">Raw .nessus file bytes (UTF-8 XML).</param>
+    /// <param name="fileName">Original file name.</param>
+    /// <param name="resolution">Conflict resolution strategy for duplicate findings.</param>
+    /// <param name="dryRun">If true, preview without persisting.</param>
+    /// <param name="importedBy">Identity of the importing user.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Import result with severity counts, mappings, and warnings.</returns>
+    Task<NessusImportResult> ImportNessusAsync(
+        string systemId,
+        string? assessmentId,
+        byte[] fileContent,
+        string fileName,
+        ImportConflictResolution resolution,
+        bool dryRun,
+        string importedBy,
+        CancellationToken ct = default);
 }

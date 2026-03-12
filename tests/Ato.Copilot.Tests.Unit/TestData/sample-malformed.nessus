@@ -1,0 +1,12 @@
+<?xml version="1.0" ?>
+<NessusClientData_v2>
+  <Report name="Malformed Scan">
+    <ReportHost name="broken">
+      <HostProperties>
+        <tag name="host-ip">10.0.0.1</tag>
+      </HostProperties>
+      <!-- Malformed: missing closing tag -->
+      <ReportItem pluginID="12345" pluginName="Test" pluginFamily="General" severity="2" port="80" protocol="tcp" svc_name="www">
+        <synopsis>Test</synopsis>
+        <!-- Intentionally unclosed element -->
+        <description>Unclosed description

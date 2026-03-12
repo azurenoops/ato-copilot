@@ -11,6 +11,7 @@
 | **AO** | Authorizing Official — Senior official with authority to formally assume responsibility for operating a system at an acceptable level of risk |
 | **ATO** | Authority to Operate — Formal authorization granted by the AO for a system to operate |
 | **ATOwC** | ATO with Conditions — Authorization that includes specific constraints or compensating controls |
+| **ACAS** | Assured Compliance Assessment Solution — DoD-standard vulnerability scanning system based on Tenable Nessus. Scans are imported via `compliance_import_nessus` |
 | **Approval Workflow** | Narrative governance process where ISSOs submit Draft narratives for ISSM review, transitioning through Draft → InReview → Approved or NeedsRevision status lifecycle |
 
 ## B
@@ -112,6 +113,7 @@
 | **NIST 800-137** | Information Security Continuous Monitoring for Federal Information Systems |
 | **Narrative Governance** | Version control and approval workflow system for SSP control narratives — provides version history, line-level diffing, rollback, and ISSM approval workflows (Feature 024) |
 | **Narrative Version** | An immutable, append-only record capturing the full text of a control narrative at a point in time, with authorship, status, and optional change reason |
+| **Nessus** | Tenable vulnerability scanner that produces .nessus XML files. Plugin results are mapped to NIST 800-53 controls via `compliance_import_nessus` |
 | **NSS** | National Security System |
 
 ## O

@@ -513,11 +513,11 @@ Move to Implement
 ### Step 7: Import Scans (ISSO)
 
 ```text
-@ato Import CKL + Prisma CSV for Eagle Eye
+@ato Import CKL + Prisma CSV + ACAS scan for Eagle Eye
 ```
 
-**Expected Tool**: `compliance_import_ckl`, `compliance_import_prisma_csv`
-**Expected Output**: Import records, findings created
+**Expected Tool**: `compliance_import_ckl`, `compliance_import_prisma_csv`, `compliance_import_nessus`
+**Expected Output**: Import records, findings created, POA&M entries auto-generated from Nessus scan
 
 ---
 

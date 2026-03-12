@@ -123,6 +123,8 @@ public class ScanImportIntegrationTests : IDisposable
             Mock.Of<ISystemSubscriptionResolver>(),
             new PrismaCsvParser(Mock.Of<ILogger<PrismaCsvParser>>()),
             new PrismaApiJsonParser(Mock.Of<ILogger<PrismaApiJsonParser>>()),
+            Mock.Of<INessusParser>(),
+            Mock.Of<INessusControlMapper>(),
             Mock.Of<ILogger<ScanImportService>>());
 
         // Tools

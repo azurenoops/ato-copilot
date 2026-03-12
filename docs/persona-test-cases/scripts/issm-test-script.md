@@ -964,6 +964,37 @@ Create a POA&M item for finding {finding_id} — scheduled completion in
 - Finding linked (source = Prisma Cloud)
 - Scheduled completion date = today + 90 days
 - Status = "Ongoing"
+
+**Verification**: Status = "Ongoing", finding linked, finding source is Prisma
+
+---
+
+### ISSM-23d: Verify Auto-Generated POA&M (from ACAS/Nessus)
+
+**Task**: Verify POA&M entries auto-created by Nessus import for Cat I/II/III findings
+**Type**: Positive test | **Precondition**: ISSO-12a completed (Nessus import with POA&M generation)
+
+```text
+List POA&M items for Eagle Eye with weakness source ACAS
+```
+
+**Note**: Nessus import auto-generates POA&M entries — no manual creation needed.
+
+**Expected Tool**: `compliance_list_poam`
+**Expected Output**:
+- POA&M entries with WeaknessSource = "ACAS"
+- Cat I → 30-day completion, Cat II → 90-day, Cat III → 180-day
+- Status = "Ongoing"
+- Each linked to a finding from the Nessus scan
+
+**Verification**: At least 1 ACAS-sourced POA&M entry exists with correct scheduled dates
+
+**Expected Tool**: `compliance_create_poam`
+**Expected Output**:
+- POA&M record created
+- Finding linked (source = Prisma Cloud)
+- Scheduled completion date = today + 90 days
+- Status = "Ongoing"
 - Prisma-specific fields preserved (PrismaAlertId, CloudResourceType)
 
 **Verification**: Status = "Ongoing", finding linked, Prisma fields present

@@ -369,6 +369,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ListPrismaPoliciesTool>();
         services.AddSingleton<PrismaTrendTool>();
 
+        // ─── Feature 026: ACAS/Nessus Scan Import ───────────────────────────
+        services.AddSingleton<INessusParser, NessusParser>();
+        services.AddSingleton<PluginFamilyMappings>();
+        services.AddSingleton<INessusControlMapper, NessusControlMapper>();
+        services.AddSingleton<ImportNessusTool>();
+        services.AddSingleton<ListNessusImportsTool>();
+
         // ─── Feature 018: SAP Generation service and tools ───────────────────
         services.AddSingleton<ISapService, SapService>();
         services.AddSingleton<GenerateSapTool>();
@@ -560,6 +567,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ImportPrismaApiTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ListPrismaPoliciesTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<PrismaTrendTool>());
+
+        // Feature 026: ACAS/Nessus Import BaseTool wrappers
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ImportNessusTool>());
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ListNessusImportsTool>());
 
         // Feature 021: Privacy tools BaseTool wrappers
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<CreatePtaTool>());

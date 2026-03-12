@@ -27,6 +27,8 @@ As an SCA, you record per-control effectiveness determinations, map findings to 
 | `compliance_compare_snapshots` | ✅ Allowed | Trend analysis |
 | `compliance_generate_sar` | ✅ Allowed | SAR generation |
 | `compliance_generate_rar` | ✅ Allowed | RAR generation |
+| `compliance_import_nessus` | ✅ Allowed | ACAS/Nessus vulnerability scan import |
+| `compliance_list_nessus_imports` | ✅ Allowed | Nessus import history |
 | `compliance_write_narrative` | ❌ Denied | SCA cannot modify SSP |
 | `compliance_remediate` | ❌ Denied | SCA cannot fix findings |
 | `compliance_issue_authorization` | ❌ Denied | Only AO can authorize |

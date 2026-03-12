@@ -23,6 +23,7 @@
 - ✓ Moderate baseline selected with 325 controls (ISSM-11)
 - ✓ AC-1 through AC-4 set as inherited (ISSM-13)
 - ✓ Prisma scans imported (ISSM-19, ISSM-20)
+- ✓ Nessus/ACAS test data available (`test-data/acas-scan-results.nessus`)
 - ✓ PTA created and PIA approved (ISSM-44, ISSM-46)
 - ✓ Interconnections registered with ISA (ISSM-48, ISSM-52)
 
@@ -270,6 +271,70 @@ deployment
 - Conflict resolutions
 
 **Verification**: Findings listed with control mappings
+
+---
+
+### ISSO-12a: Import ACAS/Nessus Scan
+
+**Task**: Import Tenable Nessus/ACAS vulnerability scan
+**Type**: Positive test | **Precondition**: System with baseline
+
+```text
+@ato Import this ACAS scan for Eagle Eye
+```
+
+**Attachment**: `test-data/acas-scan-results.nessus`
+
+**Expected Tool**: `compliance_import_nessus`
+**Expected Output**:
+- Import record created with type `NessusXml`
+- Plugin families mapped to NIST 800-53 controls
+- Severity breakdown: Critical, High, Medium, Low, Informational
+- POA&M weakness entries auto-created for Cat I/II/III findings
+- Heuristic mapping warnings (if any families used fallback)
+
+**Verification**: Import record created, findings_created > 0, poam_weaknesses_created > 0
+**Record**: hosts = ___, plugins = ___, created = ___, poam = ___, heuristic_warnings = ___
+
+---
+
+### ISSO-12b: Import ACAS/Nessus Dry Run
+
+**Task**: Preview Nessus import without persisting
+**Type**: Positive test | **Precondition**: System with baseline
+
+```text
+@ato Do a dry run import of this ACAS scan for Eagle Eye
+```
+
+**Attachment**: `test-data/acas-scan-results.nessus`
+
+**Expected Tool**: `compliance_import_nessus` (with `dry_run: true`)
+**Expected Output**:
+- Preview summary with host/plugin counts and severity breakdown
+- No import record persisted
+- No findings or POA&M entries created in database
+
+**Verification**: `dry_run: true` in response, no new records in import history
+
+---
+
+### ISSO-12c: List Nessus Import History
+
+**Task**: View Nessus-specific import history
+**Type**: Positive test | **Precondition**: ISSO-12a completed
+
+```text
+@ato Show Nessus import history for Eagle Eye
+```
+
+**Expected Tool**: `compliance_list_nessus_imports`
+**Expected Output**:
+- Filtered list showing only NessusXml imports
+- Per import: file name, date, total findings, findings created
+
+**Verification**: At least 1 Nessus import visible from ISSO-12a
+**Record**: nessus_import_count = ___
 
 ---
 
