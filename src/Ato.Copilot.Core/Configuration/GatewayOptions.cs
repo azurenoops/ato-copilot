@@ -149,6 +149,26 @@ public class PimServiceOptions
 }
 
 /// <summary>
+/// Simulated identity configuration for CAC simulation mode.
+/// Bound from the "CacAuth:SimulatedIdentity" configuration sub-section.
+/// Used only in Development environment to bypass physical smart card requirements.
+/// </summary>
+public class SimulatedIdentityOptions
+{
+    /// <summary>Simulated user principal name (e.g., "dev.user@dev.mil").</summary>
+    public string UserPrincipalName { get; set; } = string.Empty;
+
+    /// <summary>Simulated display name (e.g., "Dev User (Simulated)").</summary>
+    public string DisplayName { get; set; } = string.Empty;
+
+    /// <summary>Optional simulated certificate thumbprint. Null when not configured.</summary>
+    public string? CertificateThumbprint { get; set; }
+
+    /// <summary>Simulated role assignments. Empty list = least privilege.</summary>
+    public List<string> Roles { get; set; } = [];
+}
+
+/// <summary>
 /// CAC/PIV authentication session configuration.
 /// Bound from the "CacAuth" configuration section.
 /// </summary>
@@ -162,6 +182,18 @@ public class CacAuthOptions
 
     /// <summary>Maximum allowed session timeout in hours.</summary>
     public int MaxSessionTimeoutHours { get; set; } = 24;
+
+    /// <summary>
+    /// When true, enables CAC simulation mode in Development environment.
+    /// Simulation is ignored in non-Development environments as a safety guard.
+    /// </summary>
+    public bool SimulationMode { get; set; }
+
+    /// <summary>
+    /// Simulated identity configuration. Required when <see cref="SimulationMode"/> is true.
+    /// Provides UPN, display name, optional thumbprint, and role assignments.
+    /// </summary>
+    public SimulatedIdentityOptions? SimulatedIdentity { get; set; }
 }
 
 /// <summary>

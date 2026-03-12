@@ -38,6 +38,27 @@ ATO Copilot supports Common Access Card (CAC) and Personal Identity Verification
 | `cac_set_timeout` | Configure session timeout duration |
 | `cac_map_certificate` | Map certificate to compliance role |
 
+### CAC Simulation Mode
+
+For local development without a physical smart card, `CacAuthenticationMiddleware` supports a simulation mode that synthesizes a `ClaimsPrincipal` from configuration.
+
+**How it works:**
+
+1. `CacAuth:SimulationMode` set to `true` in `appsettings.Development.json`
+2. `CacAuth:SimulatedIdentity` provides UPN, display name, optional thumbprint, and roles
+3. Middleware creates a `ClaimsPrincipal` with claims matching real CAC auth (`NameIdentifier`, `Name`, `preferred_username`, `amr`, `Role`, `x5t`)
+4. `ClientType.Simulated` is set on the request — distinguishable from real sessions
+5. Startup validation ensures identity config is complete before the app starts
+
+**Safety guards:**
+
+- Simulation **only activates** when `ASPNETCORE_ENVIRONMENT=Development`
+- In Production/Staging the flag is silently ignored and a security warning is logged
+- `appsettings.json` (production config) must never contain simulation keys
+- `ClientType.Simulated` sessions are excluded from compliance evidence (FR-014)
+
+See [Getting Started — Engineer](../getting-started/engineer.md#cac-simulation-mode-local-development) for configuration details.
+
 ### Azure Entra ID (Fallback)
 
 When CAC is not available, standard Azure Entra ID authentication is supported via JWT bearer tokens with Microsoft Identity Web.

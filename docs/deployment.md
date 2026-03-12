@@ -267,6 +267,35 @@ For DoD environments requiring CAC/PIV:
 
 The `CacAuthenticationMiddleware` validates the JWT `amr` claim for CAC/PIV authentication methods.
 
+### CAC Simulation Mode (Development Only)
+
+For local development without a physical smart card, add simulation config to `appsettings.Development.json`:
+
+```json
+{
+  "CacAuth": {
+    "SimulationMode": true,
+    "SimulatedIdentity": {
+      "UserPrincipalName": "dev.user@dev.mil",
+      "DisplayName": "Dev User (Simulated)",
+      "CertificateThumbprint": "ABC123DEF456",
+      "Roles": ["Global Reader", "ISSO"]
+    }
+  }
+}
+```
+
+| Setting | Description |
+|---|---|
+| `SimulationMode` | Enables simulated CAC identity injection (Development only) |
+| `SimulatedIdentity.UserPrincipalName` | UPN for the simulated user (required) |
+| `SimulatedIdentity.DisplayName` | Display name (required) |
+| `SimulatedIdentity.CertificateThumbprint` | Optional certificate thumbprint claim |
+| `SimulatedIdentity.Roles` | Array of compliance roles assigned to the simulated user |
+
+!!! warning "Production safety"
+    Simulation mode is ignored in non-Development environments. Never add `SimulationMode` or `SimulatedIdentity` keys to `appsettings.json`.
+
 ### Azure Key Vault
 
 In non-Development environments, secrets can be loaded from Azure Key Vault:

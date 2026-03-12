@@ -7,6 +7,7 @@ using Serilog;
 using Serilog.Events;
 using Azure.Identity;
 using Ato.Copilot.Core.Data.Context;
+using Ato.Copilot.Core.Configuration;
 using Ato.Copilot.Core.Extensions;
 using Ato.Copilot.Core.Observability;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -108,6 +109,10 @@ async Task RunStdioModeAsync(string[] args)
         .ConfigureServices((ctx, services) =>
         {
             RegisterCoreServices(services, ctx.Configuration);
+
+            // Validate CAC simulation mode configuration
+            ValidateCacSimulationConfig(ctx.Configuration, ctx.HostingEnvironment.EnvironmentName);
+
             services.AddMcpStdioService();
         });
 
@@ -153,7 +158,8 @@ async Task RunHttpModeAsync(string[] args)
     // Register services
     RegisterCoreServices(builder.Services, builder.Configuration);
 
-    // Health checks (per FR-045, FR-033)
+    // Validate CAC simulation mode configuration
+    ValidateCacSimulationConfig(builder.Configuration, builder.Environment.EnvironmentName);
     builder.Services.AddHealthChecks()
         .AddCheck<AgentHealthCheck>("compliance-agent")
         .AddCheck<Ato.Copilot.Agents.Observability.NistControlsHealthCheck>("nist-controls");
@@ -291,6 +297,40 @@ void RegisterCoreServices(IServiceCollection services, IConfiguration configurat
 
     // MCP server
     services.AddMcpServer(configuration);
+}
+
+// ────────────────────────────────────────────────────────────────
+//  CAC Simulation Mode Validation
+// ────────────────────────────────────────────────────────────────
+void ValidateCacSimulationConfig(IConfiguration configuration, string environmentName)
+{
+    var cacAuthOptions = configuration.GetSection(CacAuthOptions.SectionName).Get<CacAuthOptions>();
+    if (cacAuthOptions?.SimulationMode != true)
+        return;
+
+    if (environmentName == "Development")
+    {
+        if (cacAuthOptions.SimulatedIdentity is null)
+            throw new InvalidOperationException(
+                "CacAuth:SimulatedIdentity configuration is required when CacAuth:SimulationMode is enabled.");
+
+        if (string.IsNullOrWhiteSpace(cacAuthOptions.SimulatedIdentity.UserPrincipalName))
+            throw new InvalidOperationException(
+                "CacAuth:SimulatedIdentity:UserPrincipalName must not be empty when CacAuth:SimulationMode is enabled.");
+
+        if (string.IsNullOrWhiteSpace(cacAuthOptions.SimulatedIdentity.DisplayName))
+            throw new InvalidOperationException(
+                "CacAuth:SimulatedIdentity:DisplayName must not be empty when CacAuth:SimulationMode is enabled.");
+
+        Log.Information("CAC simulation mode active. Simulated identity: {UserPrincipalName}",
+            cacAuthOptions.SimulatedIdentity.UserPrincipalName);
+    }
+    else
+    {
+        Log.Warning(
+            "CacAuth:SimulationMode is enabled but environment is {Environment}. Simulation mode will be ignored.",
+            environmentName);
+    }
 }
 
 // ────────────────────────────────────────────────────────────────

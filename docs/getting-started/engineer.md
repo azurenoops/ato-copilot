@@ -80,6 +80,70 @@ ATO Copilot integrates directly into your VS Code workflow:
 - [RMF Phase Reference](../rmf-phases/index.md) — Phase-by-phase details
 - [Quick Reference Card](../reference/quick-reference-cards.md) — Printable Engineer cheat sheet
 
+## CAC Simulation Mode (Local Development)
+
+When developing locally without a physical CAC/PIV smart card, enable simulation mode to bypass hardware authentication.
+
+### Enabling Simulation
+
+In `appsettings.Development.json`, set:
+
+```json
+{
+  "CacAuth": {
+    "SimulationMode": true,
+    "SimulatedIdentity": {
+      "UserPrincipalName": "dev.user@dev.mil",
+      "DisplayName": "Dev User (Simulated)",
+      "CertificateThumbprint": "ABC123DEF456",
+      "Roles": ["Global Reader", "ISSO"]
+    }
+  }
+}
+```
+
+### Switching Identities
+
+Change the `Roles` array to test different personas:
+
+| Persona | Roles |
+|---------|-------|
+| ISSO | `["ISSO", "Global Reader"]` |
+| Platform Engineer | `["Platform Engineer"]` |
+| SCA | `["SCA", "Global Reader"]` |
+| AO | `["AO", "Global Reader"]` |
+
+Restart the application after changing the identity configuration.
+
+### CI/CD Usage
+
+Integration tests use simulation mode automatically. Configure `CacAuthOptions` in test fixtures:
+
+```csharp
+builder.Services.Configure<CacAuthOptions>(o =>
+{
+    o.SimulationMode = true;
+    o.SimulatedIdentity = new SimulatedIdentityOptions
+    {
+        UserPrincipalName = "test.isso@dev.mil",
+        DisplayName = "Test ISSO",
+        Roles = ["ISSO"]
+    };
+});
+```
+
+### Production Safety
+
+Simulation mode **only activates in the Development environment**. In Production or Staging, the flag is ignored and a security warning is logged. The `appsettings.json` (production config) must never contain simulation keys.
+
+### Common Errors
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `InvalidOperationException: SimulatedIdentity configuration is required` | `SimulationMode` is true but no identity block | Add `SimulatedIdentity` section to config |
+| `InvalidOperationException: UserPrincipalName` | UPN is empty or missing | Set a valid UPN like `"dev.user@dev.mil"` |
+| Warning: "Simulation mode will be ignored" | `SimulationMode` is true in non-Development env | Expected behavior — remove the flag or switch to Development |
+
 ## Common First-Day Issues
 
 | Issue | Cause | Fix |
