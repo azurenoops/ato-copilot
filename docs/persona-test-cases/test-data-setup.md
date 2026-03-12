@@ -47,6 +47,9 @@ These values are used throughout all test cases. If you change any value, update
 | `NGV_UPDATED_TEXT` | Updated: The organization maintains access control policy consistent with... | NGV-02 |
 | `NGV_CHANGE_REASON` | Updated per ISSM feedback on 2026 assessment | NGV-02 |
 | `NGV_REVIEWER` | ISSM (SecurityLead) | NGV-04, NGV-06 |
+| `NESSUS_FILE_NAME` | acas-scan-results.nessus | F026 ACAS import |
+| `NESSUS_HOST_1` | eagleeye-web01.example.mil | F026 host target |
+| `NESSUS_HOST_IP_1` | 10.0.1.10 | F026 host IP |
 
 ---
 
@@ -227,7 +230,57 @@ The following files are required for scan import test cases. Place them in an ac
 </CHECKLIST>
 ```
 
-### 3.4 XCCDF Results File
+### 3.4 Nessus/ACAS Scan File
+
+**Used by**: Feature 026 — ACAS/Nessus import test cases
+
+**File**: `test-data/acas-scan-results.nessus`
+
+**Format**: Tenable Nessus v2 XML (`.nessus`)
+
+**Required Content**:
+- At least 2 hosts with HostProperties (host-ip, hostname, operating-system)
+- ≥ 20 ReportItem elements across multiple plugin families
+- Mix of severity levels: Critical (4), High (3), Medium (2), Low (1), None (0)
+- Plugin families that trigger curated and heuristic control mappings
+
+**Minimal Nessus Structure**:
+
+```xml
+<?xml version="1.0" ?>
+<NessusClientData_v2>
+  <Report name="Eagle Eye ACAS Scan">
+    <ReportHost name="eagleeye-web01.example.mil">
+      <HostProperties>
+        <tag name="host-ip">10.0.1.10</tag>
+        <tag name="hostname">eagleeye-web01.example.mil</tag>
+        <tag name="operating-system">Microsoft Windows Server 2022</tag>
+        <tag name="Credentialed_Scan">true</tag>
+        <tag name="HOST_START">Wed Mar 01 08:00:00 2026</tag>
+        <tag name="HOST_END">Wed Mar 01 08:30:00 2026</tag>
+      </HostProperties>
+      <ReportItem port="445" svc_name="cifs" protocol="tcp"
+                  severity="4" pluginID="97833"
+                  pluginName="MS17-010: Security Update for SMB Server"
+                  pluginFamily="Windows : Microsoft Bulletins">
+        <risk_factor>Critical</risk_factor>
+        <synopsis>Remote code execution vulnerability in SMB</synopsis>
+        <description>The remote Windows host is affected by EternalBlue.</description>
+        <solution>Apply Microsoft security update MS17-010.</solution>
+      </ReportItem>
+      <!-- Additional ReportItem entries... -->
+    </ReportHost>
+  </Report>
+</NessusClientData_v2>
+```
+
+**Variant Files** (optional for negative testing):
+- `test-data/acas-scan-malformed.nessus` — Invalid XML for error handling tests
+- `test-data/acas-scan-large.nessus` — 500+ plugins for performance tests
+
+---
+
+### 3.5 XCCDF Results File
 
 **Used by**: ISSO-10
 
@@ -284,6 +337,9 @@ After preparing the files, record their locations here:
 | Prisma API JSON | `test-data/prisma-cloud-api-results.json` | ⬜ |
 | CKL checklist | `test-data/windows-2022-stig.ckl` | ⬜ |
 | XCCDF results | `test-data/scap-scan-results.xml` | ⬜ |
+| Nessus scan | `test-data/acas-scan-results.nessus` | ⬜ |
+| Nessus (malformed) | `test-data/acas-scan-malformed.nessus` | ⬜ |
+| Nessus (large) | `test-data/acas-scan-large.nessus` | ⬜ |
 
 > **Note**: CKL export (ISSO-25, ENG-27) generates output files — no input file is needed for export tests. PTA, PIA, ISA, and SSP section data are created through natural language queries using the constants above.
 

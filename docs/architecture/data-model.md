@@ -944,10 +944,10 @@ EF Core migrations run automatically at startup (`MigrateDatabaseAsync`) with a 
 | `AlertSeverity` | Critical, High, Medium, Low, Informational |
 | `AlertStatus` | Active, Acknowledged, Remediated, Dismissed |
 | `TaskStatus` | Backlog, ToDo, InProgress, InReview, Done, Blocked |
-| `ScanImportType` | CKL, Xccdf, PrismaCloudCsv, PrismaCloudApi |
+| `ScanImportType` | CKL, Xccdf, PrismaCloudCsv, PrismaCloudApi, NessusXml |
 | `ScanImportStatus` | Pending, Completed, Failed, PartiallyCompleted |
 | `ImportFindingAction` | Created, Updated, Skipped, Error |
-| `ScanSourceType` | Manual, StigViewer, ScapComplianceChecker, PrismaCloud |
+| `ScanSourceType` | Manual, StigViewer, ScapComplianceChecker, PrismaCloud, Nessus |
 | `SapStatus` | Draft, InReview, Approved, Active, Completed |
 | `AssessmentMethod` | Test, Interview, Examine |
 | `TeamMemberRole` | Assessor, Lead, Observer, SystemOwner, Isso, Issm |

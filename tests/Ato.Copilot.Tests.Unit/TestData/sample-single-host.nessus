@@ -1,0 +1,79 @@
+<?xml version="1.0" ?>
+<NessusClientData_v2>
+  <Policy><policyName>Test Policy</policyName></Policy>
+  <Report name="Single Host Scan">
+    <ReportHost name="server01.domain.mil">
+      <HostProperties>
+        <tag name="HOST_START">Wed Mar 12 08:00:00 2025</tag>
+        <tag name="HOST_END">Wed Mar 12 08:45:00 2025</tag>
+        <tag name="host-ip">10.0.1.50</tag>
+        <tag name="hostname">server01.domain.mil</tag>
+        <tag name="operating-system">Microsoft Windows Server 2019 Standard 10.0.17763</tag>
+        <tag name="mac-address">00:0C:29:3E:5A:1B</tag>
+        <tag name="Credentialed_Scan">true</tag>
+      </HostProperties>
+      <!-- Severity 4 (Critical) — with CVEs and STIG-ID xref -->
+      <ReportItem pluginID="97833" pluginName="MS17-010: Security Update for Microsoft Windows SMB Server (4013389)" pluginFamily="Windows : Microsoft Bulletins" severity="4" port="445" protocol="tcp" svc_name="cifs">
+        <synopsis>The remote Windows host is affected by multiple vulnerabilities.</synopsis>
+        <description>The remote Windows host is missing a security update. It is, therefore, affected by multiple remote code execution vulnerabilities in Microsoft SMB Server.</description>
+        <solution>Apply the security update from Microsoft.</solution>
+        <risk_factor>Critical</risk_factor>
+        <plugin_output>The following SMBv1 vulnerabilities were detected on port 445.</plugin_output>
+        <cve>CVE-2017-0143</cve>
+        <cve>CVE-2017-0144</cve>
+        <cvss3_base_score>8.1</cvss3_base_score>
+        <cvss3_vector>CVSS:3.0/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H</cvss3_vector>
+        <cvss_base_score>9.3</cvss_base_score>
+        <exploit_available>true</exploit_available>
+        <vpr_score>9.8</vpr_score>
+        <xref>STIG-ID:WN19-00-000010</xref>
+        <xref>IAVA:2017-A-0065</xref>
+        <stig_severity>I</stig_severity>
+      </ReportItem>
+      <!-- Severity 3 (High) — with CVE, no STIG-ID -->
+      <ReportItem pluginID="104743" pluginName="OpenSSL 1.0.2 &lt; 1.0.2n Multiple Vulnerabilities" pluginFamily="Web Servers" severity="3" port="443" protocol="tcp" svc_name="www">
+        <synopsis>The remote service is affected by multiple vulnerabilities.</synopsis>
+        <description>The version of OpenSSL installed on the remote host is prior to 1.0.2n. It is, therefore, affected by multiple vulnerabilities.</description>
+        <solution>Upgrade to OpenSSL version 1.0.2n or later.</solution>
+        <risk_factor>High</risk_factor>
+        <plugin_output>Installed version : 1.0.2k</plugin_output>
+        <cve>CVE-2017-3737</cve>
+        <cvss3_base_score>5.9</cvss3_base_score>
+        <cvss3_vector>CVSS:3.0/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N</cvss3_vector>
+        <cvss_base_score>4.3</cvss_base_score>
+        <exploit_available>false</exploit_available>
+        <vpr_score>6.7</vpr_score>
+      </ReportItem>
+      <!-- Severity 2 (Medium) — with STIG-ID xref -->
+      <ReportItem pluginID="57582" pluginName="SSL Self-Signed Certificate" pluginFamily="General" severity="2" port="443" protocol="tcp" svc_name="www">
+        <synopsis>The SSL certificate chain for this service ends in an unrecognized self-signed certificate.</synopsis>
+        <description>The X.509 certificate chain for this service is not signed by a recognized certificate authority.</description>
+        <solution>Purchase or generate a proper SSL certificate for this service.</solution>
+        <risk_factor>Medium</risk_factor>
+        <plugin_output>The following certificate was found at the top of the certificate chain sent by the remote host, but is self-signed.</plugin_output>
+        <cvss3_base_score>6.5</cvss3_base_score>
+        <cvss3_vector>CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N</cvss3_vector>
+        <exploit_available>false</exploit_available>
+        <xref>STIG-ID:WN19-SO-000030</xref>
+      </ReportItem>
+      <!-- Severity 1 (Low) -->
+      <ReportItem pluginID="10287" pluginName="Traceroute Information" pluginFamily="General" severity="1" port="0" protocol="tcp" svc_name="general">
+        <synopsis>It was possible to obtain traceroute information.</synopsis>
+        <description>Makes a traceroute to the remote host.</description>
+        <solution>n/a</solution>
+        <risk_factor>Low</risk_factor>
+        <plugin_output>For your information, here is the traceroute from 10.0.1.1 to 10.0.1.50.</plugin_output>
+        <exploit_available>false</exploit_available>
+      </ReportItem>
+      <!-- Severity 0 (Informational) — should be excluded from findings -->
+      <ReportItem pluginID="19506" pluginName="Nessus Scan Information" pluginFamily="Settings" severity="0" port="0" protocol="tcp" svc_name="general">
+        <synopsis>This plugin displays information about the Nessus scan.</synopsis>
+        <description>This plugin displays, for each tested host, information about the scan itself.</description>
+        <solution>n/a</solution>
+        <risk_factor>None</risk_factor>
+        <plugin_output>Information about this scan: Nessus version : 10.5.0</plugin_output>
+        <exploit_available>false</exploit_available>
+      </ReportItem>
+    </ReportHost>
+  </Report>
+</NessusClientData_v2>

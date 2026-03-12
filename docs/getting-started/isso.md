@@ -68,6 +68,7 @@ Beyond narrative authoring and Watch monitoring, ISSOs can also:
 
 - **Import STIG scan results** — Upload CKL/XCCDF files from DISA STIG Viewer or SCAP Compliance Checker (`compliance_import_ckl`, `compliance_import_xccdf`)
 - **Import Prisma Cloud scans** — Upload CSV or API JSON exports for cloud security posture tracking (`compliance_import_prisma_csv`, `compliance_import_prisma_api`)
+- **Import ACAS/Nessus vulnerability scans** — Upload .nessus files from Tenable Nessus/ACAS for vulnerability mapping and POA&M auto-generation (`compliance_import_nessus`)
 - **Conduct Privacy Threshold Analysis** — Determine whether a PIA is required (`compliance_create_pta`)
 - **Author Privacy Impact Assessments** — Generate and submit PIAs for ISSM review (`compliance_generate_pia`)
 - **Register interconnections** — Document system-to-system connections crossing the authorization boundary (`compliance_add_interconnection`)

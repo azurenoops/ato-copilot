@@ -19,7 +19,7 @@
 ### Preconditions from ISSO Phase
 
 - ✓ Eagle Eye has SSP narratives at high completion % (ISSO-01 through ISSO-07)
-- ✓ CKL and XCCDF scans imported (ISSO-09, ISSO-10)
+- ✓ CKL, XCCDF, and Nessus scans imported (ISSO-09, ISSO-10, ISSO-12a)
 - ✓ Evidence collected for key controls (ISSO-19)
 - ✓ Monitoring active (ISSO-13)
 - ✓ Prisma imports completed (ISSM-19, ISSM-20)

@@ -150,6 +150,8 @@ public class CklExportTests : IDisposable
             Mock.Of<ISystemSubscriptionResolver>(),
             new PrismaCsvParser(NullLogger<PrismaCsvParser>.Instance),
             new PrismaApiJsonParser(NullLogger<PrismaApiJsonParser>.Instance),
+            Mock.Of<INessusParser>(),
+            Mock.Of<INessusControlMapper>(),
             NullLogger<ScanImportService>.Instance);
     }
 

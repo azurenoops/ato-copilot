@@ -85,9 +85,10 @@
 | 4 | **PIM role activation** correctly gates tool access — denied before, allowed after | AUTH-03/AUTH-08 verified; Pre-activation denial confirmed: ☐ | ☐ PASS / ☐ FAIL |
 | 5 | All NL inputs resolved by AI to **correct tool** with correct parameters | Tool resolution accuracy: ___/131 positive tests | ☐ PASS / ☐ FAIL |
 | 6 | Prisma import tests verify findings include **Prisma-specific fields** (PrismaAlertId, CloudResourceType, RemediationCli) | Fields verified in: ISSM-19, ISSM-20, ENG-20, ENG-21 | ☐ PASS / ☐ FAIL |
-| 7 | Idempotent operations produce **consistent results** on re-run | batch_populate_narratives: ☐; ConMon plan: ☐ | ☐ PASS / ☐ FAIL |
+| 7 | Nessus import tests verify **plugin-family → NIST control mapping** and POA&M auto-generation for Cat I/II/III findings | Mapping verified: ☐; POA&M entries created: ☐ | ☐ PASS / ☐ FAIL |
+| 8 | Idempotent operations produce **consistent results** on re-run | batch_populate_narratives: ☐; ConMon plan: ☐ | ☐ PASS / ☐ FAIL |
 
-**Acceptance Criteria Verdict**: ___/7 met → ☐ PASS / ☐ FAIL
+**Acceptance Criteria Verdict**: ___/8 met → ☐ PASS / ☐ FAIL
 
 ---
 

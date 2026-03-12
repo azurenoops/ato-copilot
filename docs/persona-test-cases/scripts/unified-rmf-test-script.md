@@ -676,6 +676,7 @@ Validate all interconnection agreements for Eagle Eye
 - ✓ Moderate baseline with 325 controls (ISSM-11)
 - ✓ AC-1 through AC-4 inherited (ISSM-13)
 - ✓ Prisma scans imported (ISSM-19, ISSM-20)
+- ✓ Nessus/ACAS test data available (`tests/Ato.Copilot.Tests.Unit/TestData/sample-single-host.nessus`)
 - ✓ SAP finalized (ISSM-43)
 
 ---
@@ -1003,6 +1004,47 @@ deployment
 
 **Expected Tool**: `compliance_get_import_summary`
 **Expected**: Per-finding breakdown with actions, NIST mappings, conflict resolutions
+
+---
+
+### ISSO-12a: Import ACAS/Nessus Scan
+
+```text
+@ato Import this ACAS scan for Eagle Eye
+```
+
+**Attachment**: `tests/Ato.Copilot.Tests.Unit/TestData/sample-single-host.nessus`
+
+**Expected Tool**: `compliance_import_nessus`
+**Expected**: Import record (type=NessusXml); plugin families mapped to NIST 800-53 controls; severity breakdown (Critical/High/Medium/Low/Informational); POA&M entries auto-created for Cat I/II/III findings; heuristic mapping warnings if any
+**Record**: hosts = ___, plugins = ___, created = ___, poam = ___, heuristic_warnings = ___
+
+---
+
+### ISSO-12b: Import ACAS/Nessus Dry Run
+
+```text
+@ato Do a dry run import of this ACAS scan for Eagle Eye
+```
+
+**Attachment**: `tests/Ato.Copilot.Tests.Unit/TestData/sample-single-host.nessus`
+
+**Expected Tool**: `compliance_import_nessus` (with `dry_run: true`)
+**Expected**: Preview summary with counts; no records persisted; no findings or POA&M created
+
+---
+
+### ISSO-12c: List Nessus Import History
+
+**Precondition**: ISSO-12a
+
+```text
+@ato Show Nessus import history for Eagle Eye
+```
+
+**Expected Tool**: `compliance_list_nessus_imports`
+**Expected**: Filtered list (NessusXml only); per import: file name, date, total findings, findings created
+**Record**: nessus_import_count = ___
 
 ---
 
@@ -1888,9 +1930,24 @@ Create a POA&M item for finding {finding_id} — scheduled completion in
 
 ---
 
+### ISSM-23d: Verify Auto-Generated POA&M (from ACAS/Nessus)
+
+**Precondition**: ISSO-12a (Nessus import with POA&M auto-generation)
+
+```text
+List POA&M items for Eagle Eye with weakness source ACAS
+```
+
+> Nessus import auto-generates POA&M entries — no manual creation needed.
+
+**Expected Tool**: `compliance_list_poam`
+**Expected**: ACAS-sourced POA&M entries; Cat I → 30-day completion, Cat II → 90-day, Cat III → 180-day; status = "Ongoing"; each linked to a Nessus finding
+
+---
+
 ### ISSM-24: List POA&M Items
 
-**Precondition**: ISSM-23a/b/c
+**Precondition**: ISSM-23a/b/c/d
 
 ```text
 Show all POA&M items for Eagle Eye
@@ -1978,7 +2035,7 @@ Bundle authorization package for Eagle Eye
 
 ### ISSM-29: Bundle Authorization Package
 
-**Precondition**: ISSM-18 (SSP) + SCA-17 (SAR) + ISSM-25 (RAR) + ISSM-23a/b/c (POA&M)
+**Precondition**: ISSM-18 (SSP) + SCA-17 (SAR) + ISSM-25 (RAR) + ISSM-23a/b/c/d (POA&M)
 
 ```text
 Bundle the authorization package for Eagle Eye
@@ -2664,18 +2721,18 @@ Import the latest Prisma Cloud scan for Eagle Eye to verify remediation
 | Categorize (ISSM-07–10) | 4 | ___/4 | | |
 | Select (ISSM-11–16) | 6 | ___/6 | | |
 | Implement — ISSM oversight (ISSM-17–22, 41–55) | 18 | ___/18 | | |
-| Implement — ISSO authoring (ISSO-01–12, 19, 25–34) | 21 | ___/21 | | |
+| Implement — ISSO authoring (ISSO-01–12c, 19, 25–34) | 24 | ___/24 | | |
 | Implement — Engineer build (ENG-01–10, 27–30) | 14 | ___/14 | | |
 | Monitor — ISSO day-to-day (ISSO-13–18, 20–24) | 12 | ___/12 | | |
 | Assess — SCA (SCA-01–29) | 25 | ___/25 | | |
-| Assess prep — ISSM (ISSM-23a/b/c–28) | 8 | ___/8 | | |
+| Assess prep — ISSM (ISSM-23a/b/c/d–28) | 9 | ___/9 | | |
 | Authorize — ISSM submit (ISSM-29–31) | 3 | ___/3 | | |
 | Authorize — AO decide (AO-01–16) | 13 | ___/13 | | |
 | Monitor — ISSM ConMon (ISSM-32–40) | 9 | ___/9 | | |
 | Monitor — Engineer Kanban (ENG-11–22) | 12 | ___/12 | | |
 | RBAC Denial tests | 11 | ___/11 | | |
 | Error handling (ERR-01–08) | 8 | ___/8 | | |
-| **Total** | **172** | **___/172** | | |
+| **Total** | **176** | **___/176** | | |
 
 ### Key Artifacts Tracker
 
@@ -2694,6 +2751,7 @@ Import the latest Prisma Cloud scan for Eagle Eye to verify remediation
 | PIA ID | _______________ | ISSM-46 |
 | Interconnection ID | _______________ | ISSM-48 |
 | ISA ID | _______________ | ISSM-52 |
+| Nessus Import ID | _______________ | ISSO-12a |
 | Agreement ID | _______________ | ISSM-53 |
 | SSP Completion | ___% | SCA-25 |
 | OSCAL SSP Controls | ___ | SCA-27 |
