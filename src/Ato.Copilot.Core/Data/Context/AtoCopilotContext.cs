@@ -1110,10 +1110,12 @@ public class AtoCopilotContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             // FK to approved NarrativeVersion (optional)
+            // Use NoAction to avoid SQL Server error 1785 (cycle:
+            // ControlImplementation ↔ NarrativeVersion via Versions CASCADE).
             entity.HasOne(e => e.ApprovedVersion)
                 .WithMany()
                 .HasForeignKey(e => e.ApprovedVersionId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.NoAction);
         });
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -1725,10 +1727,12 @@ public class AtoCopilotContext : DbContext
             entity.Property(e => e.ModifiedBy).HasMaxLength(200);
 
             // FK → RegisteredSystem (required)
+            // Use Restrict to avoid SQL Server error 1785 (multiple cascade paths
+            // through RegisteredSystem → AuthorizationBoundaries → InventoryItems).
             entity.HasOne(e => e.RegisteredSystem)
                 .WithMany()
                 .HasForeignKey(e => e.RegisteredSystemId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Self-referencing FK: SW → parent HW (optional)
             entity.HasOne(e => e.ParentHardware)
