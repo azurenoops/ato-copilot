@@ -4,6 +4,33 @@ All notable changes to ATO Copilot are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.23.0] - 2026-03-12
+
+### Added
+
+#### Feature 026: ACAS/Nessus Scan Import
+
+- **Nessus Import** (`compliance_import_nessus`) — Import ACAS .nessus XML files with automatic NIST 800-53 control mapping (CVE-CCI-NIST chain + plugin family heuristic fallback), severity-to-CAT mapping (Critical/High → CAT I, Medium → CAT II, Low → CAT III), duplicate detection via Plugin ID + Hostname + Port composite key, configurable conflict resolution (skip/overwrite/merge), dry-run preview mode, and POA&M auto-generation for CAT I/II findings.
+- **Nessus Import History** (`compliance_list_nessus_imports`) — Query import history with filtering by system, date range, and status. Returns scan metadata, finding counts by severity, and SHA-256 evidence hashes.
+- **NessusParser** — XDocument-based .nessus XML parser with multi-host support, extracting hosts, plugins, CVEs, severity, and scan metadata.
+- **NessusControlMapper** — Plugin family to NIST 800-53 control mapping via curated `plugin-family-mappings.json` with heuristic confidence tracking.
+- **ScanImportService.ImportNessusAsync** — 11-step orchestration pipeline: parse, validate, baseline, assessment, dedup, findings, control effectiveness, POA&M auto-generation, SHA-256 evidence, persist.
+- **ScanImportType Expansion** — Added `NessusXml` to `ScanImportType` enum; added `Nessus` to `ScanSourceType` enum.
+- **43 Unit Tests** — Parser, service, tools, severity mapping, dedup, control mapping, conflict resolution, POA&M generation. 19 integration test stubs (Cosmos DB emulator required). 4 test fixtures (single-host, multi-host, malformed, large with 567 plugins/12 hosts).
+
+### Documentation
+
+- **Agent Tool Catalog** — ACAS/Nessus section with tool specifications, parameter tables, and RBAC roles.
+- **MCP Server API** — Feature 026 tool entries with JSON response examples.
+- **Tool Inventory** — Category 10 "ACAS/Nessus Scan Import" (tools #116-117), total tool count updated from 115 to 117.
+- **ISSO Persona** — Nessus import workflows, permissions, and getting-started guide.
+- **SCA Guide** — RBAC table updated with Nessus import roles.
+- **RMF Assess Phase** — ACAS import steps added to assessment tasks.
+- **Glossary** — ACAS and Nessus terms.
+- **Persona Test Cases** — Tool validation, test data setup, environment checklist, test report, and all persona test scripts updated (ISSO-12a/12b/12c, ISSM-23d, cross-persona, unified RMF — 172→176 test cases).
+
+---
+
 ## [1.20.0] - 2026-03-05
 
 ### Added
