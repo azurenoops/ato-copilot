@@ -13,11 +13,8 @@ namespace Ato.Copilot.Agents.Compliance.Services.KnowledgeBase;
 /// </summary>
 public class RmfKnowledgeService : IRmfKnowledgeService
 {
-    private readonly IMemoryCache _cache;
     private readonly ILogger<RmfKnowledgeService> _logger;
-
-    private const string CacheKey = "kb:rmf:process_data";
-    private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
+    private readonly Lazy<Task<RmfProcessData?>> _lazyProcessData;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -28,8 +25,9 @@ public class RmfKnowledgeService : IRmfKnowledgeService
         IMemoryCache cache,
         ILogger<RmfKnowledgeService> logger)
     {
-        _cache = cache;
         _logger = logger;
+        _lazyProcessData = new Lazy<Task<RmfProcessData?>>(
+            LoadProcessDataCoreAsync, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <inheritdoc />
@@ -37,7 +35,7 @@ public class RmfKnowledgeService : IRmfKnowledgeService
         string controlId,
         CancellationToken cancellationToken = default)
     {
-        var process = await LoadProcessDataAsync();
+        var process = await _lazyProcessData.Value;
         if (process == null)
         {
             return $"Refer to NIST SP 800-53 Rev.5, control {controlId}, for detailed RMF guidance. " +
@@ -67,14 +65,14 @@ public class RmfKnowledgeService : IRmfKnowledgeService
     public async Task<RmfProcessData?> GetRmfProcessAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Retrieving full RMF process data");
-        return await LoadProcessDataAsync();
+        return await _lazyProcessData.Value;
     }
 
     /// <inheritdoc />
     public async Task<RmfStep?> GetRmfStepAsync(int step, CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Retrieving RMF step {Step}", step);
-        var process = await LoadProcessDataAsync();
+        var process = await _lazyProcessData.Value;
         return process?.Steps.FirstOrDefault(s => s.Step == step);
     }
 
@@ -82,7 +80,7 @@ public class RmfKnowledgeService : IRmfKnowledgeService
     public async Task<ServiceGuidance?> GetServiceGuidanceAsync(string topic, CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Retrieving service guidance for topic {Topic}", topic);
-        var process = await LoadProcessDataAsync();
+        var process = await _lazyProcessData.Value;
         if (process?.ServiceGuidance == null)
             return null;
 
@@ -97,13 +95,10 @@ public class RmfKnowledgeService : IRmfKnowledgeService
     }
 
     /// <summary>
-    /// Loads RMF process data from the JSON data file, with 24-hour cache TTL.
+    /// Loads RMF process data from the JSON data file (deferred via Lazy&lt;T&gt;).
     /// </summary>
-    private async Task<RmfProcessData?> LoadProcessDataAsync()
+    private async Task<RmfProcessData?> LoadProcessDataCoreAsync()
     {
-        if (_cache.TryGetValue(CacheKey, out RmfProcessData? cached) && cached != null)
-            return cached;
-
         try
         {
             var assembly = typeof(RmfKnowledgeService).Assembly;
@@ -137,7 +132,6 @@ public class RmfKnowledgeService : IRmfKnowledgeService
                 doc.ServiceGuidance,
                 doc.DeliverablesOverview);
 
-            _cache.Set(CacheKey, processData, CacheTtl);
             _logger.LogInformation("Loaded RMF process data with {StepCount} steps", processData.Steps.Count);
             return processData;
         }

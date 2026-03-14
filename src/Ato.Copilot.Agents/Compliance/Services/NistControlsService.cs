@@ -35,6 +35,7 @@ public class NistControlsService : INistControlsService
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
+    private Lazy<Task<NistCatalog?>> _lazyCatalog;
 
     private DateTime? _lastSyncedAt;
     private string _catalogSource = "none";
@@ -61,6 +62,9 @@ public class NistControlsService : INistControlsService
         _options = options.Value;
         _httpClient = httpClient;
         _configuration = configuration;
+        _lazyCatalog = new Lazy<Task<NistCatalog?>>(
+            () => LoadAndCacheCatalogAsync(CancellationToken.None),
+            LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <summary>
@@ -100,7 +104,7 @@ public class NistControlsService : INistControlsService
             }
 
             activity?.SetTag("cache.hit", false);
-            var catalog = await LoadAndCacheCatalogAsync(cancellationToken);
+            var catalog = await _lazyCatalog.Value;
 
             activity?.SetTag("success", catalog is not null);
             activity?.SetTag("fallback.used", _catalogSource == "embedded");
@@ -265,8 +269,8 @@ public class NistControlsService : INistControlsService
         if (_cache.TryGetValue(ControlsCacheKey, out List<NistControl>? controls) && controls is not null)
             return controls;
 
-        // Ensure catalog is loaded first
-        await LoadAndCacheCatalogAsync(cancellationToken);
+        // Trigger lazy catalog load (which also caches controls)
+        await _lazyCatalog.Value;
 
         if (_cache.TryGetValue(ControlsCacheKey, out controls) && controls is not null)
             return controls;

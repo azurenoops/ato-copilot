@@ -300,6 +300,24 @@ services:
 
 ---
 
+## Enterprise Hardening Layer (Feature 029)
+
+Feature 029 adds production-grade resilience, observability, and offline capabilities:
+
+| Area | Implementation |
+|------|---------------|
+| **Resilience** | Polly 8.x retry + circuit breaker + timeout pipelines on all HTTP clients |
+| **Rate Limiting** | ASP.NET Core sliding-window rate limiter per endpoint, per-client partitioning |
+| **Path Sanitization** | `PathSanitizationService` canonicalizes and validates all file path parameters |
+| **Caching** | `ResponseCacheService` with `IMemoryCache`, per-subscription scope, configurable TTL |
+| **Monitoring** | OpenTelemetry metrics + distributed tracing, optional Prometheus `/metrics` endpoint |
+| **Lazy Loading** | `Lazy<Task<T>>` thread-safe initialization for all knowledge base services |
+| **Pagination** | Server-side enforcement (default 50, max 100) with `PaginationInfo` metadata envelope |
+| **Offline Mode** | `OfflineModeService` gates network calls, NIST lookups from embedded data, `CacheRepository` for persistence |
+| **SSE Reconnection** | `SseEventBuffer` with monotonic IDs, `Last-Event-ID` replay, keepalive comments |
+
+---
+
 ## Related Documentation
 
 - [Data Model](data-model.md) — Entity relationships and ER diagram

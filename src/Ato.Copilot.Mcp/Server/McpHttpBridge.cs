@@ -2,8 +2,14 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.RateLimiting;
 using Ato.Copilot.Agents.Common;
+using Ato.Copilot.Core.Observability;
+using Ato.Copilot.Core.Services;
 using Ato.Copilot.Mcp.Models;
+using Ato.Copilot.Mcp.Resilience;
+using System.Diagnostics;
+using System.Reflection;
 using System.Text.Json;
 
 namespace Ato.Copilot.Mcp.Server;
@@ -15,18 +21,26 @@ public class McpHttpBridge
 {
     private readonly McpServer _mcpServer;
     private readonly IEnumerable<BaseTool> _tools;
+    private readonly HttpMetrics _httpMetrics;
+    private readonly OfflineModeService _offlineModeService;
+    private readonly SseEventBuffer _sseEventBuffer;
     private readonly ILogger<McpHttpBridge> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
     private readonly JsonSerializerOptions _sseJsonOptions;
+    private static readonly DateTime ServerStartTime = DateTime.UtcNow;
 
     /// <summary>Initializes a new instance of the <see cref="McpHttpBridge"/> class.</summary>
     /// <param name="mcpServer">The MCP server to delegate requests to.</param>
     /// <param name="tools">All registered BaseTool instances for dynamic tool listing.</param>
+    /// <param name="httpMetrics">HTTP metrics for health endpoint reporting.</param>
     /// <param name="logger">Logger instance.</param>
-    public McpHttpBridge(McpServer mcpServer, IEnumerable<BaseTool> tools, ILogger<McpHttpBridge> logger)
+    public McpHttpBridge(McpServer mcpServer, IEnumerable<BaseTool> tools, HttpMetrics httpMetrics, OfflineModeService offlineModeService, SseEventBuffer sseEventBuffer, ILogger<McpHttpBridge> logger)
     {
         _mcpServer = mcpServer;
         _tools = tools;
+        _httpMetrics = httpMetrics;
+        _offlineModeService = offlineModeService;
+        _sseEventBuffer = sseEventBuffer;
         _logger = logger;
         _jsonOptions = new JsonSerializerOptions
         {
@@ -53,31 +67,36 @@ public class McpHttpBridge
         app.MapPost("/mcp", (Delegate)HandleMcpRequestAsync)
             .WithName("McpJsonRpc")
             .WithTags("MCP")
-            .WithDescription("MCP JSON-RPC endpoint for tool invocations");
+            .WithDescription("MCP JSON-RPC endpoint for tool invocations")
+            .RequireRateLimiting("jsonrpc");
 
         // Compliance chat endpoint
         app.MapPost("/mcp/chat", (Delegate)HandleChatRequestAsync)
             .WithName("McpChat")
             .WithTags("MCP")
-            .WithDescription("Process compliance requests via AI agent");
+            .WithDescription("Process compliance requests via AI agent")
+            .RequireRateLimiting("chat");
 
         // Streaming chat endpoint with SSE progress events
         app.MapPost("/mcp/chat/stream", (Delegate)HandleChatStreamRequestAsync)
             .WithName("McpChatStream")
             .WithTags("MCP")
-            .WithDescription("Process compliance requests with real-time progress via SSE");
+            .WithDescription("Process compliance requests with real-time progress via SSE")
+            .RequireRateLimiting("stream");
 
         // Health endpoint
         app.MapGet("/health", (Delegate)HandleHealthAsync)
             .WithName("Health")
             .WithTags("Health")
-            .WithDescription("Health check");
+            .WithDescription("Health check")
+            .DisableRateLimiting();
 
         // Tools listing endpoint
         app.MapGet("/mcp/tools", (Delegate)HandleToolsListAsync)
             .WithName("McpToolsList")
             .WithTags("MCP")
-            .WithDescription("List available compliance tools");
+            .WithDescription("List available compliance tools")
+            .DisableRateLimiting();
 
         _logger.LogInformation("MCP HTTP endpoints mapped");
     }
@@ -144,6 +163,12 @@ public class McpHttpBridge
                 action: chatRequest.Action,
                 actionContext: chatRequest.ActionContext);
 
+            // Add cache headers from response metadata (FR-017)
+            if (result.Metadata.TryGetValue("cacheStatus", out var cacheStatus))
+            {
+                context.Response.Headers["X-Cache"] = cacheStatus?.ToString() ?? "MISS";
+            }
+
             return Results.Json(result, _jsonOptions);
         }
         catch (Exception ex)
@@ -168,7 +193,8 @@ public class McpHttpBridge
                 return;
             }
 
-            _logger.LogInformation("Streaming chat request | ConvId: {ConvId}", chatRequest.ConversationId);
+            var conversationId = chatRequest.ConversationId ?? Guid.NewGuid().ToString();
+            _logger.LogInformation("Streaming chat request | ConvId: {ConvId}", conversationId);
 
             // Set up SSE headers
             context.Response.ContentType = "text/event-stream";
@@ -176,22 +202,41 @@ public class McpHttpBridge
             context.Response.Headers["Connection"] = "keep-alive";
             await context.Response.Body.FlushAsync();
 
-            // Create progress reporter that writes SSE events (T018: typed events)
+            // T059: Replay buffered events on reconnection (FR-040)
+            var lastEventIdHeader = context.Request.Headers["Last-Event-ID"].FirstOrDefault();
+            if (long.TryParse(lastEventIdHeader, out var lastEventId) && lastEventId > 0)
+            {
+                var replayEvents = _sseEventBuffer.GetEventsForReplay(conversationId, lastEventId);
+                foreach (var evt in replayEvents)
+                {
+                    await context.Response.WriteAsync($"id: {evt.Id}\ndata: {evt.Data}\n\n");
+                    await context.Response.Body.FlushAsync();
+                }
+                _logger.LogInformation("Replayed {Count} events from buffer | ConvId: {ConvId} | LastEventId: {LastId}",
+                    replayEvents.Count, conversationId, lastEventId);
+            }
+
+            // T059: Start keepalive timer (FR-042)
+            using var keepaliveCts = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
+            var keepaliveTask = RunKeepaliveAsync(context, keepaliveCts.Token);
+
+            // Create progress reporter that writes SSE events with IDs (T018: typed events, FR-040: event IDs)
             var progress = new Progress<string>(async step =>
             {
                 try
                 {
-                    // Try to parse typed SSE event JSON; fallback to plain progress
                     string eventData;
                     if (step.StartsWith("{") && step.Contains("\"type\""))
                     {
-                        eventData = step; // Already a typed JSON event from McpServer
+                        eventData = step;
                     }
                     else
                     {
                         eventData = JsonSerializer.Serialize(new { type = "progress", step }, _sseJsonOptions);
                     }
-                    await context.Response.WriteAsync($"data: {eventData}\n\n");
+
+                    var sseEvent = _sseEventBuffer.AddEvent(conversationId, eventData);
+                    await context.Response.WriteAsync($"id: {sseEvent.Id}\ndata: {eventData}\n\n");
                     await context.Response.Body.FlushAsync();
                 }
                 catch { /* client disconnected */ }
@@ -199,7 +244,7 @@ public class McpHttpBridge
 
             var result = await _mcpServer.ProcessChatRequestAsync(
                 chatRequest.Message,
-                chatRequest.ConversationId,
+                conversationId,
                 chatRequest.Context,
                 chatRequest.ConversationHistory?.Select(m => (m.Role, m.Content)).ToList(),
                 context.RequestAborted,
@@ -207,10 +252,15 @@ public class McpHttpBridge
                 chatRequest.Action,
                 chatRequest.ActionContext);
 
-            // Write final result as SSE event
+            // Write final result as SSE event with ID
             var resultData = JsonSerializer.Serialize(new { type = "result", data = result }, _sseJsonOptions);
-            await context.Response.WriteAsync($"data: {resultData}\n\n");
+            var finalEvent = _sseEventBuffer.AddEvent(conversationId, resultData);
+            await context.Response.WriteAsync($"id: {finalEvent.Id}\ndata: {resultData}\n\n");
             await context.Response.Body.FlushAsync();
+
+            // Mark session complete for cleanup (FR-043)
+            _sseEventBuffer.CompleteSession(conversationId);
+            await keepaliveCts.CancelAsync();
         }
         catch (Exception ex)
         {
@@ -225,9 +275,27 @@ public class McpHttpBridge
         }
     }
 
+    /// <summary>Sends keepalive comments at configured intervals to prevent proxy timeouts (FR-042).</summary>
+    private async Task RunKeepaliveAsync(HttpContext context, CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(_sseEventBuffer.KeepaliveInterval, cancellationToken);
+                await context.Response.WriteAsync(": keepalive\n\n");
+                await context.Response.Body.FlushAsync();
+            }
+        }
+        catch (OperationCanceledException) { /* expected */ }
+        catch { /* client disconnected */ }
+    }
+
     /// <summary>Returns server health status, capabilities, and agent health check results.</summary>
     private async Task<IResult> HandleHealthAsync(HttpContext context)
     {
+        var healthCheckSw = Stopwatch.StartNew();
+
         // Run ASP.NET Core health checks if registered
         var healthCheckService = context.RequestServices.GetService<Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckService>();
         var agentHealthEntries = new List<object>();
@@ -249,21 +317,41 @@ public class McpHttpBridge
                 {
                     name = entry.Key,
                     status = entry.Value.Status.ToString(),
-                    description = entry.Value.Description ?? string.Empty
+                    description = entry.Value.Description ?? string.Empty,
+                    durationMs = entry.Value.Duration.TotalMilliseconds
                 });
             }
         }
 
-        var health = new
+        healthCheckSw.Stop();
+
+        // T056: When offline, override status to Degraded (FR-038)
+        if (_offlineModeService.IsOffline && overallStatus == "healthy")
+            overallStatus = "degraded";
+
+        var buildVersion = Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "1.0.0";
+
+        var health = new Dictionary<string, object>
         {
-            status = overallStatus,
-            service = "ATO Copilot MCP",
-            version = "1.16.0",
-            timestamp = DateTime.UtcNow,
-            capabilities = new[] { "compliance-assessment", "nist-800-53", "fedramp", "remediation", "evidence-collection" },
-            agents = agentHealthEntries,
-            totalDurationMs = healthCheckService is not null ? 0 : -1
+            ["status"] = overallStatus,
+            ["service"] = "ATO Copilot MCP",
+            ["version"] = buildVersion,
+            ["timestamp"] = DateTime.UtcNow,
+            ["uptimeSeconds"] = (DateTime.UtcNow - ServerStartTime).TotalSeconds,
+            ["capabilities"] = new[] { "compliance-assessment", "nist-800-53", "fedramp", "remediation", "evidence-collection" },
+            ["agents"] = agentHealthEntries,
+            ["totalDurationMs"] = healthCheckSw.ElapsedMilliseconds
         };
+
+        if (_offlineModeService.IsOffline)
+        {
+            health["offlineMode"] = true;
+            health["availableCapabilities"] = _offlineModeService.GetAvailableCapabilities()
+                .Select(c => new { name = c.CapabilityName, fallback = c.FallbackDescription }).ToArray();
+            health["unavailableCapabilities"] = _offlineModeService.GetUnavailableCapabilities()
+                .Select(c => new { name = c.CapabilityName, reason = c.FallbackDescription }).ToArray();
+        }
 
         return Results.Json(health, _jsonOptions);
     }
@@ -271,7 +359,7 @@ public class McpHttpBridge
     /// <summary>Returns the list of available compliance tools (dynamically generated from registered BaseTool instances).</summary>
     private Task<IResult> HandleToolsListAsync(HttpContext context)
     {
-        var tools = _tools
+        var allTools = _tools
             .Select(t => new
             {
                 name = t.Name,
@@ -291,7 +379,38 @@ public class McpHttpBridge
             .OrderBy(t => t.name)
             .ToArray();
 
-        return Task.FromResult(Results.Json(new { tools, count = tools.Length }, _jsonOptions));
+        // T048: Pagination support for /mcp/tools (FR-032)
+        var pageParam = context.Request.Query["page"].FirstOrDefault();
+        var pageSizeParam = context.Request.Query["pageSize"].FirstOrDefault();
+
+        if (pageParam != null || pageSizeParam != null)
+        {
+            var page = Math.Max(1, int.TryParse(pageParam, out var p) ? p : 1);
+            var pageSize = Math.Clamp(
+                int.TryParse(pageSizeParam, out var ps) ? ps : 50,
+                1, 100);
+
+            var totalItems = allTools.Length;
+            var totalPages = (int)Math.Ceiling((double)totalItems / pageSize);
+            var offset = (page - 1) * pageSize;
+            var pagedTools = allTools.Skip(offset).Take(pageSize).ToArray();
+
+            return Task.FromResult(Results.Json(new
+            {
+                tools = pagedTools,
+                count = pagedTools.Length,
+                pagination = new
+                {
+                    page,
+                    pageSize,
+                    totalItems,
+                    totalPages,
+                    hasNextPage = page < totalPages
+                }
+            }, _jsonOptions));
+        }
+
+        return Task.FromResult(Results.Json(new { tools = allTools, count = allTools.Length }, _jsonOptions));
     }
 }
 

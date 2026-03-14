@@ -189,3 +189,27 @@ When using `Foundry`, configure the unified `AzureAi` section in `appsettings.js
 **Authentication**: The Foundry provider uses `DefaultAzureCredential` (Managed Identity in production, Azure CLI locally). No API key is needed.
 
 **Fallback chain**: `Foundry` → `OpenAi` (IChatClient) → deterministic routing. If Foundry fails, the system automatically falls back.
+
+---
+
+## Enterprise Hardening Features (Feature 029)
+
+### Resilience
+
+All HTTP clients use Polly retry + circuit breaker + timeout pipelines. Configure via `Resilience:Pipelines` in `appsettings.json`.
+
+### Cache Management
+
+The `clear_cache` tool clears the in-memory response cache. Useful when testing or after data changes.
+
+### Offline Mode
+
+Set `Server:OfflineMode=true` for IL6 air-gapped operation. NIST control lookups, STIGs, and cached data remain available. AI-dependent operations return `OFFLINE_UNAVAILABLE`.
+
+### Monitoring
+
+Access Prometheus metrics at `/metrics` when `OpenTelemetry:EnablePrometheus=true`. Configure OTLP export via `OpenTelemetry:OtlpEndpoint`.
+
+### Pagination
+
+All collection responses are paginated (default 50, max 100). Add `?page=1&pageSize=25` to `/mcp/tools` or pass `page`/`pageSize` in the chat context.

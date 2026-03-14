@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Ato.Copilot.Core.Models;
 using Ato.Copilot.Core.Models.Auth;
 using Ato.Copilot.Core.Models.Compliance;
 using Ato.Copilot.Core.Models.Kanban;
@@ -201,6 +202,11 @@ public class AtoCopilotContext : DbContext
 
     /// <summary>Hardware and software inventory items for registered systems.</summary>
     public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
+
+    // ─── Cached Responses (Feature 029) ──────────────────────────────────────
+
+    /// <summary>Persistent cache entries for offline mode (FR-036).</summary>
+    public DbSet<CachedResponse> CachedResponses => Set<CachedResponse>();
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -1757,6 +1763,23 @@ public class AtoCopilotContext : DbContext
                 .HasDatabaseName("IX_InventoryItem_System_Ip");
             entity.HasIndex(e => e.BoundaryResourceId)
                 .HasDatabaseName("IX_InventoryItem_BoundaryResourceId");
+        });
+
+        // ─── CachedResponse (Feature 029 — FR-036) ──────────────────────────
+        modelBuilder.Entity<CachedResponse>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.CacheKey).HasMaxLength(256).IsRequired();
+            entity.Property(e => e.ToolName).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Response).IsRequired();
+            entity.Property(e => e.Source).HasMaxLength(20);
+            entity.Property(e => e.SubscriptionId).HasMaxLength(100).IsRequired();
+
+            entity.HasIndex(e => e.CacheKey)
+                .IsUnique()
+                .HasDatabaseName("IX_CachedResponse_CacheKey");
+            entity.HasIndex(e => new { e.ToolName, e.SubscriptionId })
+                .HasDatabaseName("IX_CachedResponse_Tool_Sub");
         });
     }
 

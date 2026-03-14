@@ -13,11 +13,8 @@ namespace Ato.Copilot.Agents.KnowledgeBase.Services;
 /// </summary>
 public class ImpactLevelService : IImpactLevelService
 {
-    private readonly IMemoryCache _cache;
     private readonly ILogger<ImpactLevelService> _logger;
-
-    private const string CacheKey = "kb:impact:all_levels";
-    private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
+    private readonly Lazy<Task<List<ImpactLevel>>> _lazyData;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -28,8 +25,9 @@ public class ImpactLevelService : IImpactLevelService
         IMemoryCache cache,
         ILogger<ImpactLevelService> logger)
     {
-        _cache = cache;
         _logger = logger;
+        _lazyData = new Lazy<Task<List<ImpactLevel>>>(
+            LoadDataCoreAsync, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <inheritdoc />
@@ -38,7 +36,7 @@ public class ImpactLevelService : IImpactLevelService
         CancellationToken cancellationToken = default)
     {
         var normalized = NormalizeLevel(level);
-        var data = await LoadDataAsync();
+        var data = await _lazyData.Value;
         return data.FirstOrDefault(il =>
             il.Level.Equals(normalized, StringComparison.OrdinalIgnoreCase));
     }
@@ -47,7 +45,7 @@ public class ImpactLevelService : IImpactLevelService
     public async Task<List<ImpactLevel>> GetAllImpactLevelsAsync(
         CancellationToken cancellationToken = default)
     {
-        var data = await LoadDataAsync();
+        var data = await _lazyData.Value;
         return data.Where(il => il.Level.StartsWith("IL", StringComparison.OrdinalIgnoreCase)).ToList();
     }
 
@@ -57,7 +55,7 @@ public class ImpactLevelService : IImpactLevelService
         CancellationToken cancellationToken = default)
     {
         var normalized = NormalizeBaseline(baseline);
-        var data = await LoadDataAsync();
+        var data = await _lazyData.Value;
         return data.FirstOrDefault(il =>
             il.Level.Equals(normalized, StringComparison.OrdinalIgnoreCase));
     }
@@ -120,11 +118,8 @@ public class ImpactLevelService : IImpactLevelService
         return $"FedRAMP-{normalized}";
     }
 
-    private async Task<List<ImpactLevel>> LoadDataAsync()
+    private async Task<List<ImpactLevel>> LoadDataCoreAsync()
     {
-        if (_cache.TryGetValue(CacheKey, out List<ImpactLevel>? cached) && cached != null)
-            return cached;
-
         try
         {
             var assembly = typeof(ImpactLevelService).Assembly;
@@ -157,7 +152,6 @@ public class ImpactLevelService : IImpactLevelService
             allLevels.AddRange(doc.ImpactLevels);
             allLevels.AddRange(doc.FedRampBaselines);
 
-            _cache.Set(CacheKey, allLevels, CacheTtl);
             _logger.LogInformation("Loaded {Count} impact levels from data file", allLevels.Count);
             return allLevels;
         }

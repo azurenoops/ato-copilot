@@ -960,3 +960,28 @@ EF Core migrations run automatically at startup (`MigrateDatabaseAsync`) with a 
 | `AgreementStatus` | Draft, Pending, Active, Expired, Revoked |
 | `SspSectionStatus` | NotStarted, Draft, InReview, Approved, NeedsRevision |
 | `OperationalStatus` | Operational, UnderDevelopment, MajorModification, Disposition, Other |
+
+---
+
+## Enterprise Hardening Entities (Feature 029)
+
+### Configuration Models (non-persisted)
+
+| Entity | Purpose | Key Fields |
+|--------|---------|------------|
+| `ResiliencePipelineConfig` | Polly retry/circuit breaker settings | Name, MaxRetryAttempts, CircuitBreakerFailureThreshold |
+| `RateLimitPolicy` | Per-endpoint rate limit rules | PolicyName, Endpoint, PermitLimit, WindowSeconds |
+| `PaginationOptions` | Default/max page sizes | DefaultPageSize (50), MaxPageSize (100) |
+| `StreamingOptions` | SSE buffer and keepalive settings | EventBufferSize (256), KeepaliveIntervalSeconds (15) |
+| `OpenTelemetryOptions` | Metrics/tracing export config | ExporterType, OtlpEndpoint, EnablePrometheus |
+| `OfflineCapability` | Capability network requirements | CapabilityName, RequiresNetwork, FallbackDescription |
+
+### Persisted Entities
+
+| Entity | Table | Purpose |
+|--------|-------|---------|
+| `CachedResponse` | `CachedResponses` | Persistent cache for offline mode |
+
+**CachedResponse Fields**: Id, CacheKey (unique, max 256), ToolName, Response (JSON), CachedAt, TtlSeconds, Source, HitCount, SubscriptionId
+
+**Indexes**: Unique on `CacheKey`, Non-unique on `(ToolName, SubscriptionId)`

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Serilog.Context;
+using System.Diagnostics;
 
 namespace Ato.Copilot.Core.Observability;
 
@@ -60,6 +61,8 @@ public class CorrelationIdMiddleware
 
         // Push into Serilog LogContext so all downstream log statements include it
         using (LogContext.PushProperty("CorrelationId", correlationId))
+        using (LogContext.PushProperty("TraceId", Activity.Current?.TraceId.ToString() ?? ""))
+        using (LogContext.PushProperty("SpanId", Activity.Current?.SpanId.ToString() ?? ""))
         {
             _logger.LogDebug("Correlation ID: {CorrelationId}", correlationId);
             await _next(context);

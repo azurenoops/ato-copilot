@@ -27,6 +27,7 @@ using Ato.Copilot.Core.Data.Context;
 using Ato.Copilot.Core.Interfaces.Auth;
 using Ato.Copilot.Core.Interfaces.Compliance;
 using Ato.Copilot.Core.Interfaces.Kanban;
+using Ato.Copilot.Core.Models;
 using Polly;
 
 namespace Ato.Copilot.Agents.Extensions;
@@ -135,17 +136,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IComplianceEventSource>(sp => sp.GetRequiredService<ActivityLogEventSource>());
         services.AddHostedService<ComplianceWatchHostedService>();
 
-        // HttpClient for NistControlsService with Polly resilience
+        // HttpClient for NistControlsService with shared Polly resilience pipeline (FR-005a)
         services.AddHttpClient(nameof(NistControlsService))
-            .AddResilienceHandler("nist-catalog", builder =>
+            .ConfigureResiliencePipeline(new ResiliencePipelineConfig
             {
-                builder.AddRetry(new HttpRetryStrategyOptions
-                {
-                    MaxRetryAttempts = 3,
-                    Delay = TimeSpan.FromSeconds(2),
-                    BackoffType = DelayBackoffType.Exponential,
-                    UseJitter = true,
-                });
+                Name = "NistControlsService",
+                MaxRetryAttempts = 3,
+                BaseDelaySeconds = 2.0,
+                UseJitter = true
             });
 
         // Register NistControlsService as a singleton using the named HttpClient
@@ -586,6 +584,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<CertifyNoInterconnectionsTool>());
         services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<ValidateAgreementsTool>());
 
+        // Feature 029: Cache management tool
+        services.AddSingleton<Ato.Copilot.Agents.Tools.ClearCacheTool>();
+        services.AddSingleton<BaseTool>(sp => sp.GetRequiredService<Ato.Copilot.Agents.Tools.ClearCacheTool>());
+
         // Register the agent
         services.AddSingleton<ComplianceAgent>();
         services.AddSingleton<BaseAgent>(sp => sp.GetRequiredService<ComplianceAgent>());
@@ -749,5 +751,88 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<BaseAgent>(sp => sp.GetRequiredService<KnowledgeBaseAgent>());
 
         return services;
+    }
+
+    /// <summary>
+    /// Configures a shared resilience pipeline on an <see cref="IHttpClientBuilder"/> with
+    /// retry, circuit breaker, and timeout policies per FR-001 through FR-005.
+    /// Pipeline order: Retry (with Retry-After support) → Circuit Breaker → Timeout.
+    /// </summary>
+    /// <param name="builder">The HTTP client builder to add resilience to.</param>
+    /// <param name="config">Pipeline configuration with retry, circuit breaker, and timeout settings.</param>
+    /// <returns>The builder for chaining.</returns>
+    public static IHttpClientBuilder ConfigureResiliencePipeline(
+        this IHttpClientBuilder builder,
+        ResiliencePipelineConfig config)
+    {
+        builder.AddResilienceHandler($"resilience-{config.Name}", pipelineBuilder =>
+        {
+            // Retry with Retry-After header support (FR-001, FR-002)
+            pipelineBuilder.AddRetry(new HttpRetryStrategyOptions
+            {
+                MaxRetryAttempts = config.MaxRetryAttempts,
+                Delay = TimeSpan.FromSeconds(config.BaseDelaySeconds),
+                BackoffType = DelayBackoffType.Exponential,
+                UseJitter = config.UseJitter,
+                ShouldRetryAfterHeader = true,
+                ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
+                    .HandleResult(r => r.StatusCode is
+                        System.Net.HttpStatusCode.ServiceUnavailable or
+                        System.Net.HttpStatusCode.TooManyRequests or
+                        System.Net.HttpStatusCode.GatewayTimeout or
+                        System.Net.HttpStatusCode.RequestTimeout),
+                OnRetry = args =>
+                {
+                    var logger = args.Context.Properties.GetValue(
+                        new ResiliencePropertyKey<ILogger>("logger"), null!);
+                    logger?.LogWarning(
+                        "Retry attempt {AttemptNumber} for {Dependency} after {Delay}ms. Status: {StatusCode}",
+                        args.AttemptNumber + 1,
+                        config.Name,
+                        args.RetryDelay.TotalMilliseconds,
+                        args.Outcome.Result?.StatusCode);
+                    return ValueTask.CompletedTask;
+                }
+            });
+
+            // Circuit breaker (FR-003)
+            pipelineBuilder.AddCircuitBreaker(new HttpCircuitBreakerStrategyOptions
+            {
+                FailureRatio = 1.0,
+                MinimumThroughput = config.CircuitBreakerFailureThreshold,
+                SamplingDuration = TimeSpan.FromSeconds(config.CircuitBreakerSamplingDurationSeconds),
+                BreakDuration = TimeSpan.FromSeconds(config.CircuitBreakerBreakDurationSeconds),
+                ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
+                    .HandleResult(r => r.StatusCode is
+                        System.Net.HttpStatusCode.ServiceUnavailable or
+                        System.Net.HttpStatusCode.TooManyRequests or
+                        System.Net.HttpStatusCode.GatewayTimeout or
+                        System.Net.HttpStatusCode.RequestTimeout),
+                OnOpened = args =>
+                {
+                    var logger = args.Context.Properties.GetValue(
+                        new ResiliencePropertyKey<ILogger>("logger"), null!);
+                    logger?.LogWarning(
+                        "Circuit breaker OPENED for {Dependency}. Break duration: {BreakDuration}s",
+                        config.Name,
+                        config.CircuitBreakerBreakDurationSeconds);
+                    return ValueTask.CompletedTask;
+                },
+                OnClosed = args =>
+                {
+                    var logger = args.Context.Properties.GetValue(
+                        new ResiliencePropertyKey<ILogger>("logger"), null!);
+                    logger?.LogInformation(
+                        "Circuit breaker CLOSED for {Dependency}. Calls will resume.",
+                        config.Name);
+                    return ValueTask.CompletedTask;
+                }
+            });
+
+            // Timeout (FR-004)
+            pipelineBuilder.AddTimeout(TimeSpan.FromSeconds(config.RequestTimeoutSeconds));
+        });
+
+        return builder;
     }
 }

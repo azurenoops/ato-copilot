@@ -43,6 +43,20 @@ public interface IAtoComplianceEngine
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Streams compliance findings incrementally as each control family completes.
+    /// Yields individual <see cref="ComplianceFinding"/> items without buffering the entire result set.
+    /// Use when the expected finding count exceeds the streaming threshold (default 50).
+    /// </summary>
+    /// <param name="subscriptionId">Azure subscription ID (valid GUID format).</param>
+    /// <param name="resourceGroup">Optional resource group constraint.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Async enumerable of compliance findings yielded per family scan.</returns>
+    IAsyncEnumerable<ComplianceFinding> StreamAssessmentFindingsAsync(
+        string subscriptionId,
+        string? resourceGroup = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Run a multi-subscription environment assessment.
     /// Pre-warms caches for all subscriptions, aggregates results.
     /// </summary>

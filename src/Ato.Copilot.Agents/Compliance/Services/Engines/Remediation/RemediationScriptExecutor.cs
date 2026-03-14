@@ -14,6 +14,7 @@ namespace Ato.Copilot.Agents.Compliance.Services.Engines.Remediation;
 public class RemediationScriptExecutor : IRemediationScriptExecutor
 {
     private readonly IScriptSanitizationService _sanitizer;
+    private readonly IPathSanitizationService _pathSanitizer;
     private readonly ILogger<RemediationScriptExecutor> _logger;
 
     private readonly int _maxRetries;
@@ -44,6 +45,7 @@ public class RemediationScriptExecutor : IRemediationScriptExecutor
         TimeSpan? scriptTimeout = null)
     {
         _sanitizer = sanitizer;
+        _pathSanitizer = pathSanitizer;
         _logger = logger;
         _maxRetries = maxRetries;
         _scriptTimeout = scriptTimeout ?? TimeSpan.FromMinutes(5);

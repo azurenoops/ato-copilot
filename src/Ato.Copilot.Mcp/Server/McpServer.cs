@@ -7,7 +7,14 @@ using Ato.Copilot.Agents.Compliance.Agents;
 using Ato.Copilot.Agents.Configuration.Agents;
 using Ato.Copilot.Agents.Configuration.Tools;
 using Ato.Copilot.Agents.Common;
+using Ato.Copilot.Core.Interfaces;
+using Ato.Copilot.Core.Services;
+using Ato.Copilot.Core.Models;
+using ErrorDetail = Ato.Copilot.Mcp.Models.ErrorDetail;
+using Microsoft.Extensions.Options;
+using System.Collections;
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 
 namespace Ato.Copilot.Mcp.Server;
@@ -18,6 +25,8 @@ namespace Ato.Copilot.Mcp.Server;
 /// </summary>
 public class McpServer
 {
+    private static readonly ActivitySource ActivitySource = new("Ato.Copilot.Mcp", "1.0.0");
+
     private readonly ComplianceMcpTools _complianceTools;
     private readonly KnowledgeBaseMcpTools _knowledgeBaseTools;
     private readonly ComplianceAgent _complianceAgent;
@@ -26,6 +35,10 @@ public class McpServer
     private readonly AgentOrchestrator _orchestrator;
     private readonly IEnumerable<BaseTool> _allTools;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IPathSanitizationService _pathSanitizer;
+    private readonly ResponseCacheService _cacheService;
+    private readonly PaginationOptions _paginationOptions;
+    private readonly OfflineModeService _offlineModeService;
     private readonly ILogger<McpServer> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
 
@@ -38,6 +51,10 @@ public class McpServer
         AgentOrchestrator orchestrator,
         IEnumerable<BaseTool> allTools,
         IHttpContextAccessor httpContextAccessor,
+        IPathSanitizationService pathSanitizer,
+        ResponseCacheService cacheService,
+        IOptions<PaginationOptions> paginationOptions,
+        OfflineModeService offlineModeService,
         ILogger<McpServer> logger)
     {
         _complianceTools = complianceTools;
@@ -48,6 +65,10 @@ public class McpServer
         _orchestrator = orchestrator;
         _allTools = allTools;
         _httpContextAccessor = httpContextAccessor;
+        _pathSanitizer = pathSanitizer;
+        _cacheService = cacheService;
+        _paginationOptions = paginationOptions.Value;
+        _offlineModeService = offlineModeService;
         _logger = logger;
         _jsonOptions = new JsonSerializerOptions
         {
@@ -90,6 +111,10 @@ public class McpServer
         conversationId ??= Guid.NewGuid().ToString();
         var stopwatch = Stopwatch.StartNew();
 
+        using var activity = ActivitySource.StartActivity("ProcessChatRequest", ActivityKind.Server);
+        activity?.SetTag("mcp.conversation_id", conversationId);
+        activity?.SetTag("mcp.user_id", ResolveCurrentUserId());
+
         _logger.LogInformation("Processing compliance chat | ConvId: {ConvId}", conversationId);
 
         try
@@ -120,6 +145,29 @@ public class McpServer
                     stopwatch, cancellationToken, progress);
             }
 
+            // T052: Offline guard — AI chat requires network (FR-035)
+            if (_offlineModeService.IsOffline)
+            {
+                stopwatch.Stop();
+                var available = _offlineModeService.GetAvailableCapabilities();
+                return new McpChatResponse
+                {
+                    Success = false,
+                    Response = "This operation requires network connectivity and is unavailable in offline mode.",
+                    ConversationId = conversationId,
+                    ProcessingTimeMs = stopwatch.ElapsedMilliseconds,
+                    Errors = new List<ErrorDetail>
+                    {
+                        new ErrorDetail
+                        {
+                            ErrorCode = "OFFLINE_UNAVAILABLE",
+                            Message = "AI chat requires network connectivity.",
+                            Suggestion = $"Available offline capabilities: {string.Join(", ", available.Select(c => c.CapabilityName))}"
+                        }
+                    }
+                };
+            }
+
             // Route to appropriate agent via confidence-scored orchestrator
             // T019: Emit typed SSE events for agent routing and thinking phases
             progress?.Report(JsonSerializer.Serialize(
@@ -144,16 +192,36 @@ public class McpServer
 
             progress?.Report(JsonSerializer.Serialize(
                 new SseAgentRoutedEvent { AgentName = targetAgent.AgentName, Confidence = targetAgent.CanHandle(message) }, _jsonOptions));
-            var response = await targetAgent.ProcessAsync(message, agentContext, cancellationToken, progress);
+
+            // Check cache before agent dispatch (FR-016)
+            var subscriptionId = context?.TryGetValue("subscriptionId", out var subId) == true
+                ? subId?.ToString() ?? "default" : "default";
+            var paramsJson = context != null ? JsonSerializer.Serialize(context, _jsonOptions) : "{}";
+            var cacheStatus = _cacheService.GetCacheStatus(targetAgent.AgentName, paramsJson, subscriptionId);
+            string cachedResponse;
+            using (var agentActivity = ActivitySource.StartActivity("AgentDispatch", ActivityKind.Internal))
+            {
+                agentActivity?.SetTag("mcp.agent", targetAgent.AgentName);
+                agentActivity?.SetTag("mcp.cache_status", cacheStatus);
+                cachedResponse = await _cacheService.GetOrSetAsync(
+                    targetAgent.AgentName, paramsJson, subscriptionId,
+                    async () =>
+                    {
+                        var resp = await targetAgent.ProcessAsync(message, agentContext, cancellationToken, progress);
+                        return JsonSerializer.Serialize(resp, _jsonOptions);
+                    });
+            }
+
+            var response = JsonSerializer.Deserialize<AgentResponse>(cachedResponse, _jsonOptions)!;
             stopwatch.Stop();
 
-            _logger.LogInformation("Routed to {Agent} | ConvId: {ConvId}",
-                targetAgent.AgentName, conversationId);
+            _logger.LogInformation("Routed to {Agent} | ConvId: {ConvId} | Cache: {CacheStatus}",
+                targetAgent.AgentName, conversationId, cacheStatus);
 
             // T012: Intent type mapping
             var intentType = MapIntentType(targetAgent.AgentId);
 
-            return new McpChatResponse
+            var chatResponse = new McpChatResponse
             {
                 Success = response.Success,
                 Response = response.Response,
@@ -173,12 +241,22 @@ public class McpServer
                 RequiresFollowUp = response.RequiresFollowUp,
                 FollowUpPrompt = response.FollowUpPrompt,
                 MissingFields = response.MissingFields,
-                Data = response.ResponseData
+                Data = response.ResponseData,
+                Metadata = new Dictionary<string, object>
+                {
+                    ["cacheStatus"] = cacheStatus,
+                }
             };
+
+            // T047: Server-side pagination enforcement (FR-029/FR-030/FR-031)
+            ApplyPagination(chatResponse, context);
+
+            return chatResponse;
         }
         catch (Exception ex)
         {
             stopwatch.Stop();
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             _logger.LogError(ex, "Error processing compliance chat request");
 
             return new McpChatResponse
@@ -198,6 +276,136 @@ public class McpServer
                 }
             };
         }
+    }
+
+    /// <summary>
+    /// Applies server-side pagination enforcement to collection data in the response.
+    /// If response.Data contains a collection exceeding the configured page size,
+    /// slices it to the requested page and populates PaginationInfo metadata.
+    /// </summary>
+    private void ApplyPagination(McpChatResponse response, Dictionary<string, object>? context)
+    {
+        if (response.Data == null) return;
+
+        // Find the first collection in Data
+        string? collectionKey = null;
+        IList? collection = null;
+        foreach (var kvp in response.Data)
+        {
+            if (kvp.Value is IList list && list.Count > _paginationOptions.DefaultPageSize)
+            {
+                collectionKey = kvp.Key;
+                collection = list;
+                break;
+            }
+            if (kvp.Value is JsonElement je && je.ValueKind == JsonValueKind.Array && je.GetArrayLength() > _paginationOptions.DefaultPageSize)
+            {
+                collectionKey = kvp.Key;
+                // Materialize JsonElement array to list of objects
+                var items = new List<object>();
+                foreach (var item in je.EnumerateArray())
+                    items.Add(item);
+                collection = items;
+                break;
+            }
+        }
+
+        if (collectionKey == null || collection == null) return;
+
+        // Parse page/pageSize from context
+        var page = 1;
+        var requestedPageSize = _paginationOptions.DefaultPageSize;
+
+        if (context != null)
+        {
+            if (context.TryGetValue("page", out var pageObj))
+                int.TryParse(pageObj?.ToString(), out page);
+            if (context.TryGetValue("pageSize", out var pageSizeObj))
+                int.TryParse(pageSizeObj?.ToString(), out requestedPageSize);
+        }
+
+        page = Math.Max(1, page);
+        var clamped = requestedPageSize > _paginationOptions.MaxPageSize;
+        var pageSize = Math.Clamp(requestedPageSize, 1, _paginationOptions.MaxPageSize);
+        var totalItems = collection.Count;
+        var totalPages = (int)Math.Ceiling((double)totalItems / pageSize);
+        var offset = (page - 1) * pageSize;
+
+        // Slice the collection
+        var paged = new List<object>();
+        for (var i = offset; i < Math.Min(offset + pageSize, totalItems); i++)
+            paged.Add(collection[i]!);
+
+        response.Data[collectionKey] = paged;
+
+        // Add PaginationInfo to metadata
+        var hasNextPage = page < totalPages;
+        response.Metadata["pagination"] = new PaginationInfo
+        {
+            Page = page,
+            PageSize = pageSize,
+            TotalItems = totalItems,
+            TotalPages = totalPages,
+            HasNextPage = hasNextPage,
+            NextPageToken = hasNextPage
+                ? Convert.ToBase64String(Encoding.UTF8.GetBytes($"offset:{offset + pageSize}"))
+                : null
+        };
+
+        if (clamped)
+            response.Metadata["pageSizeClamped"] = true;
+    }
+
+    /// <summary>
+    /// Detects PagedResult&lt;T&gt;-shaped data in the response and maps it to PaginationInfo (T049/FR-033).
+    /// Returns true if a PagedResult pattern was found and mapped.
+    /// </summary>
+    private bool ApplyPagedResultPagination(McpChatResponse response)
+    {
+        if (response.Data == null) return false;
+
+        // Look for PagedResult<T> shape: an entry with items, totalCount, page, pageSize, hasMore
+        foreach (var kvp in response.Data)
+        {
+            if (kvp.Value is not JsonElement je || je.ValueKind != JsonValueKind.Object)
+                continue;
+
+            if (!je.TryGetProperty("items", out var itemsEl) || itemsEl.ValueKind != JsonValueKind.Array)
+                continue;
+            if (!je.TryGetProperty("totalCount", out var totalCountEl) || !totalCountEl.TryGetInt32(out var totalCount))
+                continue;
+            if (!je.TryGetProperty("page", out var pageEl) || !pageEl.TryGetInt32(out var page))
+                continue;
+            if (!je.TryGetProperty("pageSize", out var pageSizeEl) || !pageSizeEl.TryGetInt32(out var pageSize))
+                continue;
+
+            var hasMore = je.TryGetProperty("hasMore", out var hasMoreEl) && hasMoreEl.GetBoolean();
+            var totalPages = pageSize > 0 ? (int)Math.Ceiling((double)totalCount / pageSize) : 0;
+
+            // Replace the PagedResult entry with just the items
+            var items = new List<object>();
+            foreach (var item in itemsEl.EnumerateArray())
+                items.Add(item);
+            response.Data[kvp.Key] = items;
+
+            // Map to PaginationInfo with opaque cursor token
+            response.Metadata ??= new Dictionary<string, object>();
+            var nextOffset = page * pageSize;
+            response.Metadata["pagination"] = new PaginationInfo
+            {
+                Page = page,
+                PageSize = pageSize,
+                TotalItems = totalCount,
+                TotalPages = totalPages,
+                HasNextPage = hasMore,
+                NextPageToken = hasMore
+                    ? Convert.ToBase64String(Encoding.UTF8.GetBytes($"offset:{nextOffset}"))
+                    : null
+            };
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -302,18 +510,58 @@ public class McpServer
                 toolArgs[kvp.Key] = kvp.Value;
         }
 
+        // Validate any file path parameters against base directory (FR-014)
+        var pathKeys = new[] { "filePath", "path", "file", "outputPath", "inputPath" };
+        var baseDir = Path.Combine(Directory.GetCurrentDirectory(), "data");
+        foreach (var key in pathKeys)
+        {
+            if (toolArgs.TryGetValue(key, out var pathValue) && pathValue is string pathStr && !string.IsNullOrEmpty(pathStr))
+            {
+                var validation = _pathSanitizer.ValidatePathWithinBase(pathStr, baseDir);
+                if (!validation.IsValid)
+                {
+                    _logger.LogWarning("Path traversal blocked in tool {Tool} param {Param}: {Reason}",
+                        toolName, key, validation.Reason);
+                    stopwatch.Stop();
+                    return new McpChatResponse
+                    {
+                        Success = false,
+                        Response = $"Invalid file path in parameter '{key}'.",
+                        ConversationId = conversationId,
+                        ProcessingTimeMs = stopwatch.ElapsedMilliseconds,
+                        Errors = new List<ErrorDetail>
+                        {
+                            new ErrorDetail
+                            {
+                                ErrorCode = "PATH_TRAVERSAL_BLOCKED",
+                                Message = $"Path validation failed for parameter '{key}'.",
+                                Suggestion = "Provide a valid file path within the allowed directory."
+                            }
+                        }
+                    };
+                }
+                toolArgs[key] = validation.CanonicalPath!;
+            }
+        }
+
         // Add the message as a fallback argument
         if (!string.IsNullOrEmpty(message))
             toolArgs.TryAdd("message", message);
 
         // Route to compliance agent to execute the tool
-        var response = await _complianceAgent.ProcessAsync(
-            $"Execute tool '{toolName}' with context: {JsonSerializer.Serialize(toolArgs, _jsonOptions)}",
-            agentContext, cancellationToken, progress);
+        AgentResponse response;
+        using (var toolActivity = ActivitySource.StartActivity($"ToolExecution:{toolName}", ActivityKind.Internal))
+        {
+            toolActivity?.SetTag("mcp.tool", toolName);
+            toolActivity?.SetTag("mcp.action", action);
+            response = await _complianceAgent.ProcessAsync(
+                $"Execute tool '{toolName}' with context: {JsonSerializer.Serialize(toolArgs, _jsonOptions)}",
+                agentContext, cancellationToken, progress);
+        }
 
         stopwatch.Stop();
 
-        return new McpChatResponse
+        var chatResponse = new McpChatResponse
         {
             Success = response.Success,
             Response = response.Response,
@@ -331,8 +579,18 @@ public class McpServer
             RequiresFollowUp = response.RequiresFollowUp,
             FollowUpPrompt = response.FollowUpPrompt,
             MissingFields = response.MissingFields,
-            Data = response.ResponseData
+            Data = response.ResponseData,
+            Metadata = new Dictionary<string, object>()
         };
+
+        // T049: Cursor-based pagination — detect PagedResult<T> shaped data (FR-033)
+        if (!ApplyPagedResultPagination(chatResponse))
+        {
+            // Fall back to generic collection pagination
+            ApplyPagination(chatResponse, actionContext);
+        }
+
+        return chatResponse;
     }
 
     /// <summary>

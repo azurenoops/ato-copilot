@@ -591,3 +591,39 @@ Parameters: {
 - [Remediation Kanban Guide](remediation-kanban.md) — Full Kanban board documentation
 - [Compliance Watch Guide](compliance-watch.md) — Alert handling for drift findings
 - [Quick Reference Card](../reference/quick-reference-cards.md) — Printable Engineer cheat sheet
+
+---
+
+## Enterprise Hardening Operations (Feature 029)
+
+### Configuring Rate Limits
+
+Edit `RateLimiting:Policies` in `appsettings.json` or override with environment variables:
+
+```bash
+export RateLimiting__Policies__0__PermitLimit=60
+export RateLimiting__Policies__0__WindowSeconds=120
+```
+
+### Monitoring Setup
+
+**Prometheus**: Set `OpenTelemetry__EnablePrometheus=true` and scrape `/metrics`.
+
+**OTLP**: Set `OpenTelemetry__OtlpEndpoint=http://collector:4317` for Jaeger/Grafana Tempo.
+
+Key metrics: `ato.copilot.http.request.duration`, `ato.copilot.http.request.total`, `ato.copilot.cache.hits`, `ato.copilot.cache.misses`.
+
+### Enabling Offline Mode
+
+```bash
+export Server__OfflineMode=true
+```
+
+Available offline: NIST control lookups, STIG data, RMF guidance, cached assessments, document generation.
+Unavailable: AI chat, ARM scans, live assessments, Prisma Cloud.
+
+### Cache Header Interpretation
+
+- `X-Cache: HIT` — Response served from cache (fast)
+- `X-Cache: MISS` — Fresh response from service (slower)
+- `X-Cache-Age: 45` — Cached entry is 45 seconds old
