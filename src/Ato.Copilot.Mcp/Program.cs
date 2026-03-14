@@ -19,6 +19,12 @@ using Ato.Copilot.Mcp.Extensions;
 using Ato.Copilot.Mcp.Middleware;
 using Ato.Copilot.Mcp.Server;
 using Microsoft.EntityFrameworkCore;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.RateLimiting;
+using Ato.Copilot.Core.Models;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 
 // ────────────────────────────────────────────────────────────────
 //  ATO Copilot — Compliance-Only MCP Server
@@ -164,6 +170,85 @@ async Task RunHttpModeAsync(string[] args)
         .AddCheck<AgentHealthCheck>("compliance-agent")
         .AddCheck<Ato.Copilot.Agents.Observability.NistControlsHealthCheck>("nist-controls");
 
+    // Rate limiting (FR-006 through FR-010a)
+    var rateLimitingOptions = new RateLimitingOptions();
+    builder.Configuration.GetSection(RateLimitingOptions.SectionName).Bind(rateLimitingOptions);
+
+    builder.Services.AddRateLimiter(options =>
+    {
+        foreach (var policy in rateLimitingOptions.Policies)
+        {
+            options.AddPolicy(policy.PolicyName, context =>
+                RateLimitPartition.GetSlidingWindowLimiter(
+                    partitionKey: context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                                  ?? context.Connection.RemoteIpAddress?.ToString()
+                                  ?? "anonymous",
+                    factory: _ => new SlidingWindowRateLimiterOptions
+                    {
+                        PermitLimit = policy.PermitLimit,
+                        Window = TimeSpan.FromSeconds(policy.WindowSeconds),
+                        SegmentsPerWindow = policy.SegmentsPerWindow,
+                        QueueLimit = 0,
+                        AutoReplenishment = true,
+                    }));
+        }
+
+        options.OnRejected = async (context, cancellationToken) =>
+        {
+            context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            context.HttpContext.Response.ContentType = "application/json";
+
+            if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+            {
+                context.HttpContext.Response.Headers.RetryAfter = ((int)retryAfter.TotalSeconds).ToString();
+            }
+            else
+            {
+                context.HttpContext.Response.Headers.RetryAfter =
+                    rateLimitingOptions.Policies.FirstOrDefault()?.WindowSeconds.ToString() ?? "60";
+            }
+
+            var errorDetail = new
+            {
+                errorCode = "RATE_LIMITED",
+                message = $"Rate limit exceeded for {context.HttpContext.Request.Path}.",
+                suggestion = "Reduce request frequency or wait before retrying."
+            };
+
+            Log.Warning("Rate limit exceeded for {Endpoint} by {Client}",
+                context.HttpContext.Request.Path,
+                context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+
+            await context.HttpContext.Response.WriteAsync(
+                JsonSerializer.Serialize(errorDetail), cancellationToken);
+        };
+    });
+
+    // OpenTelemetry metrics + tracing (FR-021, FR-022, FR-024)
+    var otelOptions = new OpenTelemetryOptions();
+    builder.Configuration.GetSection(OpenTelemetryOptions.SectionName).Bind(otelOptions);
+
+    if (otelOptions.Enabled)
+    {
+        builder.Services.AddOpenTelemetry()
+            .WithMetrics(metrics =>
+            {
+                metrics.AddAspNetCoreInstrumentation();
+                metrics.AddMeter(HttpMetrics.MeterName);          // ato.copilot.http
+                metrics.AddMeter(ToolMetrics.MeterName);          // Ato.Copilot (tools + compliance)
+                if (otelOptions.EnablePrometheus)
+                    metrics.AddPrometheusExporter();
+                else
+                    metrics.AddOtlpExporter(o => o.Endpoint = new Uri(otelOptions.OtlpEndpoint));
+            })
+            .WithTracing(tracing =>
+            {
+                tracing.AddAspNetCoreInstrumentation();
+                tracing.AddSource("Ato.Copilot.Mcp");
+                tracing.AddOtlpExporter(o => o.Endpoint = new Uri(otelOptions.OtlpEndpoint));
+            });
+    }
+
     // Add HTTP-specific services
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddCors(options =>
@@ -187,14 +272,18 @@ async Task RunHttpModeAsync(string[] args)
     // 1. Correlation ID (MUST be first — before Serilog request logging)
     // 2. Request logging (Serilog)
     // 3. CORS
-    // 4. CAC authentication (JWT validation, amr claim check for CAC/PIV)
-    // 5. Authorization (role-based access checks, Tier 2 CAC gate, PIM tier enforcement)
-    // 6. Audit logging (captures all requests with user/role/action)
+    // 4. Rate limiting (per-endpoint sliding window, FR-006)
+    // 5. CAC authentication (JWT validation, amr claim check for CAC/PIV)
+    // 6. Authorization (role-based access checks, Tier 2 CAC gate, PIM tier enforcement)
+    // 7. Audit logging (captures all requests with user/role/action)
     app.UseMiddleware<CorrelationIdMiddleware>();
     app.UseSerilogRequestLogging();
     app.UseCors();
+    app.UseRateLimiter();
+    app.UseMiddleware<RequestSizeLimitMiddleware>();
     app.UseMiddleware<CacAuthenticationMiddleware>();
     app.UseMiddleware<ComplianceAuthorizationMiddleware>();
+    app.UseMiddleware<RequestMetricsMiddleware>();
     app.UseMiddleware<AuditLoggingMiddleware>();
 
     // Map MCP HTTP endpoints
@@ -206,6 +295,21 @@ async Task RunHttpModeAsync(string[] args)
     {
         ResponseWriter = WriteHealthCheckResponseAsync
     });
+
+    // Prometheus scrape endpoint (FR-021) — only when enabled; otherwise 404
+    if (otelOptions.Enabled && otelOptions.EnablePrometheus)
+    {
+        app.UseOpenTelemetryPrometheusScrapingEndpoint("/metrics");
+    }
+    else
+    {
+        app.MapGet("/metrics", () => Results.Json(new
+        {
+            errorCode = "METRICS_DISABLED",
+            message = "Prometheus metrics endpoint is not enabled.",
+            suggestion = "Set OpenTelemetry:EnablePrometheus to true in configuration."
+        }, statusCode: 404));
+    }
 
     // Root endpoint
     app.MapGet("/", () => Results.Json(new

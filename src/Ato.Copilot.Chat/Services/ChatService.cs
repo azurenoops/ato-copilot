@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Ato.Copilot.Chat.Data;
 using Ato.Copilot.Chat.Models;
+using Ato.Copilot.Core.Interfaces;
 
 namespace Ato.Copilot.Chat.Services;
 
@@ -16,6 +17,7 @@ public class ChatService : IChatService
     private readonly ChatDbContext _dbContext;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<ChatService> _logger;
+    private readonly IPathSanitizationService _pathSanitizer;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -27,11 +29,13 @@ public class ChatService : IChatService
     public ChatService(
         ChatDbContext dbContext,
         IHttpClientFactory httpClientFactory,
-        ILogger<ChatService> logger)
+        ILogger<ChatService> logger,
+        IPathSanitizationService pathSanitizer)
     {
         _dbContext = dbContext;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
+        _pathSanitizer = pathSanitizer;
     }
 
     // ─── Messaging (US1) ─────────────────────────────────────────
@@ -573,7 +577,15 @@ public class ChatService : IChatService
         var storageName = $"{Guid.NewGuid()}{extension}";
         var storagePath = Path.Combine(uploadsDir, storageName);
 
-        await using (var fileStream = new FileStream(storagePath, FileMode.Create))
+        // Validate resolved path against uploads base directory (FR-012)
+        var pathValidation = _pathSanitizer.ValidatePathWithinBase(storagePath, uploadsDir);
+        if (!pathValidation.IsValid)
+        {
+            _logger.LogWarning("Path traversal blocked for attachment {FileName}: {Reason}", fileName, pathValidation.Reason);
+            throw new InvalidOperationException($"PATH_TRAVERSAL_BLOCKED: {pathValidation.Reason}");
+        }
+
+        await using (var fileStream = new FileStream(pathValidation.CanonicalPath!, FileMode.Create))
         {
             await stream.CopyToAsync(fileStream);
         }

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using Ato.Copilot.Core.Interfaces;
 using Ato.Copilot.Core.Interfaces.Compliance;
 using Ato.Copilot.Core.Models.Compliance;
 
@@ -12,6 +13,7 @@ namespace Ato.Copilot.Agents.Compliance.Services.Engines.Remediation;
 public class RemediationScriptExecutor : IRemediationScriptExecutor
 {
     private readonly IScriptSanitizationService _sanitizer;
+    private readonly IPathSanitizationService _pathSanitizer;
     private readonly ILogger<RemediationScriptExecutor> _logger;
 
     private const int MaxRetries = 3;
@@ -22,9 +24,11 @@ public class RemediationScriptExecutor : IRemediationScriptExecutor
     /// </summary>
     public RemediationScriptExecutor(
         IScriptSanitizationService sanitizer,
+        IPathSanitizationService pathSanitizer,
         ILogger<RemediationScriptExecutor> logger)
     {
         _sanitizer = sanitizer;
+        _pathSanitizer = pathSanitizer;
         _logger = logger;
     }
 

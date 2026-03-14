@@ -43,7 +43,11 @@ public class ChatServiceAttachmentTests : IDisposable
         var client = new HttpClient(handler.Object) { BaseAddress = new Uri("http://localhost:3001") };
         _httpClientFactoryMock.Setup(f => f.CreateClient("McpServer")).Returns(client);
 
-        _service = new ChatService(_dbContext, _httpClientFactoryMock.Object, _loggerMock.Object);
+        var pathSanitizer = new Mock<Ato.Copilot.Core.Interfaces.IPathSanitizationService>();
+        pathSanitizer.Setup(s => s.ValidatePathWithinBase(It.IsAny<string>(), It.IsAny<string>()))
+            .Returns((string path, string _) => new Ato.Copilot.Core.Interfaces.PathValidationResult { IsValid = true, CanonicalPath = path });
+
+        _service = new ChatService(_dbContext, _httpClientFactoryMock.Object, _loggerMock.Object, pathSanitizer.Object);
         _testUploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "uploads");
     }
 

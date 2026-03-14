@@ -10,6 +10,13 @@ using Microsoft.Extensions.Logging;
 using OpenAI;
 using Ato.Copilot.Core.Configuration;
 using Ato.Copilot.Core.Data.Context;
+using Ato.Copilot.Core.Interfaces;
+using Ato.Copilot.Core.Models;
+using Ato.Copilot.Core.Observability;
+using Ato.Copilot.Core.Services;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Http.Resilience;
+using Polly;
 using System.ClientModel;
 
 namespace Ato.Copilot.Core.Extensions;
@@ -43,8 +50,46 @@ public static class CoreServiceExtensions
         services.Configure<NotificationOptions>(configuration.GetSection(NotificationOptions.SectionName));
         services.Configure<EscalationOptions>(configuration.GetSection(EscalationOptions.SectionName));
 
-        // Register HTTP client factory
+        // Bind enterprise hardening configuration sections (Feature 029)
+        services.Configure<ResilienceOptions>(configuration.GetSection(ResilienceOptions.SectionName));
+        services.Configure<RateLimitingOptions>(configuration.GetSection(RateLimitingOptions.SectionName));
+        services.Configure<CachingOptions>(configuration.GetSection(CachingOptions.SectionName));
+        services.Configure<PaginationOptions>(configuration.GetSection(PaginationOptions.SectionName));
+        services.Configure<StreamingOptions>(configuration.GetSection(StreamingOptions.SectionName));
+        services.Configure<OpenTelemetryOptions>(configuration.GetSection(OpenTelemetryOptions.SectionName));
+
+        // Register enterprise hardening singletons
+        services.AddSingleton<HttpMetrics>();
+        services.AddSingleton<IPathSanitizationService, PathSanitizationService>();
+        services.AddSingleton<ResponseCacheService>();
+        services.AddSingleton<OfflineModeService>();
+
+        // Register IMemoryCache with configurable size limit (FR-020a)
+        var cachingOptions = new CachingOptions();
+        configuration.GetSection(CachingOptions.SectionName).Bind(cachingOptions);
+        services.AddMemoryCache(options =>
+        {
+            options.SizeLimit = (long)cachingOptions.SizeLimitMb * 1024 * 1024;
+        });
+
+        // Register HTTP client factory with default resilience pipeline (FR-001, T016)
         services.AddHttpClient();
+        services.AddHttpClient("default", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+        })
+        .AddResilienceHandler("resilience-default", pipelineBuilder =>
+        {
+            pipelineBuilder.AddRetry(new Microsoft.Extensions.Http.Resilience.HttpRetryStrategyOptions
+            {
+                MaxRetryAttempts = 3,
+                Delay = TimeSpan.FromSeconds(2),
+                BackoffType = DelayBackoffType.Exponential,
+                UseJitter = true,
+                ShouldRetryAfterHeader = true,
+            });
+            pipelineBuilder.AddTimeout(TimeSpan.FromSeconds(30));
+        });
 
         // Register IChatClient from Azure OpenAI when configured
         RegisterChatClient(services, configuration);

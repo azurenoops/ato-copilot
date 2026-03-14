@@ -13,11 +13,8 @@ namespace Ato.Copilot.Agents.KnowledgeBase.Services;
 /// </summary>
 public class FedRampTemplateService : IFedRampTemplateService
 {
-    private readonly IMemoryCache _cache;
     private readonly ILogger<FedRampTemplateService> _logger;
-
-    private const string CacheKey = "kb:fedramp:all_templates";
-    private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
+    private readonly Lazy<Task<List<FedRampTemplate>>> _lazyData;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -28,8 +25,9 @@ public class FedRampTemplateService : IFedRampTemplateService
         IMemoryCache cache,
         ILogger<FedRampTemplateService> logger)
     {
-        _cache = cache;
         _logger = logger;
+        _lazyData = new Lazy<Task<List<FedRampTemplate>>>(
+            LoadDataCoreAsync, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <inheritdoc />
@@ -39,7 +37,7 @@ public class FedRampTemplateService : IFedRampTemplateService
         CancellationToken cancellationToken = default)
     {
         var normalized = NormalizeTemplateType(templateType);
-        var templates = await LoadDataAsync();
+        var templates = await _lazyData.Value;
         return templates.FirstOrDefault(t =>
             t.TemplateType.Equals(normalized, StringComparison.OrdinalIgnoreCase));
     }
@@ -48,7 +46,7 @@ public class FedRampTemplateService : IFedRampTemplateService
     public async Task<List<FedRampTemplate>> GetAllTemplatesAsync(
         CancellationToken cancellationToken = default)
     {
-        return await LoadDataAsync();
+        return await _lazyData.Value;
     }
 
     /// <summary>
@@ -73,11 +71,8 @@ public class FedRampTemplateService : IFedRampTemplateService
         return trimmed;
     }
 
-    private async Task<List<FedRampTemplate>> LoadDataAsync()
+    private async Task<List<FedRampTemplate>> LoadDataCoreAsync()
     {
-        if (_cache.TryGetValue(CacheKey, out List<FedRampTemplate>? cached) && cached != null)
-            return cached;
-
         try
         {
             var assembly = typeof(FedRampTemplateService).Assembly;
@@ -107,7 +102,6 @@ public class FedRampTemplateService : IFedRampTemplateService
             if (doc == null) return new List<FedRampTemplate>();
 
             var templates = doc.Templates;
-            _cache.Set(CacheKey, templates, CacheTtl);
             _logger.LogInformation("Loaded {Count} FedRAMP templates from data file", templates.Count);
             return templates;
         }

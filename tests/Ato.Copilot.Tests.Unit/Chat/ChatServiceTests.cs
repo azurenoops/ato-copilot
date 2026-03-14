@@ -56,7 +56,7 @@ public class ChatServiceTests : IDisposable
             .Setup(f => f.CreateClient("McpServer"))
             .Returns(client);
 
-        return new ChatService(_dbContext, _httpClientFactoryMock.Object, _loggerMock.Object);
+        return new ChatService(_dbContext, _httpClientFactoryMock.Object, _loggerMock.Object, Mock.Of<Ato.Copilot.Core.Interfaces.IPathSanitizationService>());
     }
 
     /// <summary>

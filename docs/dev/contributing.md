@@ -236,3 +236,29 @@ docs: update ISSM guide with ConMon section
 test: add assessment record unit tests
 refactor: extract gate condition logic
 ```
+
+---
+
+## Enterprise Hardening Configuration (Feature 029)
+
+The following configuration sections were added in Feature 029. Override via environment variables using double-underscore syntax (e.g., `Resilience__Pipelines__0__MaxRetryAttempts=5`).
+
+| Section | Purpose | Key Settings |
+|---------|---------|--------------|
+| `Resilience` | Polly retry/circuit breaker | `Pipelines[].MaxRetryAttempts`, `BaseDelaySeconds` |
+| `RateLimiting` | Per-endpoint rate limits | `Policies[].PermitLimit`, `WindowSeconds` |
+| `Caching` | Response cache settings | `SizeLimitMb`, `DefaultTtlSeconds` |
+| `Pagination` | Collection page sizes | `DefaultPageSize` (50), `MaxPageSize` (100) |
+| `Streaming` | SSE buffer/keepalive | `EventBufferSize` (256), `KeepaliveIntervalSeconds` (15) |
+| `OpenTelemetry` | Metrics/tracing export | `OtlpEndpoint`, `EnablePrometheus` |
+| `Server.OfflineMode` | IL6 air-gap mode | `true`/`false` |
+
+### NuGet Packages Added
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `OpenTelemetry.Extensions.Hosting` | 1.9.0 | OTel host integration |
+| `OpenTelemetry.Exporter.OpenTelemetryProtocol` | 1.9.0 | OTLP export |
+| `OpenTelemetry.Exporter.Prometheus.AspNetCore` | 1.9.0-beta.2 | Prometheus `/metrics` |
+| `OpenTelemetry.Instrumentation.AspNetCore` | 1.9.0 | ASP.NET Core auto-instrumentation |
+| `Microsoft.Extensions.Http.Resilience` | 9.0.0 | Polly integration |

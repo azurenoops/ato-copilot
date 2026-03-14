@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Reflection;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Ato.Copilot.Core.Interfaces.Compliance;
@@ -14,14 +13,11 @@ namespace Ato.Copilot.Agents.Compliance.Services.KnowledgeBase;
 /// </summary>
 public class StigKnowledgeService : IStigKnowledgeService
 {
-    private readonly IMemoryCache _cache;
     private readonly IDoDInstructionService _dodInstructionService;
     private readonly ILogger<StigKnowledgeService> _logger;
 
-    private const string CacheKey = "kb:stig:all_controls";
-    private const string CciCacheKey = "kb:cci:all_mappings";
-    private const string RuleIdIndexCacheKey = "kb:stig:rule_id_index";
-    private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
+    private readonly Lazy<Task<List<StigControl>>> _lazyControls;
+    private readonly Lazy<Task<List<CciMapping>>> _lazyCciMappings;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -33,9 +29,12 @@ public class StigKnowledgeService : IStigKnowledgeService
         IDoDInstructionService dodInstructionService,
         ILogger<StigKnowledgeService> logger)
     {
-        _cache = cache;
         _dodInstructionService = dodInstructionService;
         _logger = logger;
+        _lazyControls = new Lazy<Task<List<StigControl>>>(
+            LoadControlsCoreAsync, LazyThreadSafetyMode.ExecutionAndPublication);
+        _lazyCciMappings = new Lazy<Task<List<CciMapping>>>(
+            LoadCciMappingsCoreAsync, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <inheritdoc />
@@ -43,7 +42,7 @@ public class StigKnowledgeService : IStigKnowledgeService
         string controlId,
         CancellationToken cancellationToken = default)
     {
-        var controls = await LoadControlsAsync();
+        var controls = await _lazyControls.Value;
         var matching = controls
             .Where(c => c.NistControls.Contains(controlId, StringComparer.OrdinalIgnoreCase))
             .ToList();
@@ -57,7 +56,7 @@ public class StigKnowledgeService : IStigKnowledgeService
     /// <inheritdoc />
     public async Task<StigControl?> GetStigControlAsync(string stigId, CancellationToken cancellationToken = default)
     {
-        var controls = await LoadControlsAsync();
+        var controls = await _lazyControls.Value;
         return controls.FirstOrDefault(c =>
             string.Equals(c.StigId, stigId, StringComparison.OrdinalIgnoreCase));
     }
@@ -73,7 +72,7 @@ public class StigKnowledgeService : IStigKnowledgeService
     /// <inheritdoc />
     public async Task<List<StigControl>> GetStigControlsByBenchmarkAsync(string benchmarkId, CancellationToken cancellationToken = default)
     {
-        var controls = await LoadControlsAsync();
+        var controls = await _lazyControls.Value;
         return controls
             .Where(c => string.Equals(c.BenchmarkId, benchmarkId, StringComparison.OrdinalIgnoreCase))
             .ToList();
@@ -84,19 +83,13 @@ public class StigKnowledgeService : IStigKnowledgeService
     /// </summary>
     private async Task<Dictionary<string, StigControl>> LoadRuleIdIndexAsync()
     {
-        if (_cache.TryGetValue(RuleIdIndexCacheKey, out Dictionary<string, StigControl>? cached) && cached != null)
-            return cached;
-
-        var controls = await LoadControlsAsync();
+        var controls = await _lazyControls.Value;
         var index = new Dictionary<string, StigControl>(StringComparer.OrdinalIgnoreCase);
         foreach (var control in controls)
         {
             if (!string.IsNullOrEmpty(control.RuleId) && !index.ContainsKey(control.RuleId))
                 index[control.RuleId] = control;
         }
-
-        _cache.Set(RuleIdIndexCacheKey, index, CacheTtl);
-        _logger.LogDebug("Built RuleId index with {Count} entries", index.Count);
         return index;
     }
 
@@ -107,7 +100,7 @@ public class StigKnowledgeService : IStigKnowledgeService
         int maxResults = 10,
         CancellationToken cancellationToken = default)
     {
-        var controls = await LoadControlsAsync();
+        var controls = await _lazyControls.Value;
         var lower = query.ToLowerInvariant();
 
         var results = controls.Where(c =>
@@ -158,8 +151,8 @@ public class StigKnowledgeService : IStigKnowledgeService
         StigSeverity? severity = null,
         CancellationToken cancellationToken = default)
     {
-        var cciMappings = await LoadCciMappingsAsync();
-        var controls = await LoadControlsAsync();
+        var cciMappings = await _lazyCciMappings.Value;
+        var controls = await _lazyControls.Value;
 
         // Step 1: Find all CCI IDs mapped to this NIST control
         var normalizedControlId = controlId.ToUpperInvariant();
@@ -190,20 +183,17 @@ public class StigKnowledgeService : IStigKnowledgeService
         string controlId,
         CancellationToken cancellationToken = default)
     {
-        var allMappings = await LoadCciMappingsAsync();
+        var allMappings = await _lazyCciMappings.Value;
         return allMappings
             .Where(m => m.NistControlId.Equals(controlId, StringComparison.OrdinalIgnoreCase))
             .ToList();
     }
 
     /// <summary>
-    /// Loads STIG controls from the JSON data file, with 24-hour cache TTL.
+    /// Loads STIG controls from the JSON data file (deferred via Lazy&lt;T&gt;).
     /// </summary>
-    private async Task<List<StigControl>> LoadControlsAsync()
+    private async Task<List<StigControl>> LoadControlsCoreAsync()
     {
-        if (_cache.TryGetValue(CacheKey, out List<StigControl>? cached) && cached != null)
-            return cached;
-
         try
         {
             var assembly = typeof(StigKnowledgeService).Assembly;
@@ -234,7 +224,6 @@ public class StigKnowledgeService : IStigKnowledgeService
             var doc = JsonSerializer.Deserialize<StigDataFile>(json, JsonOptions);
             var controls = doc?.Controls ?? new List<StigControl>();
 
-            _cache.Set(CacheKey, controls, CacheTtl);
             _logger.LogInformation("Loaded {Count} STIG controls from data file", controls.Count);
             return controls;
         }
@@ -246,13 +235,10 @@ public class StigKnowledgeService : IStigKnowledgeService
     }
 
     /// <summary>
-    /// Loads CCI-NIST mappings from the embedded JSON resource, with 24-hour cache TTL.
+    /// Loads CCI-NIST mappings from the embedded JSON resource (deferred via Lazy&lt;T&gt;).
     /// </summary>
-    private async Task<List<CciMapping>> LoadCciMappingsAsync()
+    private async Task<List<CciMapping>> LoadCciMappingsCoreAsync()
     {
-        if (_cache.TryGetValue(CciCacheKey, out List<CciMapping>? cached) && cached != null)
-            return cached;
-
         try
         {
             var assembly = typeof(StigKnowledgeService).Assembly;
@@ -272,7 +258,6 @@ public class StigKnowledgeService : IStigKnowledgeService
             var doc = JsonSerializer.Deserialize<CciDataFile>(json, JsonOptions);
             var mappings = doc?.Mappings ?? new List<CciMapping>();
 
-            _cache.Set(CciCacheKey, mappings, CacheTtl);
             _logger.LogInformation("Loaded {Count} CCI-NIST mappings from embedded resource", mappings.Count);
             return mappings;
         }

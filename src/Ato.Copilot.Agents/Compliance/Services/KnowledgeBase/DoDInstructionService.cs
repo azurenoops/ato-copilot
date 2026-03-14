@@ -13,11 +13,8 @@ namespace Ato.Copilot.Agents.Compliance.Services.KnowledgeBase;
 /// </summary>
 public class DoDInstructionService : IDoDInstructionService
 {
-    private readonly IMemoryCache _cache;
     private readonly ILogger<DoDInstructionService> _logger;
-
-    private const string CacheKey = "kb:dod:all_instructions";
-    private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
+    private readonly Lazy<Task<List<DoDInstruction>>> _lazyInstructions;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -28,8 +25,9 @@ public class DoDInstructionService : IDoDInstructionService
         IMemoryCache cache,
         ILogger<DoDInstructionService> logger)
     {
-        _cache = cache;
         _logger = logger;
+        _lazyInstructions = new Lazy<Task<List<DoDInstruction>>>(
+            LoadInstructionsCoreAsync, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <inheritdoc />
@@ -39,7 +37,7 @@ public class DoDInstructionService : IDoDInstructionService
     {
         _logger.LogDebug("DoD instruction lookup for control {ControlId}", controlId);
 
-        var instructions = await LoadInstructionsAsync();
+        var instructions = await _lazyInstructions.Value;
         var matching = instructions
             .Where(i => i.RelatedNistControls.Contains(controlId, StringComparer.OrdinalIgnoreCase))
             .ToList();
@@ -86,7 +84,7 @@ public class DoDInstructionService : IDoDInstructionService
     {
         _logger.LogDebug("Explaining DoD instruction {InstructionId}", instructionId);
 
-        var instructions = await LoadInstructionsAsync();
+        var instructions = await _lazyInstructions.Value;
         var normalized = NormalizeInstructionId(instructionId);
 
         return instructions.FirstOrDefault(i =>
@@ -100,7 +98,7 @@ public class DoDInstructionService : IDoDInstructionService
     {
         _logger.LogDebug("Finding DoD instructions for control {ControlId}", controlId);
 
-        var instructions = await LoadInstructionsAsync();
+        var instructions = await _lazyInstructions.Value;
         return instructions
             .Where(i => i.RelatedNistControls.Contains(controlId, StringComparer.OrdinalIgnoreCase) ||
                         i.ControlMappings.Any(m => m.ControlId.Equals(controlId, StringComparison.OrdinalIgnoreCase)))
@@ -135,13 +133,10 @@ public class DoDInstructionService : IDoDInstructionService
     }
 
     /// <summary>
-    /// Loads DoD instruction data from the JSON data file, with 24-hour cache TTL.
+    /// Loads DoD instruction data from the JSON data file (deferred via Lazy&lt;T&gt;).
     /// </summary>
-    private async Task<List<DoDInstruction>> LoadInstructionsAsync()
+    private async Task<List<DoDInstruction>> LoadInstructionsCoreAsync()
     {
-        if (_cache.TryGetValue(CacheKey, out List<DoDInstruction>? cached) && cached != null)
-            return cached;
-
         try
         {
             var assembly = typeof(DoDInstructionService).Assembly;
@@ -170,7 +165,6 @@ public class DoDInstructionService : IDoDInstructionService
             var doc = JsonSerializer.Deserialize<DoDInstructionsDataFile>(json, JsonOptions);
             var instructions = doc?.Instructions ?? new List<DoDInstruction>();
 
-            _cache.Set(CacheKey, instructions, CacheTtl);
             _logger.LogInformation("Loaded {Count} DoD instructions from data file", instructions.Count);
             return instructions;
         }

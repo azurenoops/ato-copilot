@@ -46,7 +46,7 @@ public class ChatServiceConversationTests : IDisposable
         var client = new HttpClient(handler.Object) { BaseAddress = new Uri("http://localhost:3001") };
         _httpClientFactoryMock.Setup(f => f.CreateClient("McpServer")).Returns(client);
 
-        _service = new ChatService(_dbContext, _httpClientFactoryMock.Object, _loggerMock.Object);
+        _service = new ChatService(_dbContext, _httpClientFactoryMock.Object, _loggerMock.Object, Mock.Of<Ato.Copilot.Core.Interfaces.IPathSanitizationService>());
     }
 
     public void Dispose()
