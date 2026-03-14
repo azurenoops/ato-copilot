@@ -15,11 +15,12 @@ public class ScanImportModelTests
     [Fact]
     public void ScanImportType_Should_Have_Ckl_And_Xccdf()
     {
-        Enum.GetValues<ScanImportType>().Should().HaveCount(4);
+        Enum.GetValues<ScanImportType>().Should().HaveCount(5);
         Enum.IsDefined(ScanImportType.Ckl).Should().BeTrue();
         Enum.IsDefined(ScanImportType.Xccdf).Should().BeTrue();
         Enum.IsDefined(ScanImportType.PrismaCsv).Should().BeTrue();
         Enum.IsDefined(ScanImportType.PrismaApi).Should().BeTrue();
+        Enum.IsDefined(ScanImportType.NessusXml).Should().BeTrue();
     }
 
     // ─── ScanImportStatus Enum ───────────────────────────────────────────────

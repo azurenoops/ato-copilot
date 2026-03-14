@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
+using Azure.AI.Agents.Persistent;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Ato.Copilot.Core.Configuration;
@@ -14,7 +16,10 @@ public abstract class BaseAgent
 {
     protected readonly ILogger Logger;
     private readonly IChatClient? _chatClient;
-    private readonly AzureOpenAIGatewayOptions? _aiOptions;
+    private protected readonly AzureAiOptions? _azureAiOptions;
+    private protected readonly PersistentAgentsClient? _foundryClient;
+    private protected string? _foundryAgentId;
+    private readonly ConcurrentDictionary<string, string> _threadMap = new();
 
     protected BaseAgent(ILogger logger)
     {
@@ -22,14 +27,18 @@ public abstract class BaseAgent
     }
 
     /// <summary>
-    /// Constructor overload for AI-enabled agents. Accepts optional IChatClient and AI options.
-    /// When chatClient is null, agents fall back to deterministic tool routing.
+    /// Constructor for AI-enabled agents using the unified AzureAiOptions configuration.
     /// </summary>
-    protected BaseAgent(ILogger logger, IChatClient? chatClient, AzureOpenAIGatewayOptions? aiOptions)
+    protected BaseAgent(
+        ILogger logger,
+        IChatClient? chatClient,
+        PersistentAgentsClient? foundryClient,
+        AzureAiOptions? azureAiOptions)
         : this(logger)
     {
         _chatClient = chatClient;
-        _aiOptions = aiOptions;
+        _foundryClient = foundryClient;
+        _azureAiOptions = azureAiOptions;
     }
 
     /// <summary>
@@ -87,6 +96,457 @@ public abstract class BaseAgent
     }
 
     /// <summary>
+    /// Dispatches AI processing based on the configured <see cref="AzureAiOptions.Provider"/>.
+    /// Routes to Foundry, OpenAI, or deterministic based on provider setting.
+    /// Returns null if the selected backend is unavailable or fails, allowing the caller
+    /// to fall back to deterministic tool routing.
+    /// </summary>
+    protected async Task<AgentResponse?> TryProcessWithBackendAsync(
+        string message,
+        AgentConversationContext context,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progress = null)
+    {
+        if (_azureAiOptions is not { Enabled: true })
+            return await TryProcessWithAiAsync(message, context, cancellationToken, progress);
+
+        switch (_azureAiOptions.Provider)
+        {
+            case AiProvider.Foundry:
+                try
+                {
+                    var foundryResponse = await TryProcessWithFoundryAsync(message, context, cancellationToken, progress);
+                    if (foundryResponse != null)
+                        return foundryResponse;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex,
+                        "Foundry processing threw exception for agent {AgentName}, falling back to IChatClient",
+                        AgentName);
+                }
+
+                Logger.LogWarning(
+                    "Foundry processing returned null for agent {AgentName}, falling back to IChatClient",
+                    AgentName);
+
+                // Fallback to IChatClient if Foundry fails
+                return await TryProcessWithAiAsync(message, context, cancellationToken, progress);
+
+            case AiProvider.OpenAi:
+            default:
+                return await TryProcessWithAiAsync(message, context, cancellationToken, progress);
+        }
+    }
+
+    /// <summary>
+    /// Attempt AI-powered processing via Azure AI Foundry Agents.
+    /// Creates a thread, adds user message, creates a run, polls to completion,
+    /// dispatches tool calls locally, and returns the assistant response.
+    /// Returns null if Foundry is unavailable, not provisioned, or fails — signaling
+    /// the caller to try the next backend in the fallback chain.
+    /// </summary>
+    protected virtual async Task<AgentResponse?> TryProcessWithFoundryAsync(
+        string message,
+        AgentConversationContext context,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progress = null)
+    {
+        if (_foundryClient is null || _foundryAgentId is null)
+            return null;
+
+        var stopwatch = Stopwatch.StartNew();
+        var toolsExecuted = new List<ToolExecutionResult>();
+
+        try
+        {
+            Logger.LogInformation(
+                "Foundry processing started for agent {AgentName}, conversation {ConversationId}",
+                AgentName, context.ConversationId);
+
+            // Reuse existing thread for conversation or create new one (US5)
+            string threadId;
+            if (_threadMap.TryGetValue(context.ConversationId, out var existingThreadId))
+            {
+                threadId = existingThreadId;
+                Logger.LogDebug(
+                    "Reusing Foundry thread {ThreadId} for conversation {ConversationId}",
+                    threadId, context.ConversationId);
+            }
+            else
+            {
+                var thread = await _foundryClient.Threads.CreateThreadAsync(cancellationToken: cancellationToken);
+                threadId = thread.Value.Id;
+                _threadMap[context.ConversationId] = threadId;
+                Logger.LogDebug(
+                    "Created Foundry thread {ThreadId} for conversation {ConversationId}",
+                    threadId, context.ConversationId);
+            }
+
+            // Add user message to thread
+            await _foundryClient.Messages.CreateMessageAsync(
+                threadId,
+                MessageRole.User,
+                message,
+                cancellationToken: cancellationToken);
+
+            // Create run with the provisioned agent
+            var run = (await _foundryClient.Runs.CreateRunAsync(
+                threadId,
+                _foundryAgentId,
+                cancellationToken: cancellationToken)).Value;
+
+            Logger.LogInformation(
+                "Foundry run created: threadId={ThreadId}, runId={RunId}, agent={AgentName}",
+                threadId, run.Id, AgentName);
+
+            // Poll until terminal status with timeout enforcement (FR-006)
+            var maxRounds = _azureAiOptions?.RunTimeoutSeconds > 0
+                ? _azureAiOptions.RunTimeoutSeconds
+                : 60;
+            var timeoutMs = maxRounds * 1000;
+            var toolRounds = 0;
+            var maxToolRounds = _azureAiOptions?.MaxToolIterations ?? 5;
+
+            while (true)
+            {
+                // Timeout enforcement (T018)
+                if (stopwatch.ElapsedMilliseconds > timeoutMs)
+                {
+                    Logger.LogWarning(
+                        "Foundry run timed out after {ElapsedMs}ms for agent {AgentName}, cancelling run {RunId}",
+                        stopwatch.ElapsedMilliseconds, AgentName, run.Id);
+
+                    await _foundryClient.Runs.CancelRunAsync(threadId, run.Id, cancellationToken);
+                    return null;
+                }
+
+                run = (await _foundryClient.Runs.GetRunAsync(threadId, run.Id, cancellationToken)).Value;
+
+                if (run.Status == RunStatus.Completed)
+                {
+                    // Read the assistant's response — last assistant message
+                    string? responseText = null;
+                    await foreach (var msg in _foundryClient.Messages.GetMessagesAsync(
+                        threadId, order: ListSortOrder.Descending, cancellationToken: cancellationToken))
+                    {
+                        if (msg.Role == MessageRole.Agent)
+                        {
+                            responseText = string.Join("", msg.ContentItems
+                                .OfType<MessageTextContent>()
+                                .Select(c => c.Text));
+                            break;
+                        }
+                    }
+
+                    stopwatch.Stop();
+                    Logger.LogInformation(
+                        "Foundry processing completed for agent {AgentName} in {ElapsedMs}ms, {ToolCount} tools executed",
+                        AgentName, stopwatch.ElapsedMilliseconds, toolsExecuted.Count);
+
+                    return new AgentResponse
+                    {
+                        Success = true,
+                        Response = responseText ?? "I processed your request but have no additional details to share.",
+                        AgentName = AgentName,
+                        ToolsExecuted = toolsExecuted,
+                        ProcessingTimeMs = stopwatch.ElapsedMilliseconds
+                    };
+                }
+                else if (run.Status == RunStatus.RequiresAction)
+                {
+                    toolRounds++;
+                    if (toolRounds > maxToolRounds)
+                    {
+                        Logger.LogWarning(
+                            "Foundry run hit max tool rounds ({MaxRounds}) for agent {AgentName}, cancelling",
+                            maxToolRounds, AgentName);
+
+                        await _foundryClient.Runs.CancelRunAsync(threadId, run.Id, cancellationToken);
+
+                        var lastTool = toolsExecuted.LastOrDefault(t => t.Success);
+                        var summary = $"Completed {toolsExecuted.Count(t => t.Success)} of {toolsExecuted.Count} tool calls before reaching the maximum iteration limit. Last tool executed: {lastTool?.ToolName ?? "none"}.";
+                        if (lastTool?.Result is { Length: > 0 })
+                            summary += $" {lastTool.Result}";
+
+                        return new AgentResponse
+                        {
+                            Success = true,
+                            Response = summary,
+                            AgentName = AgentName,
+                            ToolsExecuted = toolsExecuted,
+                            ProcessingTimeMs = stopwatch.ElapsedMilliseconds
+                        };
+                    }
+
+                    // Dispatch tool calls locally (R-005)
+                    if (run.RequiredAction is SubmitToolOutputsAction submitAction)
+                    {
+                        var toolOutputs = new List<ToolOutput>();
+                        var toolCallCount = submitAction.ToolCalls.Count;
+
+                        Logger.LogDebug(
+                            "Foundry run requires action: {ToolCallCount} tool calls, round {Round}, agent {AgentName}",
+                            toolCallCount, toolRounds, AgentName);
+
+                        progress?.Report($"ATO Copilot is executing {toolCallCount} tool(s) (round {toolRounds})...");
+
+                        foreach (var requiredCall in submitAction.ToolCalls)
+                        {
+                            if (requiredCall is RequiredFunctionToolCall functionCall)
+                            {
+                                var toolStopwatch = Stopwatch.StartNew();
+                                var tool = Tools.FirstOrDefault(t =>
+                                    t.Name.Equals(functionCall.Name, StringComparison.OrdinalIgnoreCase));
+
+                                if (tool is null)
+                                {
+                                    Logger.LogWarning(
+                                        "Unknown tool {ToolName} requested by Foundry in agent {AgentName}",
+                                        functionCall.Name, AgentName);
+
+                                    toolOutputs.Add(new ToolOutput(functionCall.Id,
+                                        $"Error: Tool '{functionCall.Name}' is not available. " +
+                                        $"Available tools: {string.Join(", ", Tools.Select(t => t.Name))}"));
+
+                                    toolsExecuted.Add(new ToolExecutionResult
+                                    {
+                                        ToolName = functionCall.Name,
+                                        Success = false,
+                                        Result = "Unknown tool",
+                                        ExecutionTimeMs = 0
+                                    });
+                                    continue;
+                                }
+
+                                try
+                                {
+                                    // Parse arguments from JSON string
+                                    var args = new Dictionary<string, object?>();
+                                    if (!string.IsNullOrEmpty(functionCall.Arguments))
+                                    {
+                                        var jsonArgs = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(functionCall.Arguments);
+                                        if (jsonArgs != null)
+                                        {
+                                            foreach (var kvp in jsonArgs)
+                                                args[kvp.Key] = kvp.Value;
+                                        }
+                                    }
+
+                                    Logger.LogDebug(
+                                        "Executing tool {ToolName} for agent {AgentName}, round {Round}",
+                                        tool.Name, AgentName, toolRounds);
+
+                                    progress?.Report($"Running {tool.Description ?? tool.Name}...");
+
+                                    var toolResult = await tool.ExecuteAsync(args, cancellationToken);
+                                    toolStopwatch.Stop();
+
+                                    toolOutputs.Add(new ToolOutput(functionCall.Id, toolResult ?? string.Empty));
+
+                                    toolsExecuted.Add(new ToolExecutionResult
+                                    {
+                                        ToolName = tool.Name,
+                                        Success = true,
+                                        Result = toolResult?.Length > 200
+                                            ? toolResult[..200] + "..."
+                                            : toolResult ?? string.Empty,
+                                        ExecutionTimeMs = toolStopwatch.ElapsedMilliseconds
+                                    });
+
+                                    Logger.LogDebug(
+                                        "Tool {ToolName} completed in {ElapsedMs}ms for agent {AgentName}",
+                                        tool.Name, toolStopwatch.ElapsedMilliseconds, AgentName);
+                                }
+                                catch (Exception ex)
+                                {
+                                    toolStopwatch.Stop();
+                                    Logger.LogError(ex,
+                                        "Tool {ToolName} failed in agent {AgentName}: {Error}",
+                                        tool.Name, AgentName, ex.Message);
+
+                                    toolOutputs.Add(new ToolOutput(functionCall.Id,
+                                        $"Error executing tool: {ex.Message}"));
+
+                                    toolsExecuted.Add(new ToolExecutionResult
+                                    {
+                                        ToolName = tool.Name,
+                                        Success = false,
+                                        Result = ex.Message,
+                                        ExecutionTimeMs = toolStopwatch.ElapsedMilliseconds
+                                    });
+                                }
+                            }
+                        }
+
+                        // Submit tool outputs back to the run
+                        run = (await _foundryClient.Runs.SubmitToolOutputsToRunAsync(
+                            run, toolOutputs, cancellationToken)).Value;
+                    }
+                }
+                else if (run.Status == RunStatus.Failed
+                    || run.Status == RunStatus.Cancelled
+                    || run.Status == RunStatus.Expired)
+                {
+                    // Terminal failure statuses (T024)
+                    stopwatch.Stop();
+                    Logger.LogError(
+                        "Foundry run terminal failure: status={RunStatus}, error={LastError}, agent={AgentName}, runId={RunId}, elapsed={ElapsedMs}ms",
+                        run.Status, run.LastError?.Message ?? "none", AgentName, run.Id, stopwatch.ElapsedMilliseconds);
+                    return null;
+                }
+                else
+                {
+                    // Queued, InProgress — poll again after 1 second
+                    progress?.Report("ATO Copilot is thinking...");
+                    await Task.Delay(1000, cancellationToken);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            Logger.LogError(ex,
+                "Foundry processing failed for agent {AgentName} after {ElapsedMs}ms: {Error}",
+                AgentName, stopwatch.ElapsedMilliseconds, ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Provisions (or reuses) a Foundry agent with the given name, instructions, and tool definitions.
+    /// Lists existing agents by name and creates or updates as needed (FR-018 idempotency).
+    /// Per research R-007.
+    /// </summary>
+    protected async Task ProvisionFoundryAgentAsync(CancellationToken cancellationToken = default)
+    {
+        if (_foundryClient is null || _azureAiOptions is not { IsFoundry: true })
+            return;
+
+        try
+        {
+            var agentName = AgentName;
+            var instructions = GetSystemPrompt();
+            var toolDefinitions = BuildFoundryToolDefinitions();
+
+            Logger.LogInformation(
+                "Provisioning Foundry agent \"{AgentName}\" with {ToolCount} tools...",
+                agentName, toolDefinitions.Count);
+
+            // List existing agents and find by name (R-007)
+            PersistentAgent? existing = null;
+            await foreach (var agent in _foundryClient.Administration.GetAgentsAsync(cancellationToken: cancellationToken))
+            {
+                if (string.Equals(agent.Name, agentName, StringComparison.OrdinalIgnoreCase))
+                {
+                    existing = agent;
+                    break;
+                }
+            }
+
+            if (existing != null)
+            {
+                // Update existing agent with current instructions and tools
+                var updated = await _foundryClient.Administration.UpdateAgentAsync(
+                    existing.Id,
+                    _azureAiOptions!.DeploymentName,
+                    name: agentName,
+                    instructions: instructions,
+                    tools: toolDefinitions,
+                    cancellationToken: cancellationToken);
+                _foundryAgentId = updated.Value.Id;
+
+                Logger.LogInformation(
+                    "Foundry agent updated: id={AgentId}, name={AgentName}",
+                    _foundryAgentId, agentName);
+            }
+            else
+            {
+                // Create new agent
+                var created = await _foundryClient.Administration.CreateAgentAsync(
+                    _azureAiOptions!.DeploymentName,
+                    name: agentName,
+                    instructions: instructions,
+                    tools: toolDefinitions,
+                    cancellationToken: cancellationToken);
+                _foundryAgentId = created.Value.Id;
+
+                Logger.LogInformation(
+                    "Foundry agent provisioned: id={AgentId}, name={AgentName}",
+                    _foundryAgentId, agentName);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex,
+                "Failed to provision Foundry agent \"{AgentName}\" — Foundry processing will be unavailable",
+                AgentName);
+            _foundryAgentId = null;
+        }
+    }
+
+    /// <summary>
+    /// Converts registered <see cref="BaseTool"/> instances to Foundry <see cref="FunctionToolDefinition"/>
+    /// objects with JSON Schema parameters. Per research R-003.
+    /// </summary>
+    private List<ToolDefinition> BuildFoundryToolDefinitions()
+    {
+        var definitions = new List<ToolDefinition>();
+        foreach (var tool in Tools)
+        {
+            try
+            {
+                var schema = BuildToolJsonSchema(tool);
+                var functionTool = new FunctionToolDefinition(
+                    name: tool.Name,
+                    description: tool.Description,
+                    parameters: BinaryData.FromString(schema));
+                definitions.Add(functionTool);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex,
+                    "Failed to build Foundry tool definition for {ToolName} — skipping",
+                    tool.Name);
+            }
+        }
+        return definitions;
+    }
+
+    /// <summary>
+    /// Builds a JSON Schema string from a BaseTool's Parameters metadata.
+    /// Reuses the same parameter metadata that Feature 011's ToolAIFunction uses.
+    /// </summary>
+    private static string BuildToolJsonSchema(BaseTool tool)
+    {
+        var properties = new Dictionary<string, object>();
+        var required = new List<string>();
+
+        foreach (var kvp in tool.Parameters)
+        {
+            var param = kvp.Value;
+            var prop = new Dictionary<string, object>
+            {
+                ["type"] = param.Type.ToLowerInvariant(),
+                ["description"] = param.Description
+            };
+            properties[kvp.Key] = prop;
+
+            if (param.Required)
+                required.Add(kvp.Key);
+        }
+
+        var schema = new Dictionary<string, object>
+        {
+            ["type"] = "object",
+            ["properties"] = properties,
+            ["required"] = required
+        };
+
+        return JsonSerializer.Serialize(schema);
+    }
+
+    /// <summary>
     /// Attempt AI-powered processing via Azure OpenAI. Returns null if AI is unavailable
     /// or disabled, signaling the caller to fall back to deterministic tool routing.
     /// Implements manual tool-calling loop per research decision R4.
@@ -97,7 +557,7 @@ public abstract class BaseAgent
         CancellationToken cancellationToken = default,
         IProgress<string>? progress = null)
     {
-        if (_chatClient is null || _aiOptions is null || !_aiOptions.AgentAIEnabled)
+        if (_chatClient is null || _azureAiOptions is not { Enabled: true })
             return null;
 
         var stopwatch = Stopwatch.StartNew();
@@ -114,11 +574,11 @@ public abstract class BaseAgent
             var chatOptions = new ChatOptions
             {
                 Tools = toolDefinitions,
-                Temperature = (float)_aiOptions.Temperature
+                Temperature = (float)_azureAiOptions.Temperature
             };
 
             var toolsExecuted = new List<ToolExecutionResult>();
-            var maxRounds = _aiOptions.MaxToolCallRounds;
+            var maxRounds = _azureAiOptions.MaxToolIterations;
 
             for (var round = 0; round < maxRounds; round++)
             {

@@ -51,14 +51,12 @@ public class TaskEnrichmentService : ITaskEnrichmentService
     /// <param name="remediationEngine">AI-first → NIST-template fallback engine for script generation.</param>
     /// <param name="aiGenerator">AI plan generator — used for IsAvailable check (CHK013).</param>
     /// <param name="chatClient">Optional AI chat client for dedicated validation criteria prompt (per research R3).</param>
-    /// <param name="aiOptions">Azure OpenAI gateway options (AgentAIEnabled gate check).</param>
     /// <param name="logger">Structured logger (Constitution Principle V).</param>
     public TaskEnrichmentService(
         IRemediationEngine remediationEngine,
         IAiRemediationPlanGenerator aiGenerator,
         ILogger<TaskEnrichmentService> logger,
-        IChatClient? chatClient = null,
-        IOptions<AzureOpenAIGatewayOptions>? aiOptions = null)
+        IChatClient? chatClient = null)
     {
         _remediationEngine = remediationEngine;
         _aiGenerator = aiGenerator;

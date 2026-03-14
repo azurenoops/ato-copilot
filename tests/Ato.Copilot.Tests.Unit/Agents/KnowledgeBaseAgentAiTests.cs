@@ -32,7 +32,7 @@ public class KnowledgeBaseAgentAiTests
     }
 
     private KnowledgeBaseAgent CreateAgent(IChatClient? chatClient = null,
-        AzureOpenAIGatewayOptions? aiOptions = null)
+        AzureAiOptions? aiOptions = null)
     {
         var options = Options.Create(new KnowledgeBaseAgentOptions());
         var cache = new MemoryCache(new MemoryCacheOptions());
@@ -53,7 +53,7 @@ public class KnowledgeBaseAgentAiTests
         var explainImpactLevel = new ExplainImpactLevelTool(impactLevelService, cache, toolOptions, Mock.Of<ILogger<ExplainImpactLevelTool>>());
         var getFedRampTemplate = new GetFedRampTemplateGuidanceTool(fedRampTemplateService, cache, toolOptions, Mock.Of<ILogger<GetFedRampTemplateGuidanceTool>>());
 
-        IOptions<AzureOpenAIGatewayOptions>? optionsWrapper =
+        IOptions<AzureAiOptions>? optionsWrapper =
             aiOptions != null ? Options.Create(aiOptions) : null;
 
         return new KnowledgeBaseAgent(
@@ -65,13 +65,14 @@ public class KnowledgeBaseAgentAiTests
             getFedRampTemplate,
             Mock.Of<ILogger<KnowledgeBaseAgent>>(),
             chatClient,
+            null,
             optionsWrapper);
     }
 
-    private static AzureOpenAIGatewayOptions CreateEnabledOptions() => new()
+    private static AzureAiOptions CreateEnabledOptions() => new()
     {
-        AgentAIEnabled = true,
-        MaxToolCallRounds = 5,
+        Enabled = true,
+        MaxToolIterations = 5,
         Temperature = 0.3,
         Endpoint = "https://test.openai.azure.us/"
     };

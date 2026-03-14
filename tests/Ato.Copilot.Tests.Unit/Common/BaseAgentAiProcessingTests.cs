@@ -23,8 +23,8 @@ public class BaseAgentAiProcessingTests
         private readonly string _systemPrompt;
 
         public TestAgent(ILogger logger, IChatClient? chatClient = null,
-            AzureOpenAIGatewayOptions? aiOptions = null)
-            : base(logger, chatClient, aiOptions)
+            AzureAiOptions? aiOptions = null)
+            : base(logger, chatClient, null, aiOptions)
         {
             _systemPrompt = "You are a test agent for compliance.";
         }
@@ -92,11 +92,11 @@ public class BaseAgentAiProcessingTests
             => _handler(arguments, cancellationToken);
     }
 
-    private AzureOpenAIGatewayOptions CreateEnabledOptions(int maxRounds = 5) =>
+    private AzureAiOptions CreateEnabledOptions(int maxRounds = 5) =>
         new()
         {
-            AgentAIEnabled = true,
-            MaxToolCallRounds = maxRounds,
+            Enabled = true,
+            MaxToolIterations = maxRounds,
             Temperature = 0.3,
             Endpoint = "https://test.openai.azure.us/"
         };
@@ -124,7 +124,7 @@ public class BaseAgentAiProcessingTests
     public async Task TryProcessWithAiAsync_WhenAgentAIDisabled_ReturnsNull()
     {
         var chatClient = new Mock<IChatClient>();
-        var options = new AzureOpenAIGatewayOptions { AgentAIEnabled = false };
+        var options = new AzureAiOptions { Enabled = false };
         var agent = new TestAgent(_loggerMock.Object, chatClient.Object, options);
 
         var result = await agent.TestTryProcessWithAiAsync("hello", CreateContext());
@@ -563,7 +563,7 @@ public class BaseAgentAiProcessingTests
     public async Task DegradedMode_DisabledFlag_ProcessesLikePreAI()
     {
         var chatClient = new Mock<IChatClient>();
-        var options = new AzureOpenAIGatewayOptions { AgentAIEnabled = false };
+        var options = new AzureAiOptions { Enabled = false };
         var agent = new TestAgent(_loggerMock.Object, chatClient.Object, options);
 
         var aiResult = await agent.TestTryProcessWithAiAsync("test", CreateContext());

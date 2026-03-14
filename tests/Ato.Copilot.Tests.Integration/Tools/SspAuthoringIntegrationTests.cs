@@ -181,7 +181,7 @@ public class SspAuthoringIntegrationTests : IDisposable
         sspData.GetProperty("controls_with_narratives").GetInt32().Should().BeGreaterOrEqualTo(2); // 1 manual + at least 1 batch
         sspData.GetProperty("content").GetString().Should().Contain("System Security Plan");
         sspData.GetProperty("content").GetString().Should().Contain("SSP Integration System");
-        sspData.GetProperty("sections").GetArrayLength().Should().Be(5);
+        sspData.GetProperty("sections").GetArrayLength().Should().Be(13);
     }
 
     /// <summary>
@@ -304,7 +304,7 @@ public class SspAuthoringIntegrationTests : IDisposable
         sspJson.RootElement.GetProperty("status").GetString().Should().Be("success");
         var sspData = sspJson.RootElement.GetProperty("data");
         sspData.GetProperty("sections").GetArrayLength().Should().Be(2);
-        sspData.GetProperty("content").GetString().Should().Contain("System Information");
+        sspData.GetProperty("content").GetString().Should().Contain("System Identification");
         sspData.GetProperty("content").GetString().Should().Contain("Security Categorization");
     }
 

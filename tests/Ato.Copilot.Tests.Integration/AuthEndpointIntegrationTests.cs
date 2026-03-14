@@ -81,6 +81,7 @@ public class AuthEndpointIntegrationTests : IAsyncLifetime
         builder.Services.AddInMemoryStateManagement();
         builder.Services.AddComplianceAgent(builder.Configuration);
         builder.Services.AddConfigurationAgent();
+        builder.Services.AddKnowledgeBaseAgent(builder.Configuration);
         builder.Services.AddMcpServer(builder.Configuration);
         builder.Services.AddCors(options =>
             options.AddDefaultPolicy(policy =>

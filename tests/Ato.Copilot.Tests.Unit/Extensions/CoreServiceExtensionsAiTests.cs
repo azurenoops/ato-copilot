@@ -1,5 +1,6 @@
 using Xunit;
 using FluentAssertions;
+using Azure.AI.Agents.Persistent;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,7 +10,7 @@ namespace Ato.Copilot.Tests.Unit.Extensions;
 
 /// <summary>
 /// Unit tests for IChatClient factory registration in CoreServiceExtensions.
-/// Verifies conditional registration based on Gateway:AzureOpenAI configuration.
+/// Verifies conditional registration based on AzureAi configuration.
 /// </summary>
 public class CoreServiceExtensionsAiTests
 {
@@ -19,9 +20,9 @@ public class CoreServiceExtensionsAiTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Gateway:AzureOpenAI:Endpoint"] = "https://test.openai.azure.us/",
-                ["Gateway:AzureOpenAI:ApiKey"] = "test-api-key-12345",
-                ["Gateway:AzureOpenAI:ChatDeploymentName"] = "gpt-4o"
+                ["AzureAi:Endpoint"] = "https://test.openai.azure.us/",
+                ["AzureAi:ApiKey"] = "test-api-key-12345",
+                ["AzureAi:DeploymentName"] = "gpt-4o"
             })
             .Build();
 
@@ -40,8 +41,8 @@ public class CoreServiceExtensionsAiTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Gateway:AzureOpenAI:Endpoint"] = "",
-                ["Gateway:AzureOpenAI:ApiKey"] = "test-api-key"
+                ["AzureAi:Endpoint"] = "",
+                ["AzureAi:ApiKey"] = "test-api-key"
             })
             .Build();
 
@@ -68,7 +69,7 @@ public class CoreServiceExtensionsAiTests
         services.AddAtoCopilotCore(config);
 
         var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IChatClient));
-        descriptor.Should().BeNull("IChatClient should not be registered when AzureOpenAI section is missing");
+        descriptor.Should().BeNull("IChatClient should not be registered when AzureAi section is missing");
     }
 
     [Fact]
@@ -91,9 +92,9 @@ public class CoreServiceExtensionsAiTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Gateway:AzureOpenAI:Endpoint"] = "https://test.openai.azure.us/",
-                ["Gateway:AzureOpenAI:UseManagedIdentity"] = "true",
-                ["Gateway:AzureOpenAI:ChatDeploymentName"] = "gpt-4o"
+                ["AzureAi:Endpoint"] = "https://test.openai.azure.us/",
+                ["AzureAi:UseManagedIdentity"] = "true",
+                ["AzureAi:DeploymentName"] = "gpt-4o"
             })
             .Build();
 
@@ -112,10 +113,10 @@ public class CoreServiceExtensionsAiTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Gateway:AzureOpenAI:Endpoint"] = "https://my-service.openai.azure.us/",
-                ["Gateway:AzureOpenAI:ApiKey"] = "gov-api-key",
-                ["Gateway:AzureOpenAI:ChatDeploymentName"] = "gpt-4o",
-                ["Gateway:Azure:CloudEnvironment"] = "AzureGovernment"
+                ["AzureAi:Endpoint"] = "https://my-service.openai.azure.us/",
+                ["AzureAi:ApiKey"] = "gov-api-key",
+                ["AzureAi:DeploymentName"] = "gpt-4o",
+                ["AzureAi:CloudEnvironment"] = "AzureGovernment"
             })
             .Build();
 
@@ -125,5 +126,72 @@ public class CoreServiceExtensionsAiTests
 
         var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IChatClient));
         descriptor.Should().NotBeNull("IChatClient should work with Azure Government .us endpoints");
+    }
+
+    [Fact]
+    public void AddAtoCopilotCore_WithFoundryProjectEndpoint_RegistersPersistentAgentsClient()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AzureAi:FoundryProjectEndpoint"] = "https://my-foundry-project.services.ai.azure.us/",
+                ["AzureAi:CloudEnvironment"] = "AzureGovernment"
+            })
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddAtoCopilotCore(config);
+
+        var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(PersistentAgentsClient));
+        descriptor.Should().NotBeNull(
+            "PersistentAgentsClient should be registered when FoundryProjectEndpoint is configured");
+        descriptor!.Lifetime.Should().Be(ServiceLifetime.Singleton);
+    }
+
+    [Fact]
+    public void AddAtoCopilotCore_WithFoundryEndpointEmpty_DoesNotRegisterPersistentAgentsClient()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AzureAi:FoundryProjectEndpoint"] = ""
+            })
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddAtoCopilotCore(config);
+
+        var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(PersistentAgentsClient));
+        descriptor.Should().BeNull(
+            "PersistentAgentsClient should not be registered when FoundryProjectEndpoint is empty");
+    }
+
+    [Fact]
+    public void AddAtoCopilotCore_WithGovFoundryEndpoint_RegistersWithGovAuthorityHost()
+    {
+        // T013a / FR-002: Azure Government authority host for Foundry client
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AzureAi:FoundryProjectEndpoint"] = "https://my-foundry-project.services.ai.azure.us/",
+                ["AzureAi:CloudEnvironment"] = "AzureGovernment"
+            })
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddAtoCopilotCore(config);
+
+        var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(PersistentAgentsClient));
+        descriptor.Should().NotBeNull(
+            "PersistentAgentsClient should be registered for Azure Government Foundry endpoints");
+
+        // Verify the factory can be invoked (exercises Gov authority host path)
+        var provider = services.BuildServiceProvider();
+        var act = () => provider.GetService<PersistentAgentsClient>();
+        act.Should().NotThrow(
+            "PersistentAgentsClient factory should construct successfully with Gov authority host");
     }
 }

@@ -35,26 +35,27 @@ public class ConfigurationAgentAiTests
     }
 
     private ConfigurationAgent CreateAgent(IChatClient? chatClient = null,
-        AzureOpenAIGatewayOptions? aiOptions = null)
+        AzureAiOptions? aiOptions = null)
     {
         var tool = new ConfigurationTool(
             _stateMock.Object,
             Mock.Of<ILogger<ConfigurationTool>>());
 
-        IOptions<AzureOpenAIGatewayOptions>? optionsWrapper =
+        IOptions<AzureAiOptions>? optionsWrapper =
             aiOptions != null ? Options.Create(aiOptions) : null;
 
         return new ConfigurationAgent(
             tool,
             Mock.Of<ILogger<ConfigurationAgent>>(),
             chatClient,
+            null,
             optionsWrapper);
     }
 
-    private static AzureOpenAIGatewayOptions CreateEnabledOptions() => new()
+    private static AzureAiOptions CreateEnabledOptions() => new()
     {
-        AgentAIEnabled = true,
-        MaxToolCallRounds = 5,
+        Enabled = true,
+        MaxToolIterations = 5,
         Temperature = 0.3,
         Endpoint = "https://test.openai.azure.us/"
     };
@@ -120,7 +121,7 @@ public class ConfigurationAgentAiTests
     [Fact]
     public async Task ProcessAsync_AiDisabledFlag_FallsBackToClassifyIntent()
     {
-        var options = new AzureOpenAIGatewayOptions { AgentAIEnabled = false };
+        var options = new AzureAiOptions { Enabled = false };
         var agent = CreateAgent(_chatClientMock.Object, options);
 
         var result = await agent.ProcessAsync("show settings", CreateContext());

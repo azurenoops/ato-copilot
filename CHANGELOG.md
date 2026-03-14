@@ -4,6 +4,22 @@ All notable changes to ATO Copilot are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.24.0] - 2026-03-14
+
+### Added
+
+#### Feature 028: Azure AI Foundry Agent Integration
+
+- **AI Provider Selection** — Unified `AzureAi:Provider` config switch (`OpenAi`, `Foundry`) with `AzureAi:Enabled` master flag enables operators to choose AI provider without code changes. Configuration bound via `AzureAiOptions` / `AiProvider` enum.
+- **Foundry Agent Client** — `PersistentAgentsClient` from `Azure.AI.Agents.Persistent` 1.1.0 registered via DI with `DefaultAzureCredential` (Gov/Commercial authority host aware via `AzureAi:CloudEnvironment`).
+- **Agent Provisioning** — Each ATO Copilot agent (Compliance, Configuration, KnowledgeBase) auto-provisions a corresponding Foundry agent at startup with system prompt and tool definitions. Idempotent create-or-update by name.
+- **Thread & Run Processing** — Full `TryProcessWithFoundryAsync` implementation: thread creation, user message, run creation, polling, `RequiresAction` tool dispatch (local `BaseTool.ExecuteAsync`), response extraction.
+- **Thread-to-Conversation Mapping** — `ConcurrentDictionary<string, string>` maps conversations to persistent Foundry threads for multi-turn context.
+- **Run Timeout Enforcement** — Configurable `AzureAi:RunTimeoutSeconds` with automatic `CancelRunAsync` on timeout. `MaxToolIterations` (configurable, default 10) prevents infinite tool dispatch loops.
+- **Graceful Fallback Chain** — Foundry failure → IChatClient → deterministic routing. Provisioning failures set `_foundryAgentId=null` without crashing. Terminal run statuses (Failed, Cancelled, Expired) handled gracefully.
+- **12 Unit Tests** — Provider dispatch routing, provisioning guards, thread mapping, constructor defaults, Gov authority host, provider-switch thread isolation (SC-007).
+- **4 Fallback Integration Tests** — Foundry→IChatClient chain, OpenAi-only routing, no-config regression, exception handling (SC-009).
+
 ## [1.23.0] - 2026-03-12
 
 ### Added

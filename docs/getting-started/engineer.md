@@ -151,3 +151,41 @@ Simulation mode **only activates in the Development environment**. In Production
 | "No assigned tasks" returned | ISSO or ISSM has not yet created Kanban tickets for your system | Ask your ISSO to assign findings from the assessment or check that your system is in the Implement phase |
 | IaC scan finds no issues on an empty file | Scanner requires actual resource definitions to analyze | Add Bicep/Terraform resource blocks before scanning |
 | "Access denied" on authorization or assessment tools | `Compliance.PlatformEngineer` cannot assess controls or issue authorization | Assessment is done by the SCA; authorization by the AO — focus on implementation and remediation |
+
+## AI Backend Configuration
+
+ATO Copilot supports multiple AI providers for natural language processing. Configure the provider in `appsettings.json`:
+
+### Provider Selection
+
+Set `AzureAi:Provider` to choose the active AI provider and `AzureAi:Enabled` to enable AI processing:
+
+| Provider Value | Description |
+|----------------|-------------|
+| `OpenAi` | Azure OpenAI GPT-4o via `IChatClient` — **default** |
+| `Foundry` | Azure AI Foundry Agents with server-side orchestration |
+
+When `AzureAi:Enabled` is `false` (or the `AzureAi` section is absent), all agents use deterministic tool routing only.
+
+### Azure AI Foundry Configuration
+
+When using `Foundry`, configure the unified `AzureAi` section in `appsettings.json`:
+
+```json
+{
+  "AzureAi": {
+    "Enabled": true,
+    "Provider": "Foundry",
+    "Endpoint": "https://<openai-endpoint>/",
+    "DeploymentName": "gpt-4o",
+    "FoundryProjectEndpoint": "https://<your-project>.services.ai.azure.us/",
+    "RunTimeoutSeconds": 60,
+    "MaxToolIterations": 10,
+    "CloudEnvironment": "AzureGovernment"
+  }
+}
+```
+
+**Authentication**: The Foundry provider uses `DefaultAzureCredential` (Managed Identity in production, Azure CLI locally). No API key is needed.
+
+**Fallback chain**: `Foundry` → `OpenAi` (IChatClient) → deterministic routing. If Foundry fails, the system automatically falls back.
