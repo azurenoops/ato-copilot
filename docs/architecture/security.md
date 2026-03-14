@@ -300,3 +300,31 @@ Immutable database record for compliance audit trails:
 - Time-limited access (default 3h, max 24h)
 - Revocable via `jit_revoke_access`
 - Sessions tracked in `JitRequests` DbSet
+
+---
+
+## Enterprise Hardening (Feature 029)
+
+### Path Sanitization
+
+All file path parameters in tool actions are validated by `PathSanitizationService`:
+
+- **Canonicalization**: Uses `Path.GetFullPath()` to resolve `.` and `..` segments
+- **Boundary check**: Ensures the canonical path starts with the allowed base directory
+- **Blocked patterns**: Rejects null bytes, shell metacharacters, and URIs in paths
+- Applies to parameters: `filePath`, `path`, `file`, `outputPath`, `inputPath`
+
+### Rate Limiting
+
+Per-endpoint sliding window rate limiting via ASP.NET Core `SlidingWindowRateLimiter`:
+
+- **Default**: 30 requests per 60 seconds, 2 segments per window
+- **Per-client partitioning**: Rate limits partitioned by authenticated user OID
+- **Response**: 429 with `Retry-After` header and structured error JSON
+- Configurable via `RateLimiting:Policies` in appsettings
+
+### Input Validation
+
+- **Request size limit**: `RequestSizeLimitMiddleware` enforces a configurable maximum (default 32KB)
+- **Body validation**: All chat and tool payloads validated before processing
+- **Script sanitization**: `ScriptSanitizationService` validates remediation scripts before execution

@@ -793,6 +793,34 @@ public class AtoComplianceEngine : IAtoComplianceEngine
     }
 
     /// <inheritdoc />
+    public async IAsyncEnumerable<ComplianceFinding> StreamAssessmentFindingsAsync(
+        string subscriptionId,
+        string? resourceGroup = null,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Streaming assessment findings | Sub: {Sub} | RG: {RG}",
+            subscriptionId, resourceGroup ?? "(all)");
+
+        // Pre-warm the resource cache
+        try { await _azureResourceService.PreWarmCacheAsync(subscriptionId, cancellationToken); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Cache pre-warm failed for Sub={Sub}", subscriptionId); }
+
+        var families = ControlFamilies.AllFamilies.ToList();
+        foreach (var familyCode in families)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var familyResult = await AssessControlFamilyAsync(
+                familyCode, subscriptionId, resourceGroup, cancellationToken);
+
+            foreach (var finding in familyResult.Findings)
+            {
+                yield return finding;
+            }
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<ComplianceAssessment> RunEnvironmentAssessmentAsync(
         IEnumerable<string> subscriptionIds,
         string environmentName,

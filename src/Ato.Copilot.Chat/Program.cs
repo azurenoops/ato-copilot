@@ -5,6 +5,8 @@ using Serilog.Events;
 using Serilog.Sinks.ApplicationInsights.TelemetryConverters;
 using System.Text.Json;
 using Ato.Copilot.Channels.Abstractions;
+using Ato.Copilot.Agents.Extensions;
+using Ato.Copilot.Core.Models;
 using Ato.Copilot.Chat.Channels;
 using Ato.Copilot.Chat.Data;
 using Ato.Copilot.Chat.Hubs;
@@ -87,6 +89,14 @@ try
         var mcpBaseUrl = builder.Configuration.GetValue<string>("McpServer:BaseUrl") ?? "http://localhost:3001";
         client.BaseAddress = new Uri(mcpBaseUrl);
         client.Timeout = TimeSpan.FromSeconds(180);
+    })
+    .ConfigureResiliencePipeline(new ResiliencePipelineConfig
+    {
+        Name = "McpServer",
+        MaxRetryAttempts = 3,
+        BaseDelaySeconds = 2.0,
+        UseJitter = true,
+        RequestTimeoutSeconds = 180
     });
     builder.Services.AddControllers()
         .AddJsonOptions(options =>

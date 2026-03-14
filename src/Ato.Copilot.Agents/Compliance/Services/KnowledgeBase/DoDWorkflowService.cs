@@ -13,11 +13,8 @@ namespace Ato.Copilot.Agents.Compliance.Services.KnowledgeBase;
 /// </summary>
 public class DoDWorkflowService : IDoDWorkflowService
 {
-    private readonly IMemoryCache _cache;
     private readonly ILogger<DoDWorkflowService> _logger;
-
-    private const string CacheKey = "kb:dod:all_workflows";
-    private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
+    private readonly Lazy<Task<List<DoDWorkflow>>> _lazyWorkflows;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -39,8 +36,9 @@ public class DoDWorkflowService : IDoDWorkflowService
         IMemoryCache cache,
         ILogger<DoDWorkflowService> logger)
     {
-        _cache = cache;
         _logger = logger;
+        _lazyWorkflows = new Lazy<Task<List<DoDWorkflow>>>(
+            LoadWorkflowsCoreAsync, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <inheritdoc />
@@ -50,7 +48,7 @@ public class DoDWorkflowService : IDoDWorkflowService
     {
         _logger.LogDebug("Getting workflow for assessment type {AssessmentType}", assessmentType);
 
-        var workflows = await LoadWorkflowsAsync();
+        var workflows = await _lazyWorkflows.Value;
         if (workflows.Count == 0)
             return new List<string>(StandardWorkflow);
 
@@ -75,7 +73,7 @@ public class DoDWorkflowService : IDoDWorkflowService
     {
         _logger.LogDebug("Getting workflow detail for {WorkflowId}", workflowId);
 
-        var workflows = await LoadWorkflowsAsync();
+        var workflows = await _lazyWorkflows.Value;
         return workflows.FirstOrDefault(w =>
             w.WorkflowId.Equals(workflowId, StringComparison.OrdinalIgnoreCase));
     }
@@ -87,20 +85,17 @@ public class DoDWorkflowService : IDoDWorkflowService
     {
         _logger.LogDebug("Getting workflows for organization {Organization}", organization);
 
-        var workflows = await LoadWorkflowsAsync();
+        var workflows = await _lazyWorkflows.Value;
         return workflows
             .Where(w => w.Organization.Equals(organization, StringComparison.OrdinalIgnoreCase))
             .ToList();
     }
 
     /// <summary>
-    /// Loads workflow data from the JSON data file, with 24-hour cache TTL.
+    /// Loads workflow data from the JSON data file (deferred via Lazy&lt;T&gt;).
     /// </summary>
-    private async Task<List<DoDWorkflow>> LoadWorkflowsAsync()
+    private async Task<List<DoDWorkflow>> LoadWorkflowsCoreAsync()
     {
-        if (_cache.TryGetValue(CacheKey, out List<DoDWorkflow>? cached) && cached != null)
-            return cached;
-
         try
         {
             var assembly = typeof(DoDWorkflowService).Assembly;
@@ -144,7 +139,6 @@ public class DoDWorkflowService : IDoDWorkflowService
                 w.RequiredDocuments,
                 w.ApprovalAuthorities)).ToList();
 
-            _cache.Set(CacheKey, workflows, CacheTtl);
             _logger.LogInformation("Loaded {Count} DoD workflows from data file", workflows.Count);
             return workflows;
         }

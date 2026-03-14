@@ -1283,3 +1283,90 @@ All tools return structured error responses via `ToolResponse<T>`:
 | `CONCURRENCY_CONFLICT` | Optimistic concurrency violation |
 | `GATE_FAILED` | RMF gate conditions not met |
 | `INTERNAL_ERROR` | Unexpected server error |
+
+---
+
+## Enterprise Hardening (Feature 029)
+
+### Rate Limiting
+
+All endpoints are protected by sliding-window rate limiting. When the limit is exceeded:
+
+- **Status**: `429 Too Many Requests`
+- **Header**: `Retry-After: <seconds>` — seconds until the window resets
+- **Body**: `{ "error": "Rate limit exceeded", "retryAfter": <seconds> }`
+
+Default limits: 30 requests per 60-second window, 2 segments per window.
+
+### Cache Headers
+
+Responses from cached tool results include:
+
+| Header | Description |
+|--------|-------------|
+| `X-Cache` | `HIT` or `MISS` — whether the response was served from cache |
+| `X-Cache-Age` | Seconds since the cache entry was created |
+
+### Pagination
+
+Collection endpoints accept pagination parameters:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `page` | int | 1 | Page number (1-based) |
+| `pageSize` | int | 50 | Items per page (max 100) |
+
+Paginated responses include a `PaginationInfo` envelope in metadata:
+
+```json
+{
+  "metadata": {
+    "pagination": {
+      "page": 1,
+      "pageSize": 50,
+      "totalItems": 200,
+      "totalPages": 4,
+      "hasNextPage": true,
+      "nextPageToken": "<opaque-base64-token>"
+    }
+  }
+}
+```
+
+When `pageSize` exceeds the maximum (100), it is clamped and `metadata.pageSizeClamped: true` is set.
+
+The `/mcp/tools` endpoint supports `page` and `pageSize` query parameters for paginated tool listing.
+
+### Offline Mode
+
+When `Server:OfflineMode` is `true`, network-dependent operations return:
+
+```json
+{
+  "errors": [{
+    "errorCode": "OFFLINE_UNAVAILABLE",
+    "message": "AI chat requires network connectivity.",
+    "suggestion": "Available offline capabilities: NIST Control Lookups, Cached Assessments, ..."
+  }]
+}
+```
+
+The `/health` endpoint reports `"status": "degraded"` with `availableCapabilities` and `unavailableCapabilities` arrays.
+
+### SSE Reconnection Protocol
+
+The `/mcp/chat/stream` endpoint supports SSE reconnection:
+
+- Each SSE event includes an `id:` field with a monotonically increasing integer
+- To reconnect, send the `Last-Event-ID` header with the last received event ID
+- Missed events are replayed from the buffer before live events resume
+- Keepalive comments (`: keepalive\n\n`) are sent every 15 seconds during idle periods
+- Event buffers are evicted after session completion or 60 seconds of inactivity
+
+### Monitoring
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/metrics` | GET | Prometheus metrics (when `OpenTelemetry:EnablePrometheus` is true) |
+
+Metrics include `ato.copilot.http.request.duration`, `ato.copilot.http.request.total`, `ato.copilot.cache.hits`, `ato.copilot.cache.misses`. OTLP export is configured via `OpenTelemetry:OtlpEndpoint`.

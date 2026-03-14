@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Ato.Copilot.Core.Interfaces.Auth;
 using Ato.Copilot.Mcp.Models;
+using Ato.Copilot.Mcp.Resilience;
 using Ato.Copilot.Mcp.Server;
 using Ato.Copilot.Mcp.Tools;
 
@@ -29,6 +30,7 @@ public static class McpServiceExtensions
         // MCP Server
         services.AddSingleton<McpServer>();
         services.AddSingleton<McpHttpBridge>();
+        services.AddSingleton<SseEventBuffer>();
 
         return services;
     }

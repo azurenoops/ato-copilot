@@ -96,6 +96,20 @@ public interface ISspService
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Streams SSP document sections incrementally, yielding each section's content
+    /// independently without buffering the entire document. Useful for large SSP generation
+    /// where clients can render sections as they arrive via SSE.
+    /// </summary>
+    /// <param name="systemId">RegisteredSystem ID.</param>
+    /// <param name="sections">Specific sections to include (null for all).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Async enumerable of (sectionNumber, content) tuples.</returns>
+    IAsyncEnumerable<(int SectionNumber, string Content)> StreamSspSectionsAsync(
+        string systemId,
+        IEnumerable<string>? sections = null,
+        CancellationToken cancellationToken = default);
+
     // ─── SSP Section Management (Feature 022) ───────────────────────────────
 
     /// <summary>
