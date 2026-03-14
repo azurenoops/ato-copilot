@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ato.Copilot.Core.Configuration;
@@ -13,12 +14,15 @@ namespace Ato.Copilot.Mcp.Middleware;
 /// Checks amr claims for ["mfa", "rsa"] when RequireCac is enabled.
 /// Runs before ComplianceAuthorizationMiddleware in the pipeline.
 /// Per R-004: Azure AD sets amr=rsa for certificate-based authentication.
+/// In Development with SimulationMode enabled, synthesizes a ClaimsPrincipal from config.
 /// </summary>
 public class CacAuthenticationMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<CacAuthenticationMiddleware> _logger;
     private readonly AzureAdOptions _azureAdOptions;
+    private readonly CacAuthOptions _cacAuthOptions;
+    private readonly IHostEnvironment _hostEnvironment;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="CacAuthenticationMiddleware"/> class.
@@ -26,10 +30,14 @@ public class CacAuthenticationMiddleware
     public CacAuthenticationMiddleware(
         RequestDelegate next,
         IOptions<AzureAdOptions> azureAdOptions,
+        IOptions<CacAuthOptions> cacAuthOptions,
+        IHostEnvironment hostEnvironment,
         ILogger<CacAuthenticationMiddleware> logger)
     {
         _next = next;
         _azureAdOptions = azureAdOptions.Value;
+        _cacAuthOptions = cacAuthOptions.Value;
+        _hostEnvironment = hostEnvironment;
         _logger = logger;
     }
 
@@ -45,8 +53,49 @@ public class CacAuthenticationMiddleware
             return;
         }
 
-        // In development mode, skip JWT validation
+        // In development mode with simulation enabled, synthesize identity from config
         var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        if (_cacAuthOptions.SimulationMode)
+        {
+            if (environment == "Development")
+            {
+                var simId = _cacAuthOptions.SimulatedIdentity
+                    ?? throw new InvalidOperationException(
+                        "CacAuth:SimulatedIdentity configuration is required when SimulationMode is enabled.");
+
+                var claims = new List<Claim>
+                {
+                    new(ClaimTypes.NameIdentifier, simId.UserPrincipalName),
+                    new(ClaimTypes.Name, simId.DisplayName),
+                    new("preferred_username", simId.UserPrincipalName),
+                    new("amr", "mfa"),
+                    new("amr", "rsa"),
+                };
+
+                foreach (var role in simId.Roles)
+                    claims.Add(new(ClaimTypes.Role, role));
+
+                if (simId.CertificateThumbprint is not null)
+                    claims.Add(new("x5t", simId.CertificateThumbprint));
+
+                context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Simulated"));
+                context.Items["ClientType"] = ClientType.Simulated;
+
+                _logger.LogDebug(
+                    "CAC simulation active — identity: {UserPrincipalName}, roles: {Roles}",
+                    simId.UserPrincipalName, string.Join(", ", simId.Roles));
+
+                await _next(context);
+                return;
+            }
+
+            _logger.LogWarning(
+                "CacAuth:SimulationMode is enabled but environment is {Environment}. " +
+                "Simulation mode will be ignored — falling through to real JWT authentication.",
+                environment);
+        }
+
+        // In development mode without simulation, skip JWT validation
         if (environment == "Development")
         {
             await _next(context);

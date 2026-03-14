@@ -209,6 +209,57 @@ dotnet test --filter "Category=Unit&Feature=015"
 
 ---
 
+## CAC Simulation in Integration Tests
+
+Integration tests use CAC simulation mode to test CAC-protected workflows without smart card hardware. Each test fixture configures its own simulated identity:
+
+```csharp
+[Collection("IntegrationTests")]
+public class SimulationModeIssoIntegrationTests : IAsyncLifetime
+{
+    private WebApplication _app = null!;
+    private HttpClient _client = null!;
+
+    public async Task InitializeAsync()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.Services.Configure<CacAuthOptions>(o =>
+        {
+            o.SimulationMode = true;
+            o.SimulatedIdentity = new SimulatedIdentityOptions
+            {
+                UserPrincipalName = "test.isso@dev.mil",
+                DisplayName = "Test ISSO",
+                CertificateThumbprint = "ISSO_THUMB_001",
+                Roles = ["ISSO", "Global Reader"]
+            };
+        });
+        builder.WebHost.UseTestServer();
+        // ... register services, build pipeline ...
+        _app = builder.Build();
+        await _app.StartAsync();
+        _client = _app.GetTestClient();
+    }
+
+    public async Task DisposeAsync()
+    {
+        _client.Dispose();
+        await _app.DisposeAsync();
+    }
+}
+```
+
+Key patterns:
+
+- Each test class gets its own `WebApplication` with a distinct persona
+- `ClientType.Simulated` is set on requests — assert via `context.Items["ClientType"]`
+- No application restart needed between test classes
+- Environment is automatically `Development` in test hosts
+
+See `tests/Ato.Copilot.Tests.Integration/SimulationModeIntegrationTests.cs` for complete examples.
+
+---
+
 ## Persona End-to-End Tests
 
 Feature 020 introduced comprehensive persona-based end-to-end test scripts that validate tool invocations across complete RMF workflows. These tests use the "Eagle Eye" reference system and are organized by persona.

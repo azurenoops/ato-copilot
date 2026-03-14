@@ -15,7 +15,13 @@ public enum ClientType
     Web,
 
     /// <summary>Command-line interface surface.</summary>
-    CLI
+    CLI,
+
+    /// <summary>
+    /// Simulated CAC session for development/testing.
+    /// Excluded from compliance evidence per FR-014.
+    /// </summary>
+    Simulated
 }
 
 /// <summary>
