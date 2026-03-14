@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
+using Azure.AI.Agents.Persistent;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -8,7 +9,6 @@ using Ato.Copilot.Agents.Configuration.Tools;
 using Ato.Copilot.Core.Configuration;
 
 namespace Ato.Copilot.Agents.Configuration.Agents;
-
 /// <summary>
 /// Configuration Agent — manages ATO Copilot settings including subscription,
 /// framework, baseline, and environment preferences.
@@ -29,11 +29,16 @@ public class ConfigurationAgent : BaseAgent
         ConfigurationTool configurationTool,
         ILogger<ConfigurationAgent> logger,
         IChatClient? chatClient = null,
-        IOptions<AzureOpenAIGatewayOptions>? aiOptions = null)
-        : base(logger, chatClient, aiOptions?.Value)
+        PersistentAgentsClient? foundryClient = null,
+        IOptions<AzureAiOptions>? azureAiOptions = null)
+        : base(logger, chatClient, foundryClient, azureAiOptions?.Value)
     {
         _configurationTool = configurationTool;
         RegisterTool(_configurationTool);
+
+        // Provision Foundry agent in background when enabled
+        if (_azureAiOptions?.IsFoundry == true)
+            _ = Task.Run(async () => await ProvisionFoundryAgentAsync());
     }
 
     /// <inheritdoc />
@@ -59,7 +64,7 @@ public class ConfigurationAgent : BaseAgent
         var lower = message.ToLowerInvariant();
 
         // Strong configuration intent
-        string[] configKeywords = ["configure", "set subscription", "set framework",
+        string[] configKeywords = ["configure", "configuration", "set subscription", "set framework",
             "change setting", "update setting", "my settings", "show settings",
             "switch subscription", "select subscription", "select framework"];
         foreach (var keyword in configKeywords)
@@ -116,8 +121,8 @@ public class ConfigurationAgent : BaseAgent
 
         Logger.LogInformation("Configuration agent processing: {Message}", message);
 
-        // ── AI-powered processing path (Feature 011) ────────────────────
-        var aiResponse = await TryProcessWithAiAsync(message, context, cancellationToken, progress);
+        // ── AI-powered processing path (Feature 011 / Feature 028) ──────────
+        var aiResponse = await TryProcessWithBackendAsync(message, context, cancellationToken, progress);
         if (aiResponse != null)
             return aiResponse;
 

@@ -73,6 +73,7 @@ public class ObservabilityIntegrationTests : IAsyncLifetime
         builder.Services.AddInMemoryStateManagement();
         builder.Services.AddComplianceAgent(builder.Configuration);
         builder.Services.AddConfigurationAgent();
+        builder.Services.AddKnowledgeBaseAgent(builder.Configuration);
         builder.Services.AddMcpServer(builder.Configuration);
 
         // Health checks (same as Program.cs)

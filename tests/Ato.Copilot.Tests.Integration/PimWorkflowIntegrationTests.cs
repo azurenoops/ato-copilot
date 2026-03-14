@@ -78,6 +78,7 @@ public class PimWorkflowIntegrationTests : IAsyncLifetime
         builder.Services.AddInMemoryStateManagement();
         builder.Services.AddComplianceAgent(builder.Configuration);
         builder.Services.AddConfigurationAgent();
+        builder.Services.AddKnowledgeBaseAgent(builder.Configuration);
         builder.Services.AddMcpServer(builder.Configuration);
         builder.Services.AddCors(options =>
             options.AddDefaultPolicy(policy =>
@@ -143,7 +144,7 @@ public class PimWorkflowIntegrationTests : IAsyncLifetime
         var json = JsonDocument.Parse(content);
 
         json.RootElement.GetProperty("success").GetBoolean().Should().BeTrue();
-        json.RootElement.GetProperty("agentName").GetString()
+        json.RootElement.GetProperty("agentUsed").GetString()
             .Should().Be("Compliance Agent", "PIM requests should route to Compliance Agent");
     }
 

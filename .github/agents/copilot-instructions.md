@@ -53,6 +53,10 @@ Auto-generated from all feature plans. Last updated: 2026-02-21
 - Azure Cosmos DB (via EF Core) — extends existing `ScanImportRecord`/`ScanImportFinding` entities (026-acas-nessus-import)
 - C# 13 / .NET 9.0 + ASP.NET Core, Entity Framework Core, Serilog, Azure.Identity, Microsoft.Graph (027-cac-simulation-mode)
 - SQL Server via EF Core (`IDbContextFactory<AtoCopilotContext>` pattern) (027-cac-simulation-mode)
+- C# 13 / .NET 9.0 + `Azure.AI.Projects` (new — Foundry SDK), `Azure.AI.OpenAI` 2.1.0 (existing), `Microsoft.Extensions.AI` 9.4.x (existing), EF Core 9.0, ASP.NET Core (028-foundry-agents)
+- SQL Server (containerized), SQLite (dev/test) — no schema changes for this feature (028-foundry-agents)
+- C# 13 / .NET 9.0 + Azure.AI.Agents.Persistent 1.1.0, Azure.AI.OpenAI 2.1.0, Microsoft.Extensions.AI 9.4.x, Azure.Identity 1.13.2, EF Core 9.0, Serilog (028-foundry-agents)
+- SQLite (dev) / SQL Server (prod) via EF Core; Foundry threads are server-side (ephemeral, no local persistence) (028-foundry-agents)
 
 - C# 13 / .NET 9.0 + Azure.Identity 1.13, Azure.ResourceManager 1.13, Microsoft.Extensions.AI 9.4-preview, Microsoft.EntityFrameworkCore 9.0, Serilog 4.2, xUnit 2.9, FluentAssertions 7.0, Moq 4.20 (001-core-compliance)
 
@@ -72,9 +76,9 @@ dotnet build Ato.Copilot.sln [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMAN
 C# .NET 9: Follow standard conventions
 
 ## Recent Changes
+- 028-foundry-agents: Added C# 13 / .NET 9.0 + Azure.AI.Agents.Persistent 1.1.0, Azure.AI.OpenAI 2.1.0, Microsoft.Extensions.AI 9.4.x, Azure.Identity 1.13.2, EF Core 9.0, Serilog
+- 028-foundry-agents: Added C# 13 / .NET 9.0 + `Azure.AI.Projects` (new — Foundry SDK), `Azure.AI.OpenAI` 2.1.0 (existing), `Microsoft.Extensions.AI` 9.4.x (existing), EF Core 9.0, ASP.NET Core
 - 027-cac-simulation-mode: Added C# 13 / .NET 9.0 + ASP.NET Core, Entity Framework Core, Serilog, Azure.Identity, Microsoft.Graph
-- 026-acas-nessus-import: Added C# / .NET 8 + `System.Xml.Linq` (XDocument parser), Entity Framework Core, xUnit + FluentAssertions + Moq (testing)
-- 025-hw-sw-inventory: Added C# 13 / .NET 9.0 + EF Core 9.0.0 (SQLite dev / SQL Server prod), ClosedXML (Excel I/O), System.Text.Json, FluentAssertions + xUnit + Moq (tests)
 
 
 <!-- MANUAL ADDITIONS START -->

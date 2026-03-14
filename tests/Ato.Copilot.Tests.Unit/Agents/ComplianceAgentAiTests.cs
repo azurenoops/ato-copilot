@@ -25,7 +25,7 @@ public class ComplianceAgentAiTests
     private readonly IServiceScopeFactory _scopeFactory = Mock.Of<IServiceScopeFactory>();
 
     private ComplianceAgent CreateAgent(IChatClient? chatClient = null,
-        AzureOpenAIGatewayOptions? aiOptions = null)
+        AzureAiOptions? aiOptions = null)
     {
         var complianceEngine = Mock.Of<IAtoComplianceEngine>();
         var remediationEngine = Mock.Of<IRemediationEngine>();
@@ -133,7 +133,7 @@ public class ComplianceAgentAiTests
         var nistSearchTool = new NistControlSearchTool(nistControls, Mock.Of<ILogger<NistControlSearchTool>>());
         var nistExplainerTool = new NistControlExplainerTool(nistControls, Mock.Of<ILogger<NistControlExplainerTool>>());
 
-        IOptions<AzureOpenAIGatewayOptions>? optionsWrapper =
+        IOptions<AzureAiOptions>? optionsWrapper =
             aiOptions != null ? Options.Create(aiOptions) : null;
 
         return new ComplianceAgent(
@@ -164,13 +164,14 @@ public class ComplianceAgentAiTests
             Mock.Of<ISystemIdResolver>(),
             Mock.Of<ILogger<ComplianceAgent>>(),
             chatClient,
+            null,
             optionsWrapper);
     }
 
-    private static AzureOpenAIGatewayOptions CreateEnabledOptions() => new()
+    private static AzureAiOptions CreateEnabledOptions() => new()
     {
-        AgentAIEnabled = true,
-        MaxToolCallRounds = 5,
+        Enabled = true,
+        MaxToolIterations = 5,
         Temperature = 0.3,
         Endpoint = "https://test.openai.azure.us/"
     };

@@ -44,9 +44,17 @@ public class EmassIntegrationTests : IDisposable
         _serviceProvider = services.BuildServiceProvider();
         _scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
 
+        var oscalMock = new Mock<IOscalSspExportService>();
+        oscalMock.Setup(s => s.ExportAsync(
+                It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new OscalExportResult(
+                "{\"system-security-plan\":{\"uuid\":\"test\",\"metadata\":{\"title\":\"Test SSP\",\"oscal-version\":\"1.0.6\"}}}",
+                new List<string>(),
+                new OscalStatistics(2, 1, 0, 0, 0)));
+
         var emassSvc = new EmassExportService(
             _scopeFactory, Mock.Of<ILogger<EmassExportService>>(),
-            Mock.Of<IOscalSspExportService>());
+            oscalMock.Object);
 
         _exportTool = new ExportEmassTool(
             emassSvc, Mock.Of<ILogger<ExportEmassTool>>());

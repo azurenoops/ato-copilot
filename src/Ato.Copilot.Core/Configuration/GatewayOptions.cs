@@ -19,19 +19,22 @@ public class AzureAdOptions
 }
 
 /// <summary>
-/// Gateway connection configuration for Azure, OpenAI, and GitHub
+/// Gateway connection configuration for Azure and GitHub
 /// </summary>
 public class GatewayOptions
 {
     public const string SectionName = "Gateway";
 
     public AzureGatewayOptions Azure { get; set; } = new();
-    public AzureOpenAIGatewayOptions AzureOpenAI { get; set; } = new();
     public GitHubGatewayOptions GitHub { get; set; } = new();
     public int ConnectionTimeoutSeconds { get; set; } = 60;
     public int RequestTimeoutSeconds { get; set; } = 300;
 }
 
+/// <summary>
+/// Azure subscription and identity configuration.
+/// Bound from the "Gateway:Azure" configuration section.
+/// </summary>
 public class AzureGatewayOptions
 {
     public string TenantId { get; set; } = string.Empty;
@@ -44,46 +47,83 @@ public class AzureGatewayOptions
     public bool EnableUserTokenPassthrough { get; set; }
 }
 
-/// <summary>
-/// Azure OpenAI service configuration for agent AI processing.
-/// Bound from the "Gateway:AzureOpenAI" configuration section.
-/// </summary>
-public class AzureOpenAIGatewayOptions
-{
-    /// <summary>API key for Azure OpenAI authentication (used when UseManagedIdentity is false).</summary>
-    public string ApiKey { get; set; } = string.Empty;
-
-    /// <summary>Azure OpenAI service endpoint URL (e.g., https://my-service.openai.azure.us/).</summary>
-    public string Endpoint { get; set; } = string.Empty;
-
-    /// <summary>Default deployment name for backward compatibility.</summary>
-    public string DeploymentName { get; set; } = "gpt-4o";
-
-    /// <summary>Whether to use DefaultAzureCredential instead of API key.</summary>
-    public bool UseManagedIdentity { get; set; }
-
-    /// <summary>Chat completion deployment name used for agent AI processing.</summary>
-    public string ChatDeploymentName { get; set; } = "gpt-4o";
-
-    /// <summary>Embedding deployment name for vector operations.</summary>
-    public string EmbeddingDeploymentName { get; set; } = "text-embedding-ada-002";
-
-    /// <summary>Master feature flag — when false, all agents skip AI processing and use deterministic tool routing.</summary>
-    public bool AgentAIEnabled { get; set; }
-
-    /// <summary>Maximum number of LLM ↔ tool-call round-trips before terminating with a summary response.</summary>
-    public int MaxToolCallRounds { get; set; } = 5;
-
-    /// <summary>LLM sampling temperature (0.0–1.0). Lower values produce more deterministic responses.</summary>
-    public double Temperature { get; set; } = 0.3;
-}
-
 public class GitHubGatewayOptions
 {
     public string AccessToken { get; set; } = string.Empty;
     public string ApiBaseUrl { get; set; } = "https://api.github.com";
     public string DefaultOwner { get; set; } = string.Empty;
     public bool Enabled { get; set; }
+}
+
+/// <summary>
+/// Unified AI backend configuration. Bound from the top-level "AzureAi" configuration section.
+/// </summary>
+public class AzureAiOptions
+{
+    public const string SectionName = "AzureAi";
+
+    /// <summary>Master AI feature flag. When false, all agents use deterministic tool routing.</summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>AI provider: OpenAi (direct Azure OpenAI) or Foundry (Azure AI Foundry Agents).</summary>
+    public AiProvider Provider { get; set; } = AiProvider.OpenAi;
+
+    /// <summary>Azure OpenAI service endpoint URL (e.g., https://my-service.openai.azure.us/).</summary>
+    public string Endpoint { get; set; } = string.Empty;
+
+    /// <summary>Model deployment name (e.g., gpt-4o). Used for both direct and Foundry paths.</summary>
+    public string DeploymentName { get; set; } = "gpt-4o";
+
+    /// <summary>API key for Azure OpenAI authentication (when UseManagedIdentity is false).</summary>
+    public string? ApiKey { get; set; }
+
+    /// <summary>Whether to use DefaultAzureCredential instead of API key.</summary>
+    public bool UseManagedIdentity { get; set; } = true;
+
+    /// <summary>Azure cloud environment: AzurePublicCloud or AzureGovernment.</summary>
+    public string CloudEnvironment { get; set; } = "AzurePublicCloud";
+
+    /// <summary>Maximum completion tokens per AI response.</summary>
+    public int MaxCompletionTokens { get; set; } = 4096;
+
+    /// <summary>Maximum number of LLM ↔ tool-call round-trips before terminating.</summary>
+    public int MaxToolIterations { get; set; } = 10;
+
+    /// <summary>Number of recent messages to include as conversation context.</summary>
+    public int ConversationWindowSize { get; set; } = 20;
+
+    /// <summary>LLM sampling temperature (0.0–1.0). Lower values produce more deterministic responses.</summary>
+    public double Temperature { get; set; } = 0.3;
+
+    /// <summary>Azure AI Foundry project endpoint (required when Provider is Foundry).</summary>
+    public string? FoundryProjectEndpoint { get; set; }
+
+    /// <summary>Maximum seconds to poll a Foundry run before cancelling and triggering fallback.</summary>
+    public int RunTimeoutSeconds { get; set; } = 60;
+
+    /// <summary>Custom system prompt template. When set, overrides the agent's default prompt resource.</summary>
+    public string? SystemPromptTemplate { get; set; }
+
+    // ── Computed helpers ─────────────────────────────────────────────────────
+
+    /// <summary>True when Provider is Foundry and FoundryProjectEndpoint is configured.</summary>
+    public bool IsFoundry => Provider == AiProvider.Foundry
+                          && !string.IsNullOrWhiteSpace(FoundryProjectEndpoint);
+
+    /// <summary>True when Endpoint is configured and Enabled is true.</summary>
+    public bool IsConfigured => Enabled && !string.IsNullOrWhiteSpace(Endpoint);
+}
+
+/// <summary>
+/// AI provider selection for <see cref="AzureAiOptions.Provider"/>.
+/// </summary>
+public enum AiProvider
+{
+    /// <summary>Direct Azure OpenAI chat completions via IChatClient.</summary>
+    OpenAi = 0,
+
+    /// <summary>Azure AI Foundry Agents with server-side threads and runs.</summary>
+    Foundry = 1
 }
 
 /// <summary>

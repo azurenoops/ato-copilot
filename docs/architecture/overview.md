@@ -103,7 +103,9 @@ ATO Copilot is a compliance-focused MCP (Model Context Protocol) agent server bu
 │ ├─ Config    │  │ │  sation    │  │ ├─ Policy    │
 │ ├─ Constants │  │ └─ State     │  │ ├─ Defender  │
 │ └─ Interfaces│  └──────────────┘  │ ├─ Graph     │
-└──────┬───────┘                    │ └─ Entra ID  │
+└──────┬───────┘                    │ ├─ Entra ID  │
+       │                            │ └─ AI Foundry│
+       │                            │    Agents    │
        │                            └──────────────┘
        ▼
 ┌──────────────┐  ┌──────────────┐
@@ -130,7 +132,10 @@ ATO Copilot is a compliance-focused MCP (Model Context Protocol) agent server bu
    ↓
 5. ComplianceAgent.ProcessAsync():
    a. CheckAuthGateAsync() — RBAC + PIM tier enforcement
-   b. TryProcessWithAiAsync() — LLM tool-calling (if AI enabled)
+   b. TryProcessWithBackendAsync() — dispatches to configured AI provider:
+      - Foundry (AiProvider.Foundry): Foundry thread/run API with local tool execution
+      - OpenAi (AiProvider.OpenAi): IChatClient LLM tool-calling
+      - Fallback chain: Foundry → IChatClient → deterministic
    c. RouteToToolAsync() — deterministic keyword-based fallback
    d. AppendDeactivationOfferAsync() — PIM session management
    ↓
@@ -264,6 +269,7 @@ services:
 | **ORM** | Entity Framework Core | 9.0 |
 | **Database** | SQLite (dev) / SQL Server 2022 (prod) | — |
 | **AI** | Azure OpenAI (GPT-4o) | via Microsoft.Extensions.AI |
+| **AI Foundry** | Azure AI Foundry Agents | Azure.AI.Agents.Persistent 1.1.0 |
 | **Identity** | Microsoft Identity Web / Entra ID | 3.5.0 |
 | **Azure SDKs** | ARM, Resource Graph, Policy, Defender | 1.13.x |
 | **PDF** | QuestPDF | 2024.12.3 |

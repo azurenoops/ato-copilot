@@ -100,7 +100,8 @@ internal static class TestMockFactory
             /* 75  systemIdResolver        */ Mock.Of<ISystemIdResolver>(),
             /* 76  logger                  */ Mock.Of<ILogger<ComplianceAgent>>(),
             /* 77  chatClient (optional)   */ (object?)null,
-            /* 78  aiOptions (optional)    */ (object?)null
+            /* 78  foundryClient (optional)*/ (object?)null,
+            /* 79  azureAiOptions (optional)*/ (object?)null
         );
 
         mock.Setup(a => a.AgentId).Returns("compliance-agent");

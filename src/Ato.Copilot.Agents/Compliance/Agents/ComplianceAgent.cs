@@ -8,6 +8,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Azure.AI.Agents.Persistent;
 using Ato.Copilot.Agents.Common;
 using Ato.Copilot.Agents.Compliance.Tools;
 using Ato.Copilot.Core.Configuration;
@@ -220,8 +221,9 @@ public class ComplianceAgent : BaseAgent
         ISystemIdResolver systemIdResolver,
         ILogger<ComplianceAgent> logger,
         IChatClient? chatClient = null,
-        IOptions<AzureOpenAIGatewayOptions>? aiOptions = null)
-        : base(logger, chatClient, aiOptions?.Value)
+        PersistentAgentsClient? foundryClient = null,
+        IOptions<AzureAiOptions>? azureAiOptions = null)
+        : base(logger, chatClient, foundryClient, azureAiOptions?.Value)
     {
         _systemIdResolver = systemIdResolver;
         _assessmentTool = assessmentTool;
@@ -415,6 +417,10 @@ public class ComplianceAgent : BaseAgent
         {
             tool.SystemIdResolver = _systemIdResolver;
         }
+
+        // Provision Foundry agent in background when enabled
+        if (_azureAiOptions?.IsFoundry == true)
+            _ = Task.Run(async () => await ProvisionFoundryAgentAsync());
     }
 
     /// <inheritdoc />
@@ -587,7 +593,7 @@ public class ComplianceAgent : BaseAgent
             progress?.Report("Routing to ATO Copilot agent...");
 
             // ── AI-powered processing path (Feature 011) ────────────────────
-            var aiResponse = await TryProcessWithAiAsync(message, context, cancellationToken, progress);
+            var aiResponse = await TryProcessWithBackendAsync(message, context, cancellationToken, progress);
             if (aiResponse != null)
             {
                 progress?.Report("Generating response...");

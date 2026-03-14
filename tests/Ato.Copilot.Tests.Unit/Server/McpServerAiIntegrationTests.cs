@@ -39,9 +39,9 @@ public class McpServerAiIntegrationTests
     private readonly IServiceScopeFactory _scopeFactory = Mock.Of<IServiceScopeFactory>();
 
     private McpServer CreateMcpServer(IChatClient? chatClient = null,
-        AzureOpenAIGatewayOptions? aiOptions = null)
+        AzureAiOptions? aiOptions = null)
     {
-        IOptions<AzureOpenAIGatewayOptions>? optionsWrapper =
+        IOptions<AzureAiOptions>? optionsWrapper =
             aiOptions != null ? Options.Create(aiOptions) : null;
 
         // ── ConfigurationAgent (simplest, used as primary test agent) ────────
@@ -53,7 +53,7 @@ public class McpServerAiIntegrationTests
             .Returns(Task.CompletedTask);
 
         var configTool = new ConfigurationTool(_stateManagerMock.Object, Mock.Of<ILogger<ConfigurationTool>>());
-        var configAgent = new ConfigurationAgent(configTool, Mock.Of<ILogger<ConfigurationAgent>>(), chatClient, optionsWrapper);
+        var configAgent = new ConfigurationAgent(configTool, Mock.Of<ILogger<ConfigurationAgent>>(), chatClient, null, optionsWrapper);
 
         // ── ComplianceAgent (required for McpServer constructor) ─────────────
         var complianceAgent = CreateComplianceAgent(chatClient, optionsWrapper);
@@ -81,10 +81,10 @@ public class McpServerAiIntegrationTests
             Mock.Of<ILogger<McpServer>>());
     }
 
-    private static AzureOpenAIGatewayOptions CreateEnabledOptions() => new()
+    private static AzureAiOptions CreateEnabledOptions() => new()
     {
-        AgentAIEnabled = true,
-        MaxToolCallRounds = 5,
+        Enabled = true,
+        MaxToolIterations = 5,
         Temperature = 0.3,
         Endpoint = "https://test.openai.azure.us/"
     };
@@ -181,7 +181,7 @@ public class McpServerAiIntegrationTests
 
     // ── Factory helpers ──────────────────────────────────────────────────────
 
-    private ComplianceAgent CreateComplianceAgent(IChatClient? chatClient, IOptions<AzureOpenAIGatewayOptions>? aiOptions)
+    private ComplianceAgent CreateComplianceAgent(IChatClient? chatClient, IOptions<AzureAiOptions>? aiOptions)
     {
         var e = Mock.Of<IAtoComplianceEngine>();
         var r = Mock.Of<IRemediationEngine>();
@@ -280,10 +280,11 @@ public class McpServerAiIntegrationTests
             Mock.Of<ISystemIdResolver>(),
             Mock.Of<ILogger<ComplianceAgent>>(),
             chatClient,
+            null,
             aiOptions);
     }
 
-    private KnowledgeBaseAgent CreateKnowledgeBaseAgent(IChatClient? chatClient, IOptions<AzureOpenAIGatewayOptions>? aiOptions)
+    private KnowledgeBaseAgent CreateKnowledgeBaseAgent(IChatClient? chatClient, IOptions<AzureAiOptions>? aiOptions)
     {
         var cache = new MemoryCache(new MemoryCacheOptions());
         var opts = Options.Create(new KnowledgeBaseAgentOptions());
@@ -306,6 +307,7 @@ public class McpServerAiIntegrationTests
             new GetFedRampTemplateGuidanceTool(fr, cache, opts, Mock.Of<ILogger<GetFedRampTemplateGuidanceTool>>()),
             Mock.Of<ILogger<KnowledgeBaseAgent>>(),
             chatClient,
+            null,
             aiOptions);
     }
 
